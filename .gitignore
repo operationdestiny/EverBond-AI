@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# environment secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel
+.vercel/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# local Supabase files
+supabase/.temp/
+
+tsconfig.tsbuildinfo
