@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { ArrowRight, Sparkles } from "lucide-react";
-import { featuredCharacters } from "@/lib/characters";
 import { MemoryBadge } from "@/components/ui/MemoryBadge";
 
 export function HeroSection() {
-  const hero = featuredCharacters[0];
+  const hero = {
+    name: "EverBond AI",
+    tagline: "Choose a companion that remembers your story.",
+    image: "/everbond-logo.png",
+  };
 
   return (
     <section className="relative overflow-hidden py-16 md:py-24">
@@ -60,12 +63,12 @@ export function HeroSection() {
               <div className="absolute bottom-0 left-0 right-0 p-6">
                 <div className="mb-4 flex items-center gap-2">
                   <Sparkles size={16} className="text-bond-gold" />
-                  <span className="text-sm font-semibold text-bond-gold">She remembers where you left off</span>
+                  <span className="text-sm font-semibold text-bond-gold">Ever Memory™ keeps the bond alive</span>
                 </div>
                 <h2 className="font-display text-3xl font-bold">{hero.name}</h2>
                 <p className="mt-2 text-sm leading-6 text-bond-muted">{hero.tagline}</p>
                 <div className="mt-4 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6">
-                  <span className="text-bond-gold">✦ Remembered:</span> the secret you trusted her with last night.
+                  <span className="text-bond-gold">✦ Remembered:</span> your story, your moments, and where you left off.
                 </div>
               </div>
             </div>
