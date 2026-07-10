@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -9,7 +11,9 @@ const assetsDir = path.join(root, "public", "character-assets");
 const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!url || !serviceKey) throw new Error("Missing SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+if (!url || !serviceKey) {
+  throw new Error("Missing SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
 
 const categoryMap = {
   "EverBond Girls": "everbond-girls",
@@ -18,7 +22,33 @@ const categoryMap = {
   "Public Creations": "public-creations"
 };
 
-const required = ["id","image_file","name","section","role","tags","title","opening_scenario","first_message","relationship_context","ai_profile","feature_flags","generated_seo"];
+const requiredStrings = [
+  "id", "image_file", "name", "section", "role", "relationship_pace",
+  "title", "opening_scenario", "first_message", "relationship_context"
+];
+
+function assertObject(value, label, id) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${id}: ${label} must be an object`);
+  }
+}
+
+function validateCharacter(character, file) {
+  const id = character?.id ?? "unknown";
+  for (const field of requiredStrings) {
+    if (typeof character?.[field] !== "string" || !character[field].trim()) {
+      throw new Error(`${file}: ${id} missing required string field ${field}`);
+    }
+  }
+  if (!Array.isArray(character.tags)) throw new Error(`${id}: tags must be an array`);
+  assertObject(character.ai_profile, "ai_profile", id);
+  assertObject(character.feature_flags, "feature_flags", id);
+  assertObject(character.generated_seo, "generated_seo", id);
+  if (typeof character.generated_seo.slug !== "string" || !character.generated_seo.slug.trim()) {
+    throw new Error(`${id}: generated_seo.slug is required`);
+  }
+}
+
 const files = fs.readdirSync(dataDir).filter((file) => file.endsWith(".json")).sort();
 const all = [];
 const ids = new Set();
@@ -27,10 +57,11 @@ const slugs = new Set();
 for (const file of files) {
   const parsed = JSON.parse(fs.readFileSync(path.join(dataDir, file), "utf8"));
   if (!Array.isArray(parsed)) throw new Error(`${file} must contain a JSON array`);
+
   for (const character of parsed) {
-    for (const field of required) if (character[field] === undefined || character[field] === null) throw new Error(`${file}: ${character.id ?? "unknown"} missing ${field}`);
-    const slug = character.generated_seo?.slug;
-    if (!slug) throw new Error(`${character.id}: generated_seo.slug is required`);
+    validateCharacter(character, file);
+
+    const slug = character.generated_seo.slug.trim();
     if (ids.has(character.id)) throw new Error(`Duplicate character id: ${character.id}`);
     if (slugs.has(slug)) throw new Error(`Duplicate character slug: ${slug}`);
     ids.add(character.id);
@@ -38,8 +69,11 @@ for (const file of files) {
 
     const category = categoryMap[character.section];
     if (!category) throw new Error(`${character.id}: unsupported section ${character.section}`);
+
     const assetPath = path.join(assetsDir, category, character.image_file);
-    if (!fs.existsSync(assetPath)) throw new Error(`${character.id}: missing image ${assetPath}`);
+    if (!fs.existsSync(assetPath)) {
+      throw new Error(`${character.id}: missing image public/character-assets/${category}/${character.image_file}`);
+    }
 
     all.push({
       id: character.id,
@@ -48,7 +82,7 @@ for (const file of files) {
       section: character.section,
       category,
       role: character.role,
-      relationship_pace: character.relationship_pace ?? null,
+      relationship_pace: character.relationship_pace,
       tags: character.tags,
       title: character.title,
       opening_scenario: character.opening_scenario,
@@ -62,16 +96,20 @@ for (const file of files) {
       visibility: "public",
       is_public: true,
       official: category !== "public-creations",
-      creator_username: category === "public-creations" ? null : "everbond"
+      creator_username: category === "public-creations" ? null : "everbond",
+      is_active: true,
+      updated_at: new Date().toISOString()
     });
   }
 }
 
 const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
+
 for (let i = 0; i < all.length; i += 200) {
   const batch = all.slice(i, i + 200);
   const { error } = await supabase.from("characters").upsert(batch, { onConflict: "id" });
   if (error) throw error;
   console.log(`Imported ${Math.min(i + batch.length, all.length)}/${all.length}`);
 }
+
 console.log(`Done. Imported ${all.length} characters using text primary keys.`);
