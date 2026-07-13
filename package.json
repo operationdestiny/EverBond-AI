@@ -10,7 +10,7 @@
     "import:characters": "node scripts/import-characters.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.47.10",
+    "@supabase/supabase-js": "^2.110.3",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "lucide-react": "^0.468.0",
