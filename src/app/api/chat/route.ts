@@ -163,24 +163,6 @@ export async function POST(request: Request) {
       content: prompt
     },
     {
-       if (!lastUserMessage.trim()) {
-    return NextResponse.json(
-      { error: "Missing user message" },
-      { status: 400 }
-    );
-  }
-
-  const recent = body.data.messages.slice(-8).map((m) => {
-    const role = m.role === "character" ? character.name : "user";
-    return `${role}: ${m.content}`;
-  });
-
-  const prompt = buildChatModePrompt(character, memory, recent, language);
-
-  if (conversationId) {
-    await supabase.from("messages").insert({
-      conversation_id: conversationId,
-      role: "user",
       role: "user",
       content: lastUserMessage
     }
