@@ -16,47 +16,140 @@ export type EverBondModelResult = {
 const DEV_FALLBACK =
   'She glances over for a second, trying not to smile too much. "I heard you. I just need a minute to figure out what to say."';
 
-export async function callEverBondModel(messages: EverBondMessage[]): Promise<EverBondModelResult> {
-  const provider = process.env.AI_PROVIDER || "generic_openai_compatible";
-  const apiBaseUrl = process.env.AI_API_BASE_URL;
-  const apiKey = process.env.AI_API_KEY;
-  const model = process.env.AI_MODEL_ID || "everbond-model-not-configured";
-  const maxTokens = Number(process.env.AI_MAX_TOKENS || 220);
-  const temperature = Number(process.env.AI_TEMPERATURE || 0.82);
+function cleanBaseUrl(value: string) {
+  return value.replace(/\/$/, "");
+}
 
-  if (!apiBaseUrl || !apiKey || !model || model === "everbond-model-not-configured") {
-    return { content: DEV_FALLBACK, inputTokens: 0, outputTokens: 0, provider: "dev_fallback", model };
+function buildChatCompletionsEndpoint(baseUrl: string) {
+  const clean = cleanBaseUrl(baseUrl);
+
+  if (clean.endsWith("/chat/completions")) {
+    return clean;
   }
 
-  const endpoint = apiBaseUrl.endsWith("/chat/completions")
-    ? apiBaseUrl
-    : `${apiBaseUrl.replace(/\/$/, "")}/chat/completions`;
+  return `${clean}/chat/completions`;
+}
 
+function getProviderConfig() {
+  const provider = process.env.AI_PROVIDER || "venice";
+
+  if (provider === "venice") {
+    return {
+      provider: "venice",
+      apiBaseUrl:
+        process.env.VENICE_BASE_URL ||
+        process.env.AI_API_BASE_URL ||
+        "https://api.venice.ai/api/v1",
+      apiKey:
+        process.env.VENICE_API_KEY ||
+        process.env.AI_API_KEY ||
+        "",
+      model:
+        process.env.VENICE_CHAT_MODEL ||
+        process.env.AI_MODEL_ID ||
+        "venice-uncensored-role-play",
+      useVeniceParameters: true
+    };
+  }
+
+  return {
+    provider,
+    apiBaseUrl: process.env.AI_API_BASE_URL || "",
+    apiKey: process.env.AI_API_KEY || "",
+    model: process.env.AI_MODEL_ID || "everbond-model-not-configured",
+    useVeniceParameters: false
+  };
+}
+
+function getNumberEnv(name: string, fallback: number) {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+async function postChatCompletion(
+  endpoint: string,
+  apiKey: string,
+  body: Record<string, unknown>
+) {
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: maxTokens,
-      temperature,
-      top_p: 0.9
-    })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) {
-    throw new Error(`EverBond AI provider request failed: ${response.status} ${await response.text()}`);
+    const text = await response.text();
+    throw new Error(`EverBond AI provider request failed: ${response.status} ${text}`);
   }
 
-  const data = await response.json();
+  return response.json();
+}
+
+export async function callEverBondModel(
+  messages: EverBondMessage[]
+): Promise<EverBondModelResult> {
+  const config = getProviderConfig();
+
+  const maxTokens = getNumberEnv("AI_MAX_TOKENS", 220);
+  const temperature = getNumberEnv("AI_TEMPERATURE", 0.9);
+  const topP = getNumberEnv("AI_TOP_P", 0.95);
+
+  if (
+    !config.apiBaseUrl ||
+    !config.apiKey ||
+    !config.model ||
+    config.model === "everbond-model-not-configured"
+  ) {
+    return {
+      content: DEV_FALLBACK,
+      inputTokens: 0,
+      outputTokens: 0,
+      provider: "dev_fallback",
+      model: config.model
+    };
+  }
+
+  const endpoint = buildChatCompletionsEndpoint(config.apiBaseUrl);
+
+  const requestBody: Record<string, unknown> = {
+    model: config.model,
+    messages,
+    max_tokens: maxTokens,
+    temperature,
+    top_p: topP
+  };
+
+  if (config.useVeniceParameters) {
+    requestBody.venice_parameters = {
+      include_venice_system_prompt: false,
+      enable_web_search: "off"
+    };
+  }
+
+  // No external fallback. Retry the same Venice/private model once for temporary failures.
+  let data: any;
+
+  try {
+    data = await postChatCompletion(endpoint, config.apiKey, requestBody);
+  } catch (firstError) {
+    data = await postChatCompletion(endpoint, config.apiKey, requestBody).catch(() => {
+      throw firstError;
+    });
+  }
+
+  const content = data.choices?.[0]?.message?.content;
+
   return {
-    content: data.choices?.[0]?.message?.content ?? "",
+    content: typeof content === "string" ? content.trim() : "",
     inputTokens: data.usage?.prompt_tokens ?? 0,
     outputTokens: data.usage?.completion_tokens ?? 0,
-    provider,
-    model
+    provider: config.provider,
+    model: config.model
   };
 }
