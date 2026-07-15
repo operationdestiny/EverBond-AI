@@ -29,6 +29,9 @@ export type PremiumCharacterInput = {
   display_order?: number;
 };
 
+// Backward-compatible export for old API routes that still import EverBondCharacterInput.
+export type EverBondCharacterInput = PremiumCharacterInput;
+
 export function sectionToCategory(section: string): CharacterCategory {
   const normalized = section.toLowerCase();
 
@@ -72,6 +75,14 @@ export function fallbackImagePathForCharacter(character: PremiumCharacterInput) 
   return `/character-assets/${imageStoragePathForCharacter(character)}`;
 }
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export function toDatabaseCharacter(character: PremiumCharacterInput) {
   const category = normalizeCharacterCategory(character.section, character.category);
   const official = category !== "public-creations";
@@ -83,10 +94,7 @@ export function toDatabaseCharacter(character: PremiumCharacterInput) {
     slug:
       character.slug ||
       character.generated_seo?.slug ||
-      `${character.name}-${character.title}`
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, ""),
+      slugify(`${character.name}-${character.title}`),
     name: character.name,
     section: character.section,
     category,
