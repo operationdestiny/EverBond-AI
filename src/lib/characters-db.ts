@@ -30,6 +30,8 @@ type CharacterRow = {
   generated_seo?: JsonObject | null;
   quality_control?: JsonObject | null;
   image_file: string;
+  image_storage_bucket?: string | null;
+  image_storage_path?: string | null;
   image_url: string;
   visibility?: "public" | "private" | "unlisted";
   is_public?: boolean;
@@ -44,10 +46,18 @@ type CharacterRow = {
 const DEFAULT_CATEGORY: CharacterCategory = "everbond-girls";
 
 const selectFields =
-  "id,slug,name,section,category,role,relationship_pace,tags,title,opening_scenario,first_message,relationship_context,ai_profile,feature_flags,generated_seo,quality_control,image_file,image_url,visibility,is_public,official,view_count,favorite_count,display_order,creator_username,created_at";
+  "id,slug,name,section,category,role,relationship_pace,tags,title,opening_scenario,first_message,relationship_context,ai_profile,feature_flags,generated_seo,quality_control,image_file,image_storage_bucket,image_storage_path,image_url,visibility,is_public,official,view_count,favorite_count,display_order,creator_username,created_at";
 
 function normalizeCategory(value?: string | null): CharacterCategory {
-  if (value === "anime-fantasy" || value === "everbond-guys" || value === "public-creations" || value === "everbond-girls") return value;
+  if (
+    value === "anime-fantasy" ||
+    value === "everbond-guys" ||
+    value === "public-creations" ||
+    value === "everbond-girls"
+  ) {
+    return value;
+  }
+
   return DEFAULT_CATEGORY;
 }
 
@@ -66,6 +76,18 @@ function arrayFrom(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
+function characterImageFromRow(row: CharacterRow) {
+  if (row.image_url && row.image_url.trim()) return row.image_url;
+
+  const category = normalizeCategory(row.category);
+
+  if (row.image_storage_path && row.image_storage_path.trim()) {
+    return `/character-assets/${row.image_storage_path}`;
+  }
+
+  return `/character-assets/${category}/${row.image_file}`;
+}
+
 export function rowToCharacter(row: CharacterRow): Character {
   const ai = row.ai_profile ?? {};
   const visual = (ai.visual_identity ?? {}) as JsonObject;
@@ -80,7 +102,6 @@ export function rowToCharacter(row: CharacterRow): Character {
   const traits = arrayFrom(core.traits);
   const flaws = arrayFrom(core.flaws);
   const petNames = arrayFrom(speech.pet_names);
-  const remember = arrayFrom(memoryRules.remember);
 
   return {
     id: row.id,
@@ -90,7 +111,7 @@ export function rowToCharacter(row: CharacterRow): Character {
     category,
     gender: category === "everbond-guys" ? "male" : "female",
     voiceGender: category === "everbond-guys" ? "male" : "female",
-    image: row.image_url,
+    image: characterImageFromRow(row),
     tagline: row.title,
     description: row.opening_scenario,
     openingMessage: row.first_message,
@@ -99,44 +120,53 @@ export function rowToCharacter(row: CharacterRow): Character {
     official: Boolean(row.official),
     viewCount: compactViewCount(row.view_count),
     creatorUsername: row.creator_username ?? undefined,
-    createdAt: row.created_at && Date.now() - new Date(row.created_at).getTime() < 86_400_000 ? "today" : "older",
+    createdAt:
+      row.created_at && Date.now() - new Date(row.created_at).getTime() < 86_400_000
+        ? "today"
+        : "older",
     card: {
       name: row.name,
       personality: [
         traits.length ? traits.join(", ") : "",
         flaws.length ? `Flaws: ${flaws.join(", ")}` : "",
         stringFrom(core.emotional_need)
-      ].filter(Boolean).join(" · "),
+      ]
+        .filter(Boolean)
+        .join(" · "),
       tone: [
         pace,
         stringFrom(dynamic.starting_bond),
         stringFrom(dynamic.tension_type),
         stringFrom(dynamic.affection_style)
-      ].filter(Boolean).join(" · "),
-      speechStyle: [
-        stringFrom(speech.voice),
-        stringFrom(speech.sentence_style),
-        petNames.length ? `Pet names: ${petNames.join(", ")}` : ""
-      ].filter(Boolean).join(" · ") || "Natural, emotional, in-character dialogue.",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      speechStyle:
+        [
+          stringFrom(speech.voice),
+          stringFrom(speech.sentence_style),
+          petNames.length ? `Pet names: ${petNames.join(", ")}` : ""
+        ]
+          .filter(Boolean)
+          .join(" · ") || "Natural, emotional, in-character dialogue.",
       motivations: row.relationship_context ?? row.title,
-      boundaries: "Stay in character, never control the user, and keep the scene emotionally grounded.",
-      relationshipStyle: [
-        pace,
-        stringFrom(dynamic.conflict_style)
-      ].filter(Boolean).join(" · "),
-      worldContext: [
-        row.section,
-        stringFrom(visual.setting),
-        stringFrom(visual.mood)
-      ].filter(Boolean).join(" · "),
-      exampleDialogue: [row.first_message, ...arrayFrom(ai.sample_dialogue)].filter(Boolean),
-
+      boundaries:
+        "Stay in character, never control the user, and keep the scene emotionally grounded.",
+      relationshipStyle: [pace, stringFrom(dynamic.conflict_style)]
+        .filter(Boolean)
+        .join(" · "),
+      worldContext: [row.section, stringFrom(visual.setting), stringFrom(visual.mood)]
+        .filter(Boolean)
+        .join(" · "),
+      exampleDialogue: [row.first_message, ...arrayFrom(ai.sample_dialogue)].filter(Boolean)
     }
   };
 }
 
 function canUseSupabase() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
 }
 
 export async function queryCharacters(input: CharacterQuery = {}) {
@@ -144,8 +174,14 @@ export async function queryCharacters(input: CharacterQuery = {}) {
   const offset = Math.max(input.offset ?? 0, 0);
 
   if (!canUseSupabase()) {
-    const filtered = fallbackCharacters.filter((item) => !input.category || item.category === input.category);
-    return { characters: filtered.slice(offset, offset + limit), hasMore: filtered.length > offset + limit };
+    const filtered = fallbackCharacters.filter(
+      (item) => !input.category || item.category === input.category
+    );
+
+    return {
+      characters: filtered.slice(offset, offset + limit),
+      hasMore: filtered.length > offset + limit
+    };
   }
 
   const supabase = getSupabaseServiceClient();
@@ -162,7 +198,9 @@ export async function queryCharacters(input: CharacterQuery = {}) {
 
   if (input.query?.trim()) {
     const term = input.query.trim().replaceAll(",", " ");
-    query = query.or(`name.ilike.%${term}%,title.ilike.%${term}%,opening_scenario.ilike.%${term}%,role.ilike.%${term}%`);
+    query = query.or(
+      `name.ilike.%${term}%,title.ilike.%${term}%,opening_scenario.ilike.%${term}%,role.ilike.%${term}%`
+    );
   }
 
   const { data, error, count } = await query
@@ -174,18 +212,28 @@ export async function queryCharacters(input: CharacterQuery = {}) {
 
   return {
     characters: (data as CharacterRow[]).map(rowToCharacter),
-    hasMore: typeof count === "number" ? offset + limit < count : (data?.length ?? 0) === limit
+    hasMore:
+      typeof count === "number" ? offset + limit < count : (data?.length ?? 0) === limit
   };
 }
 
-export async function getCharactersFromSupabase(limit = 100, offset = 0, category: CharacterCategory = "everbond-girls") {
+export async function getCharactersFromSupabase(
+  limit = 100,
+  offset = 0,
+  category: CharacterCategory = "everbond-girls"
+) {
   return (await queryCharacters({ limit, offset, category })).characters;
 }
 
-export async function getCharacterBySlugFromSupabase(slug: string): Promise<Character | undefined> {
-  if (!canUseSupabase()) return fallbackCharacters.find((character) => character.slug === slug);
+export async function getCharacterBySlugFromSupabase(
+  slug: string
+): Promise<Character | undefined> {
+  if (!canUseSupabase()) {
+    return fallbackCharacters.find((character) => character.slug === slug);
+  }
 
   const supabase = getSupabaseServiceClient();
+
   const { data, error } = await supabase
     .from("characters")
     .select(selectFields)
@@ -196,5 +244,6 @@ export async function getCharacterBySlugFromSupabase(slug: string): Promise<Char
     .maybeSingle();
 
   if (error) throw error;
+
   return data ? rowToCharacter(data as CharacterRow) : undefined;
 }
