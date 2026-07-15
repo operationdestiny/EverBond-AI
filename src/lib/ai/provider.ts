@@ -38,15 +38,12 @@ function getProviderConfig() {
       provider: "venice",
       apiBaseUrl:
         process.env.VENICE_BASE_URL ||
-        process.env.AI_API_BASE_URL ||
         "https://api.venice.ai/api/v1",
       apiKey:
         process.env.VENICE_API_KEY ||
-        process.env.AI_API_KEY ||
         "",
       model:
         process.env.VENICE_CHAT_MODEL ||
-        process.env.AI_MODEL_ID ||
         "venice-uncensored-role-play",
       useVeniceParameters: true
     };
@@ -96,7 +93,7 @@ export async function callEverBondModel(
 ): Promise<EverBondModelResult> {
   const config = getProviderConfig();
 
-  const maxTokens = getNumberEnv("AI_MAX_TOKENS", 220);
+  const maxTokens = getNumberEnv("AI_MAX_TOKENS", 120);
   const temperature = getNumberEnv("AI_TEMPERATURE", 0.9);
   const topP = getNumberEnv("AI_TOP_P", 0.95);
 
