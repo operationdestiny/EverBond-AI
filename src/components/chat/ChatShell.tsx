@@ -528,7 +528,7 @@ export function ChatShell({ character }: { character: Character }) {
         </div>
       )}
 
-      {gateMode && (
+       {gateMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
           <div className="relative grid w-full max-w-3xl overflow-hidden rounded-[2rem] border-2 border-bond-rose/70 bg-bond-card shadow-[0_0_36px_rgba(255,92,168,0.28)] md:grid-cols-[0.95fr_1.05fr]">
             <button
@@ -547,6 +547,7 @@ export function ChatShell({ character }: { character: Character }) {
               />
 
               <div className="absolute bottom-0 left-0 right-0 flex justify-center bg-gradient-to-t from-black/85 via-black/45 to-transparent px-5 pb-5 pt-16">
+                <p className="max-w-[88%] text-center text-[14px] font from-black/85 via-black/45 to-transparent px-5 pb-5 pt-16">
                 <p className="max-w-[88%] text-center text-[14px] font-semibold leading-5 text-bond-rose drop-shadow-[0_0_12px_rgba(255,92,168,0.65)]">
                   {gateMode === "signup"
                     ? SIGNUP_REQUIRED_MESSAGE
@@ -561,21 +562,7 @@ export function ChatShell({ character }: { character: Character }) {
                   Start your bond
                 </p>
 
-                <button
-                  onClick={handleGoogleLogin}
-                  disabled={authLoading}
-                  className="bond-pink-button mt-8 rounded-xl border border-bond-rose/40 bg-white px-5 py-3 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Continue with Google
-                </button>
-
-                <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-bond-muted">
-                  <span className="h-px flex-1 bg-white/10" />
-                  or
-                  <span className="h-px flex-1 bg-white/10" />
-                </div>
-
-                <div className="space-y-3">
+                <div className="mt-8 space-y-3">
                   <input
                     value={authEmail}
                     onChange={(event) => setAuthEmail(event.target.value)}
@@ -600,6 +587,18 @@ export function ChatShell({ character }: { character: Character }) {
                     {authLoading ? "One moment..." : "Continue with email"}
                   </button>
                 </div>
+
+                <p className="mt-5 text-center text-[11px] leading-5 text-bond-muted">
+                  By continuing, you confirm that you are of legal age and agree to our{" "}
+                  <Link href="/legal" className="font-semibold text-bond-rose hover:underline">
+                    Terms of Use
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/legal" className="font-semibold text-bond-rose hover:underline">
+                    Privacy Policy
+                  </Link>
+                  .
+                </p>
 
                 {authError && (
                   <p className="mt-4 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
