@@ -528,7 +528,7 @@ export function ChatShell({ character }: { character: Character }) {
         </div>
       )}
 
-            {gateMode && (
+      {gateMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
           <div className="relative grid w-full max-w-3xl overflow-hidden rounded-[2rem] border-2 border-bond-rose/70 bg-bond-card shadow-[0_0_36px_rgba(255,92,168,0.28)] md:grid-cols-[0.95fr_1.05fr]">
             <button
@@ -546,8 +546,8 @@ export function ChatShell({ character }: { character: Character }) {
                 className="h-full min-h-[360px] w-full object-cover"
               />
 
-              <div className="absolute bottom-0 left-0 right-0 p-5">
-                <p className="max-w-[92%] text-[15px] font-semibold leading-6 text-bond-rose drop-shadow-[0_0_12px_rgba(255,92,168,0.45)]">
+              <div className="absolute bottom-0 left-0 right-0 flex justify-center bg-gradient-to-t from-black/85 via-black/45 to-transparent px-5 pb-5 pt-16">
+                <p className="max-w-[88%] text-center text-[14px] font-semibold leading-5 text-bond-rose drop-shadow-[0_0_12px_rgba(255,92,168,0.65)]">
                   {gateMode === "signup"
                     ? SIGNUP_REQUIRED_MESSAGE
                     : TRIAL_ENDED_MESSAGE}
@@ -557,7 +557,7 @@ export function ChatShell({ character }: { character: Character }) {
 
             {gateMode === "signup" ? (
               <div className="flex flex-col justify-center p-6 md:p-8">
-                <p className="font-display text-3xl font-bold text-bond-rose drop-shadow-[0_0_14px_rgba(255,92,168,0.28)]">
+                <p className="text-center font-display text-3xl font-bold text-bond-rose drop-shadow-[0_0_14px_rgba(255,92,168,0.28)]">
                   Start your bond
                 </p>
 
@@ -615,7 +615,7 @@ export function ChatShell({ character }: { character: Character }) {
               </div>
             ) : (
               <div className="flex flex-col justify-center p-6 md:p-8">
-                <p className="font-display text-3xl font-bold text-bond-rose drop-shadow-[0_0_14px_rgba(255,92,168,0.28)]">
+                <p className="text-center font-display text-3xl font-bold text-bond-rose drop-shadow-[0_0_14px_rgba(255,92,168,0.28)]">
                   Keep your companion
                 </p>
 
