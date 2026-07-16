@@ -644,3 +644,6 @@ export function ChatShell({ character }: { character: Character }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
