@@ -46,9 +46,6 @@ export function ChatShell({ character }: { character: Character }) {
     { role: "character", content: initialCharacterMessage }
   ]);
   const [input, setInput] = useState("");
-  const [    { role: "character", content: initialCharacterMessage }
-  ]);
-  const [input, setInput] = useState("");
   const [gateMode, setGateMode] = useState<GateMode>(null);
   const [showPortrait, setShowPortrait] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
@@ -63,7 +60,7 @@ export function ChatShell({ character }: { character: Character }) {
   const [pendingMessage, setPendingMessage] = useState("");
 
   const isPublicCreation = character.category === "public-creations";
-
+  
   const supabase = useMemo(() => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
