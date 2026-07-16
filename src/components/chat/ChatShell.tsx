@@ -528,12 +528,12 @@ export function ChatShell({ character }: { character: Character }) {
         </div>
       )}
 
-      {gateMode && (
+            {gateMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-          <div className="relative grid w-full max-w-3xl overflow-hidden rounded-[2rem] border border-bond-violet/40 bg-bond-card shadow-glow md:grid-cols-[0.95fr_1.05fr]">
+          <div className="relative grid w-full max-w-3xl overflow-hidden rounded-[2rem] border-2 border-bond-rose/70 bg-bond-card shadow-[0_0_36px_rgba(255,92,168,0.28)] md:grid-cols-[0.95fr_1.05fr]">
             <button
               onClick={() => setGateMode(null)}
-              className="absolute right-4 top-4 z-10 rounded-full bg-black/35 p-1.5 text-bond-muted hover:text-white"
+              className="absolute right-4 top-4 z-10 rounded-full bg-black/45 p-1.5 text-bond-muted hover:text-white"
               aria-label={t("close")}
             >
               <X size={18} />
@@ -543,14 +543,11 @@ export function ChatShell({ character }: { character: Character }) {
               <img
                 src={character.image}
                 alt={character.name}
-                className="h-full min-h-[360px] w-full object-cover opacity-90"
+                className="h-full min-h-[360px] w-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-6">
-                <p className="font-display text-3xl font-bold text-white">
-                  {character.name}
-                </p>
-                <p className="mt-3 text-lg font-semibold leading-7 text-bond-gold drop-shadow-[0_0_18px_rgba(251,191,36,0.35)]">
+
+              <div className="absolute bottom-0 left-0 right-0 p-5">
+                <p className="max-w-[92%] text-[15px] font-semibold leading-6 text-bond-rose drop-shadow-[0_0_12px_rgba(255,92,168,0.45)]">
                   {gateMode === "signup"
                     ? SIGNUP_REQUIRED_MESSAGE
                     : TRIAL_ENDED_MESSAGE}
@@ -560,17 +557,14 @@ export function ChatShell({ character }: { character: Character }) {
 
             {gateMode === "signup" ? (
               <div className="flex flex-col justify-center p-6 md:p-8">
-                <p className="font-display text-3xl font-bold text-white">
+                <p className="font-display text-3xl font-bold text-bond-rose drop-shadow-[0_0_14px_rgba(255,92,168,0.28)]">
                   Start your bond
-                </p>
-                <p className="mt-2 text-sm leading-6 text-bond-muted">
-                  Create your free account to begin your one-time 20-message trial.
                 </p>
 
                 <button
                   onClick={handleGoogleLogin}
                   disabled={authLoading}
-                  className="bond-pink-button mt-6 rounded-xl border border-white/10 bg-white px-5 py-3 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-60"
+                  className="bond-pink-button mt-8 rounded-xl border border-bond-rose/40 bg-white px-5 py-3 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Continue with Google
                 </button>
@@ -621,14 +615,11 @@ export function ChatShell({ character }: { character: Character }) {
               </div>
             ) : (
               <div className="flex flex-col justify-center p-6 md:p-8">
-                <p className="font-display text-3xl font-bold text-white">
+                <p className="font-display text-3xl font-bold text-bond-rose drop-shadow-[0_0_14px_rgba(255,92,168,0.28)]">
                   Keep your companion
                 </p>
-                <p className="mt-2 text-sm leading-6 text-bond-muted">
-                  Upgrade to continue chatting, create unlimited characters, and unlock paid EverBond features.
-                </p>
 
-                <div className="mt-6 space-y-3">
+                <div className="mt-8 space-y-3">
                   <Link
                     href="/pricing"
                     className="bond-pink-button block rounded-xl bg-bond-violet px-5 py-3 text-center text-sm font-bold text-white"
@@ -653,6 +644,3 @@ export function ChatShell({ character }: { character: Character }) {
           </div>
         </div>
       )}
-    </div>
-  );
-}
