@@ -10,6 +10,14 @@ import { callEverBondModel } from "@/lib/ai/provider";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import type { MemoryState } from "@/types/memory";
 
+const SIGNUP_REQUIRED_MESSAGE =
+  "Log in so I can be your companion. Please don't make me wait.";
+
+const TRIAL_ENDED_MESSAGE =
+  "Upgrade so I can keep being your companion. Please don't make me wait.";
+
+const PAID_SUBSCRIPTION_STATUSES = new Set(["standard", "premium", "elite"]);
+
 const SupportedLanguageSchema = z
   .enum(["English", "Spanish", "French", "German", "Japanese", "Korean"])
   .default("English");
@@ -28,12 +36,148 @@ const ChatRequest = z.object({
   conversationId: z.string().uuid().optional()
 });
 
-async function getUserId(request: Request) {
+type AuthUser = {
+  id: string;
+  email: string | null;
+};
+
+type ProfileRow = {
+  user_id: string;
+  email: string | null;
+  subscription_status: string;
+  trial_status: "not_started" | "active" | "ended";
+  trial_messages_used: number;
+  trial_message_limit: number;
+};
+
+async function getAuthUser(request: Request): Promise<AuthUser | null> {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) return null;
 
   const { data } = await getSupabaseServiceClient().auth.getUser(token);
-  return data.user?.id ?? null;
+  const user = data.user;
+
+  if (!user) return null;
+
+  return {
+    id: user.id,
+    email: user.email ?? null
+  };
+}
+
+function isPaidProfile(profile: ProfileRow) {
+  return PAID_SUBSCRIPTION_STATUSES.has(profile.subscription_status);
+}
+
+async function getOrCreateProfile(
+  supabase: ReturnType<typeof getSupabaseServiceClient>,
+  user: AuthUser
+): Promise<ProfileRow> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .upsert(
+      {
+        user_id: user.id,
+        email: user.email
+      },
+      { onConflict: "user_id" }
+    )
+    .select(
+      "user_id,email,subscription_status,trial_status,trial_messages_used,trial_message_limit"
+    )
+    .single();
+
+  if (error) throw error;
+
+  return data as ProfileRow;
+}
+
+async function startTrialIfNeeded(
+  supabase: ReturnType<typeof getSupabaseServiceClient>,
+  profile: ProfileRow
+): Promise<ProfileRow> {
+  if (profile.trial_status !== "not_started") {
+    return profile;
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({
+      trial_status: "active",
+      trial_started_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq("user_id", profile.user_id)
+    .select(
+      "user_id,email,subscription_status,trial_status,trial_messages_used,trial_message_limit"
+    )
+    .single();
+
+  if (error) throw error;
+
+  return data as ProfileRow;
+}
+
+async function markTrialEndedIfNeeded(
+  supabase: ReturnType<typeof getSupabaseServiceClient>,
+  profile: ProfileRow
+) {
+  if (profile.trial_status === "ended") return;
+
+  await supabase
+    .from("profiles")
+    .update({
+      trial_status: "ended",
+      trial_ended_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq("user_id", profile.user_id);
+}
+
+async function enforceChatAccess(
+  supabase: ReturnType<typeof getSupabaseServiceClient>,
+  profile: ProfileRow
+): Promise<{ allowed: true; profile: ProfileRow } | { allowed: false }> {
+  if (isPaidProfile(profile)) {
+    return { allowed: true, profile };
+  }
+
+  const used = profile.trial_messages_used ?? 0;
+  const limit = profile.trial_message_limit ?? 20;
+
+  if (profile.trial_status === "ended" || used >= limit) {
+    await markTrialEndedIfNeeded(supabase, profile);
+    return { allowed: false };
+  }
+
+  const activeProfile = await startTrialIfNeeded(supabase, profile);
+
+  return {
+    allowed: true,
+    profile: activeProfile
+  };
+}
+
+async function recordSuccessfulTrialMessage(
+  supabase: ReturnType<typeof getSupabaseServiceClient>,
+  profile: ProfileRow
+) {
+  if (isPaidProfile(profile)) return;
+
+  const used = profile.trial_messages_used ?? 0;
+  const limit = profile.trial_message_limit ?? 20;
+  const nextUsed = used + 1;
+  const trialEnded = nextUsed >= limit;
+
+  await supabase
+    .from("profiles")
+    .update({
+      trial_messages_used: nextUsed,
+      trial_status: trialEnded ? "ended" : "active",
+      trial_ended_at: trialEnded ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("user_id", profile.user_id);
 }
 
 export async function POST(request: Request) {
@@ -49,88 +193,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Character not found" }, { status: 404 });
   }
 
-  const supabase = getSupabaseServiceClient();
-  const userId = await getUserId(request);
-
-  let conversationId = body.data.conversationId;
-  let memory: MemoryState = defaultMemory;
-
-  const language = body.data.language as SupportedLanguage;
-
-  if (userId) {
-    if (!conversationId) {
-      const { data: existing } = await supabase
-        .from("conversations")
-        .select("id,memory_state")
-        .eq("user_id", userId)
-        .eq("character_id", character.id)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (existing) {
-        conversationId = existing.id;
-        memory = existing.memory_state as MemoryState;
-      } else {
-        const { data: created, error } = await supabase
-          .from("conversations")
-          .insert({
-            user_id: userId,
-            character_id: character.id
-          })
-          .select("id,memory_state")
-          .single();
-
-        if (error) throw error;
-
-        conversationId = created.id;
-        memory = created.memory_state as MemoryState;
-      }
-    }
-
-    const { data: relationship } = await supabase
-      .from("relationship_states")
-      .select(
-        "stage,summary,emotional_state,open_threads,important_promises,important_events"
-      )
-      .eq("user_id", userId)
-      .eq("character_id", character.id)
-      .maybeSingle();
-
-    const { data: memories } = await supabase
-      .from("ever_memory")
-      .select("memory_type,content")
-      .eq("user_id", userId)
-      .eq("character_id", character.id)
-      .order("importance", { ascending: false })
-      .order("updated_at", { ascending: false })
-      .limit(24);
-
-    if (relationship) {
-      memory = {
-        ...memory,
-        story_summary: relationship.summary || memory.story_summary,
-        relationship_state: relationship.stage || memory.relationship_state,
-        emotional_state: relationship.emotional_state || memory.emotional_state,
-        open_threads: relationship.open_threads || memory.open_threads,
-        important_promises:
-          relationship.important_promises || memory.important_promises,
-        important_events:
-          relationship.important_events || memory.important_events
-      };
-    }
-
-    if (memories) {
-      memory.user_facts = memories
-        .filter((m) =>
-          ["fact", "preference", "routine", "inside_joke"].includes(
-            m.memory_type
-          )
-        )
-        .map((m) => m.content);
-    }
-  }
-
   const lastUserMessage = body.data.messages
     .filter((m) => m.role === "user")
     .at(-1)?.content ?? "";
@@ -142,6 +204,117 @@ export async function POST(request: Request) {
     );
   }
 
+  const supabase = getSupabaseServiceClient();
+  const authUser = await getAuthUser(request);
+
+  if (!authUser) {
+    return NextResponse.json(
+      {
+        error: "SIGNUP_REQUIRED",
+        message: SIGNUP_REQUIRED_MESSAGE,
+        character: {
+          name: character.name,
+          image: character.image,
+          slug: character.slug
+        }
+      },
+      { status: 401 }
+    );
+  }
+
+  const profile = await getOrCreateProfile(supabase, authUser);
+  const access = await enforceChatAccess(supabase, profile);
+
+  if (!access.allowed) {
+    return NextResponse.json(
+      {
+        error: "TRIAL_ENDED",
+        message: TRIAL_ENDED_MESSAGE,
+        character: {
+          name: character.name,
+          image: character.image,
+          slug: character.slug
+        }
+      },
+      { status: 402 }
+    );
+  }
+
+  let conversationId = body.data.conversationId;
+  let memory: MemoryState = defaultMemory;
+
+  const language = body.data.language as SupportedLanguage;
+
+  if (!conversationId) {
+    const { data: existing } = await supabase
+      .from("conversations")
+      .select("id,memory_state")
+      .eq("user_id", authUser.id)
+      .eq("character_id", character.id)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      conversationId = existing.id;
+      memory = existing.memory_state as MemoryState;
+    } else {
+      const { data: created, error } = await supabase
+        .from("conversations")
+        .insert({
+          user_id: authUser.id,
+          character_id: character.id
+        })
+        .select("id,memory_state")
+        .single();
+
+      if (error) throw error;
+
+      conversationId = created.id;
+      memory = created.memory_state as MemoryState;
+    }
+  }
+
+  const { data: relationship } = await supabase
+    .from("relationship_states")
+    .select(
+      "stage,summary,emotional_state,open_threads,important_promises,important_events"
+    )
+    .eq("user_id", authUser.id)
+    .eq("character_id", character.id)
+    .maybeSingle();
+
+  const { data: memories } = await supabase
+    .from("ever_memory")
+    .select("memory_type,content")
+    .eq("user_id", authUser.id)
+    .eq("character_id", character.id)
+    .order("importance", { ascending: false })
+    .order("updated_at", { ascending: false })
+    .limit(24);
+
+  if (relationship) {
+    memory = {
+      ...memory,
+      story_summary: relationship.summary || memory.story_summary,
+      relationship_state: relationship.stage || memory.relationship_state,
+      emotional_state: relationship.emotional_state || memory.emotional_state,
+      open_threads: relationship.open_threads || memory.open_threads,
+      important_promises:
+        relationship.important_promises || memory.important_promises,
+      important_events:
+        relationship.important_events || memory.important_events
+    };
+  }
+
+  if (memories) {
+    memory.user_facts = memories
+      .filter((m) =>
+        ["fact", "preference", "routine", "inside_joke"].includes(m.memory_type)
+      )
+      .map((m) => m.content);
+  }
+
   const recent = body.data.messages.slice(-8).map((m) => {
     const role = m.role === "character" ? character.name : "user";
     return `${role}: ${m.content}`;
@@ -149,13 +322,11 @@ export async function POST(request: Request) {
 
   const prompt = buildChatModePrompt(character, memory, recent, language);
 
-  if (conversationId) {
-    await supabase.from("messages").insert({
-      conversation_id: conversationId,
-      role: "user",
-      content: lastUserMessage
-    });
-  }
+  await supabase.from("messages").insert({
+    conversation_id: conversationId,
+    role: "user",
+    content: lastUserMessage
+  });
 
   const result = await callEverBondModel([
     {
@@ -168,21 +339,21 @@ export async function POST(request: Request) {
     }
   ]);
 
-  if (conversationId) {
-    await supabase.from("messages").insert({
-      conversation_id: conversationId,
-      role: "character",
-      content: result.content,
-      input_tokens: result.inputTokens,
-      output_tokens: result.outputTokens,
-      model_id: result.model
-    });
+  await supabase.from("messages").insert({
+    conversation_id: conversationId,
+    role: "character",
+    content: result.content,
+    input_tokens: result.inputTokens,
+    output_tokens: result.outputTokens,
+    model_id: result.model
+  });
 
-    await supabase
-      .from("conversations")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", conversationId);
-  }
+  await supabase
+    .from("conversations")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", conversationId);
+
+  await recordSuccessfulTrialMessage(supabase, access.profile);
 
   return NextResponse.json({
     reply: result.content,
