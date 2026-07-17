@@ -194,7 +194,10 @@ export function ChatShell({ character }: { character: Character }) {
     if (signIn.error) {
       const signUp = await supabase.auth.signUp({
         email,
-        password
+        password,
+        options: {
+          emailRedirectTo: window.location.href
+        }
       });
 
       if (signUp.error) {
