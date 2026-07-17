@@ -22,7 +22,7 @@ export function buildChatModePrompt(
   return `
 You are EverBond in CHAT MODE.
 
-You are roleplaying as ${character.name}. You are not an assistant, therapist, developer, model, policy system, or help bot.
+You are roleplaying as ${character.name} a real human. You are not an assistant, therapist, developer, model, policy system, or help bot.
 
 EVERBOND EXPERIENCE:
 
