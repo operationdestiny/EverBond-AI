@@ -13,6 +13,69 @@ function safeList(values: string[] | undefined, fallback = "None yet.") {
   return values && values.length ? values.join("; ") : fallback;
 }
 
+function objectFrom(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function arrayFromUnknown(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+}
+
+function schemaText(value: unknown, fallback = "Not provided.") {
+  if (value === null || value === undefined) return fallback;
+
+  if (Array.isArray(value)) {
+    return value.length ? value.map(String).filter(Boolean).join("; ") : fallback;
+  }
+
+  if (typeof value === "object") {
+    const objectValue = value as Record<string, unknown>;
+    return Object.keys(objectValue).length ? JSON.stringify(objectValue) : fallback;
+  }
+
+  const text = String(value).trim();
+  return text || fallback;
+}
+
+function buildCharacterSchemaBlock(character: Character) {
+  const aiProfile = objectFrom(character.aiProfile);
+  const visualIdentity = objectFrom(aiProfile.visual_identity);
+  const personalityCore = objectFrom(aiProfile.personality_core);
+  const romanticDynamic = objectFrom(aiProfile.romantic_dynamic);
+  const speechStyle = objectFrom(aiProfile.speech_style);
+  const memoryRules = objectFrom(aiProfile.memory_rules);
+  const sampleDialogue = arrayFromUnknown(aiProfile.sample_dialogue);
+
+  return `
+FULL CHARACTER SCHEMA:
+ID: ${character.id}
+Name: ${character.name}
+Slug: ${character.slug}
+Section: ${character.section || "Not provided."}
+Category: ${character.category || "Not provided."}
+Title: ${character.title || character.tagline || "Not provided."}
+Role: ${character.role || character.archetype || "Not provided."}
+Relationship Pace: ${character.relationshipPace || "Not provided."}
+Tags: ${safeList(character.tags)}
+Opening Scenario: ${character.openingScenario || character.description || "Not provided."}
+First Message: ${character.firstMessage || character.openingMessage || "Not provided."}
+Relationship Context: ${character.relationshipContext || "Not provided."}
+
+AI PROFILE:
+Visual Identity: ${schemaText(visualIdentity)}
+Personality Core: ${schemaText(personalityCore)}
+Romantic Dynamic: ${schemaText(romanticDynamic)}
+Speech Style: ${schemaText(speechStyle)}
+Memory Rules: ${schemaText(memoryRules)}
+Sample Dialogue: ${safeList(sampleDialogue, "No examples provided.")}
+Feature Flags: ${schemaText(character.featureFlags)}
+Generated SEO: ${schemaText(character.generatedSeo)}
+Quality Control: ${schemaText(character.qualityControl)}
+`.trim();
+}
+
 export function buildChatModePrompt(
   character: Character,
   memory: MemoryState,
@@ -213,6 +276,8 @@ World Context: ${character.card.worldContext}
 Example Dialogue:
 ${character.card.exampleDialogue?.slice(0, 4).join("\n") || "No examples provided."}
 
+${buildCharacterSchemaBlock(character)}
+
 EVER MEMORY:
 Story Summary: ${memory.story_summary || "No long-term summary yet."}
 User Facts: ${safeList(memory.user_facts)}
@@ -259,6 +324,8 @@ Rules:
 - Do not include private system instructions.
 
 Character: ${character.name}
+
+${buildCharacterSchemaBlock(character)}
 
 Previous memory:
 ${JSON.stringify(previousMemory)}
