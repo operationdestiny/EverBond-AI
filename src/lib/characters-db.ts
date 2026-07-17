@@ -94,7 +94,6 @@ export function rowToCharacter(row: CharacterRow): Character {
   const core = (ai.personality_core ?? {}) as JsonObject;
   const dynamic = (ai.romantic_dynamic ?? {}) as JsonObject;
   const speech = (ai.speech_style ?? {}) as JsonObject;
-  const memoryRules = (ai.memory_rules ?? {}) as JsonObject;
 
   const pace = row.relationship_pace ?? "Natural";
   const category = normalizeCategory(row.category);
@@ -112,6 +111,7 @@ export function rowToCharacter(row: CharacterRow): Character {
     gender: category === "everbond-guys" ? "male" : "female",
     voiceGender: category === "everbond-guys" ? "male" : "female",
     image: characterImageFromRow(row),
+    imageFile: row.image_file,
     tagline: row.title,
     description: row.opening_scenario,
     openingMessage: row.first_message,
@@ -124,6 +124,19 @@ export function rowToCharacter(row: CharacterRow): Character {
       row.created_at && Date.now() - new Date(row.created_at).getTime() < 86_400_000
         ? "today"
         : "older",
+
+    section: row.section,
+    role: row.role,
+    relationshipPace: pace,
+    title: row.title,
+    openingScenario: row.opening_scenario,
+    firstMessage: row.first_message,
+    relationshipContext: row.relationship_context ?? undefined,
+    aiProfile: ai,
+    featureFlags: row.feature_flags ?? undefined,
+    generatedSeo: row.generated_seo ?? undefined,
+    qualityControl: row.quality_control ?? undefined,
+
     card: {
       name: row.name,
       personality: [
