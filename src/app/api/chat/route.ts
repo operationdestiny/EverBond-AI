@@ -180,6 +180,120 @@ async function recordSuccessfulTrialMessage(
     .eq("user_id", profile.user_id);
 }
 
+async function getConversationForCharacter(
+  supabase: ReturnType<typeof getSupabaseServiceClient>,
+  userId: string,
+  characterId: string,
+  conversationId?: string
+): Promise<{ id: string; memory_state: MemoryState | null }> {
+  if (conversationId) {
+    const { data: existingById, error } = await supabase
+      .from("conversations")
+      .select("id,memory_state")
+      .eq("id", conversationId)
+      .eq("user_id", userId)
+      .eq("character_id", characterId)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (existingById) {
+      return existingById as { id: string; memory_state: MemoryState | null };
+    }
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("conversations")
+    .select("id,memory_state")
+    .eq("user_id", userId)
+    .eq("character_id", characterId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+
+  if (existing) {
+    return existing as { id: string; memory_state: MemoryState | null };
+  }
+
+  const { data: created, error: createError } = await supabase
+    .from("conversations")
+    .insert({
+      user_id: userId,
+      character_id: characterId
+    })
+    .select("id,memory_state")
+    .single();
+
+  if (createError) throw createError;
+
+  return created as { id: string; memory_state: MemoryState | null };
+}
+
+export async function GET(request: Request) {
+  const supabase = getSupabaseServiceClient();
+  const authUser = await getAuthUser(request);
+
+  if (!authUser) {
+    return NextResponse.json({ error: "SIGNUP_REQUIRED" }, { status: 401 });
+  }
+
+  const url = new URL(request.url);
+  const characterSlug = url.searchParams.get("characterSlug");
+
+  if (!characterSlug) {
+    return NextResponse.json({ error: "Missing characterSlug" }, { status: 400 });
+  }
+
+  const character = await getCharacterBySlugFromSupabase(characterSlug);
+
+  if (!character) {
+    return NextResponse.json({ error: "Character not found" }, { status: 404 });
+  }
+
+  const { data: conversation, error: conversationError } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("user_id", authUser.id)
+    .eq("character_id", character.id)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (conversationError) throw conversationError;
+
+  if (!conversation) {
+    return NextResponse.json({
+      conversationId: null,
+      messages: []
+    });
+  }
+
+  const { data: rows, error: messagesError } = await supabase
+    .from("messages")
+    .select("role,content,created_at")
+    .eq("conversation_id", conversation.id)
+    .in("role", ["user", "character"])
+    .order("created_at", { ascending: false })
+    .limit(80);
+
+  if (messagesError) throw messagesError;
+
+  const messages = (rows ?? [])
+    .reverse()
+    .map((message) => ({
+      role: message.role === "user" ? "user" : "character",
+      content: message.content
+    }))
+    .filter((message) => message.content);
+
+  return NextResponse.json({
+    conversationId: conversation.id,
+    messages
+  });
+}
+
 export async function POST(request: Request) {
   const body = ChatRequest.safeParse(await request.json());
 
@@ -240,40 +354,17 @@ export async function POST(request: Request) {
     );
   }
 
-  let conversationId = body.data.conversationId;
-  let memory: MemoryState = defaultMemory;
+  const conversation = await getConversationForCharacter(
+    supabase,
+    authUser.id,
+    character.id,
+    body.data.conversationId
+  );
+
+  const conversationId = conversation.id;
+  let memory: MemoryState = conversation.memory_state ?? defaultMemory;
 
   const language = body.data.language as SupportedLanguage;
-
-  if (!conversationId) {
-    const { data: existing } = await supabase
-      .from("conversations")
-      .select("id,memory_state")
-      .eq("user_id", authUser.id)
-      .eq("character_id", character.id)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (existing) {
-      conversationId = existing.id;
-      memory = existing.memory_state as MemoryState;
-    } else {
-      const { data: created, error } = await supabase
-        .from("conversations")
-        .insert({
-          user_id: authUser.id,
-          character_id: character.id
-        })
-        .select("id,memory_state")
-        .single();
-
-      if (error) throw error;
-
-      conversationId = created.id;
-      memory = created.memory_state as MemoryState;
-    }
-  }
 
   const { data: relationship } = await supabase
     .from("relationship_states")
