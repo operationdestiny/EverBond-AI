@@ -54,24 +54,45 @@ type ProfileRow = {
   trial_message_limit: number;
 };
 
-function splitTokens(text: string) {
-  return text.trim().match(/\S+/g) ?? [];
+function estimateTokenCount(text: string) {
+  const normalized = text.trim();
+  if (!normalized) return 0;
+
+  const wordCount = normalized.match(/\S+/g)?.length ?? 0;
+  const charCount = normalized.length;
+  const cjkCount =
+    normalized.match(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/g)?.length ?? 0;
+
+  return Math.max(wordCount, Math.ceil(charCount / 4), cjkCount);
 }
 
 function limitTextToTokenBudget(text: string, maxTokens: number) {
   const normalized = text.replace(/\s+/g, " ").trim();
-  const tokens = splitTokens(normalized);
 
-  if (tokens.length <= maxTokens) return normalized;
+  if (estimateTokenCount(normalized) <= maxTokens) {
+    return normalized;
+  }
 
-  return tokens.slice(0, maxTokens).join(" ");
+  const parts = normalized.match(/\S+\s*/g) ?? [];
+  let result = "";
+
+  for (const part of parts) {
+    const candidate = result + part;
+
+    if (estimateTokenCount(candidate) > maxTokens) {
+      break;
+    }
+
+    result = candidate;
+  }
+
+  return result.trim();
 }
 
-function compactUserTextForModel(text: string) {
+function deterministicCompactUserText(text: string) {
   const limited = limitTextToTokenBudget(text, USER_MESSAGE_MAX_TOKENS);
-  const tokens = splitTokens(limited);
 
-  if (tokens.length <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
+  if (estimateTokenCount(limited) <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
     return limited;
   }
 
@@ -80,9 +101,7 @@ function compactUserTextForModel(text: string) {
     .replace(/\s+/g, " ")
     .trim();
 
-  const cleanedTokens = splitTokens(cleaned);
-
-  if (cleanedTokens.length <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
+  if (estimateTokenCount(cleaned) <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
     return cleaned;
   }
 
@@ -96,19 +115,59 @@ function compactUserTextForModel(text: string) {
     const first = sentences[0];
     const last = sentences[sentences.length - 1];
     const combined = first === last ? first : `${first} ${last}`;
-    const combinedTokens = splitTokens(combined);
 
-    if (combinedTokens.length <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
+    if (estimateTokenCount(combined) <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
       return combined;
     }
   }
 
-  const startCount = 15;
-  const endCount = USER_MESSAGE_MODEL_TARGET_TOKENS - startCount - 2;
-  const start = cleanedTokens.slice(0, startCount).join(" ");
-  const end = cleanedTokens.slice(-endCount).join(" ");
+  const parts = cleaned.match(/\S+\s*/g) ?? [];
+  let result = "";
 
-  return `${start} [middle shortened] ${end}`.trim();
+  for (const part of parts) {
+    const candidate = result + part;
+
+    if (estimateTokenCount(candidate) > USER_MESSAGE_MODEL_TARGET_TOKENS) {
+      break;
+    }
+
+    result = candidate;
+  }
+
+  return result.trim();
+}
+
+async function compactUserTextForModel(text: string) {
+  const limited = limitTextToTokenBudget(text, USER_MESSAGE_MAX_TOKENS);
+
+  if (estimateTokenCount(limited) <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
+    return limited;
+  }
+
+  try {
+    const summary = await callEverBondModel([
+      {
+        role: "system",
+        content:
+          "Compress the user's message into one neutral context note under 35 tokens. Preserve all facts, names, numbers, requests, boundaries, and emotional intent. Do not answer. Do not add details."
+      },
+      {
+        role: "user",
+        content: limited
+      }
+    ]);
+
+    const compacted = limitTextToTokenBudget(
+      summary.content,
+      USER_MESSAGE_MODEL_TARGET_TOKENS
+    );
+
+    if (compacted) return compacted;
+  } catch {
+    // Fall back to deterministic compaction below.
+  }
+
+  return deterministicCompactUserText(limited);
 }
 
 async function getAuthUser(request: Request): Promise<AuthUser | null> {
@@ -385,7 +444,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const userMessageForModel = compactUserTextForModel(userMessageForStorage);
+  const userMessageForModel = await compactUserTextForModel(userMessageForStorage);
 
   const supabase = getSupabaseServiceClient();
   const authUser = await getAuthUser(request);
@@ -479,7 +538,7 @@ export async function POST(request: Request) {
     const role = m.role === "character" ? character.name : "user";
     const content =
       m.role === "user"
-        ? compactUserTextForModel(m.content)
+        ? deterministicCompactUserText(m.content)
         : limitTextToTokenBudget(m.content, CHARACTER_CONTEXT_MAX_TOKENS);
 
     return `${role}: ${content}`;
