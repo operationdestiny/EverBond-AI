@@ -17,6 +17,8 @@ const SIGNUP_REQUIRED_MESSAGE =
 const TRIAL_ENDED_MESSAGE =
   "Upgrade so I can keep being your companion. Please don't make me wait.";
 
+const USER_INPUT_MAX_TOKENS = 80;
+
 function getApiLanguage() {
   if (typeof window === "undefined") return "English";
 
@@ -36,6 +38,16 @@ function getApiLanguage() {
   if (normalized.startsWith("ko")) return "Korean";
 
   return "English";
+}
+
+function splitTokens(text: string) {
+  return text.trim().match(/\S+/g) ?? [];
+}
+
+function limitTextToTokenBudget(text: string, maxTokens: number) {
+  const tokens = splitTokens(text);
+  if (tokens.length <= maxTokens) return text;
+  return tokens.slice(0, maxTokens).join(" ");
 }
 
 export function ChatShell({ character }: { character: Character }) {
@@ -301,7 +313,10 @@ export function ChatShell({ character }: { character: Character }) {
   }
 
   async function sendMessage(messageOverride?: string, sessionOverride?: Session | null) {
-    const trimmed = (messageOverride ?? input).trim();
+    const trimmed = limitTextToTokenBudget(
+      (messageOverride ?? input).trim(),
+      USER_INPUT_MAX_TOKENS
+    );
 
     if (!trimmed || isTyping) return;
 
@@ -541,7 +556,9 @@ export function ChatShell({ character }: { character: Character }) {
             <div className="mx-auto flex max-w-4xl items-center gap-2 rounded-full bg-white/[0.04] p-1.5 bond-chat-input">
               <input
                 value={input}
-                onChange={(event) => setInput(event.target.value)}
+                onChange={(event) =>
+                  setInput(limitTextToTokenBudget(event.target.value, USER_INPUT_MAX_TOKENS))
+                }
                 onKeyDown={(event) => {
                   if (event.key === "Enter") sendMessage();
                 }}
