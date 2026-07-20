@@ -66,6 +66,30 @@ function getNumberEnv(name: string, fallback: number) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function cleanModelContent(content: unknown) {
+  if (typeof content !== "string") return "";
+
+  let text = content
+    .trim()
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\b(something else|something)\s*[—–-]\s*\1\b/gi, "$1");
+
+  const looksCutOff =
+    /[—–-]\s*$/.test(text) ||
+    /\.{3}\s*$/.test(text) ||
+    /[,;:]\s*$/.test(text);
+
+  if (looksCutOff) {
+    const completeSentence = text.match(/^([\s\S]*[.!?]["')\]]?)(?:\s|$)/);
+
+    if (completeSentence?.[1] && completeSentence[1].trim().length > 20) {
+      text = completeSentence[1].trim();
+    }
+  }
+
+  return text;
+}
+
 async function postChatCompletion(
   endpoint: string,
   apiKey: string,
@@ -93,7 +117,7 @@ export async function callEverBondModel(
 ): Promise<EverBondModelResult> {
   const config = getProviderConfig();
 
-  const maxTokens = getNumberEnv("AI_MAX_TOKENS", 120);
+  const maxTokens = Math.min(getNumberEnv("AI_MAX_TOKENS", 80), 80);
   const temperature = getNumberEnv("AI_TEMPERATURE", 0.9);
   const topP = getNumberEnv("AI_TOP_P", 0.95);
 
@@ -129,7 +153,6 @@ export async function callEverBondModel(
     };
   }
 
-  // No external fallback. Retry the same Venice/private model once for temporary failures.
   let data: any;
 
   try {
@@ -140,10 +163,10 @@ export async function callEverBondModel(
     });
   }
 
-  const content = data.choices?.[0]?.message?.content;
+  const content = cleanModelContent(data.choices?.[0]?.message?.content);
 
   return {
-    content: typeof content === "string" ? content.trim() : "",
+    content,
     inputTokens: data.usage?.prompt_tokens ?? 0,
     outputTokens: data.usage?.completion_tokens ?? 0,
     provider: config.provider,
