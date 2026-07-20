@@ -98,6 +98,7 @@ export function ChatShell({ character }: { character: Character }) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const isPublicCreation = character.category === "public-creations";
@@ -235,10 +236,17 @@ export function ChatShell({ character }: { character: Character }) {
     return `/characters?tag=${encodeURIComponent(tag)}`;
   }, [character.tags]);
 
+  function focusChatInput() {
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }
+
   function resetConversation() {
     setMessages([{ role: "character", content: initialCharacterMessage }]);
     setInput("");
     setIsTyping(false);
+    focusChatInput();
   }
 
   function shareCompanion() {
@@ -343,7 +351,10 @@ export function ChatShell({ character }: { character: Character }) {
       USER_INPUT_MAX_TOKENS
     );
 
-    if (!trimmed || isTyping) return;
+    if (!trimmed || isTyping) {
+      focusChatInput();
+      return;
+    }
 
     const activeSession = sessionOverride ?? session;
 
@@ -363,6 +374,7 @@ export function ChatShell({ character }: { character: Character }) {
     setInput("");
     setMessages(nextMessages);
     setIsTyping(true);
+    focusChatInput();
 
     try {
       const response = await fetch("/api/chat", {
@@ -414,6 +426,7 @@ export function ChatShell({ character }: { character: Character }) {
       ]);
     } finally {
       setIsTyping(false);
+      focusChatInput();
     }
   }
 
@@ -580,6 +593,7 @@ export function ChatShell({ character }: { character: Character }) {
           <div className="shrink-0 border-t border-white/5 bg-bond-bg/88 p-3 backdrop-blur-xl">
             <div className="mx-auto flex max-w-4xl items-center gap-2 rounded-full bg-white/[0.04] p-1.5 bond-chat-input">
               <input
+                ref={inputRef}
                 value={input}
                 onChange={(event) =>
                   setInput(limitTextToTokenBudget(event.target.value, USER_INPUT_MAX_TOKENS))
@@ -588,8 +602,7 @@ export function ChatShell({ character }: { character: Character }) {
                   if (event.key === "Enter") sendMessage();
                 }}
                 placeholder={`${t("messageCharacter")} ${character.name}...`}
-                disabled={isTyping}
-                className="min-w-0 flex-1 bg-transparent px-4 py-2 text-sm outline-none placeholder:text-bond-muted disabled:opacity-60"
+                className="min-w-0 flex-1 bg-transparent px-4 py-2 text-sm outline-none placeholder:text-bond-muted"
               />
               <button
                 onClick={() => sendMessage()}
@@ -718,24 +731,12 @@ export function ChatShell({ character }: { character: Character }) {
                   Keep your companion
                 </p>
 
-                <div className="mt-8 space-y-3">
+                <div className="mt-8">
                   <Link
                     href="/pricing"
-                    className="bond-pink-button block rounded-xl bg-bond-violet px-5 py-3 text-center text-sm font-bold text-white"
+                    className="bond-pink-button block rounded-xl bg-bond-rose px-6 py-4 text-center text-base font-extrabold text-white shadow-[0_0_26px_rgba(255,92,168,0.30)] transition hover:scale-[1.01] hover:bg-bond-rose/90"
                   >
-                    Unlock Standard
-                  </Link>
-                  <Link
-                    href="/pricing"
-                    className="bond-pink-button block rounded-xl bg-bond-rose px-5 py-3 text-center text-sm font-bold text-white"
-                  >
-                    Unlock Premium
-                  </Link>
-                  <Link
-                    href="/pricing"
-                    className="bond-pink-button block rounded-xl border border-bond-gold/50 bg-bond-gold/15 px-5 py-3 text-center text-sm font-bold text-bond-gold"
-                  >
-                    Unlock Elite
+                    See Plans
                   </Link>
                 </div>
               </div>
