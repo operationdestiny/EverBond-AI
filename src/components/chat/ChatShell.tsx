@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ClipboardEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createClient, type Session } from "@supabase/supabase-js";
 import { RefreshCcw, Send, Share2, Star, UserRound, X } from "lucide-react";
 import { Character } from "@/types/character";
@@ -70,6 +70,10 @@ function limitTextToTokenBudget(text: string, maxTokens: number) {
     }
 
     result = candidate;
+  }
+
+  if (!result && normalized) {
+    return normalized.slice(0, maxTokens * 4).trimEnd();
   }
 
   return result.trimEnd();
@@ -240,6 +244,48 @@ export function ChatShell({ character }: { character: Character }) {
     window.requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
+  }
+
+  function getLimitedInputValue(nextValue: string) {
+    return limitTextToTokenBudget(nextValue, USER_INPUT_MAX_TOKENS);
+  }
+
+  function wouldExceedInputLimit(nextValue: string) {
+    return estimateTokenCount(nextValue.replace(/\s+/g, " ").trimStart()) > USER_INPUT_MAX_TOKENS;
+  }
+
+  function handleBeforeInput(event: FormEvent<HTMLInputElement>) {
+    const nativeEvent = event.nativeEvent as InputEvent;
+    const inputType = nativeEvent.inputType || "";
+
+    if (inputType.startsWith("delete")) return;
+
+    const insertedText = nativeEvent.data ?? "";
+    if (!insertedText) return;
+
+    const target = event.currentTarget;
+    const start = target.selectionStart ?? input.length;
+    const end = target.selectionEnd ?? input.length;
+    const nextValue = input.slice(0, start) + insertedText + input.slice(end);
+
+    if (wouldExceedInputLimit(nextValue)) {
+      event.preventDefault();
+    }
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLInputElement>) {
+    event.preventDefault();
+
+    const pastedText = event.clipboardData.getData("text");
+    if (!pastedText) return;
+
+    const target = event.currentTarget;
+    const start = target.selectionStart ?? input.length;
+    const end = target.selectionEnd ?? input.length;
+    const nextValue = input.slice(0, start) + pastedText + input.slice(end);
+
+    setInput(getLimitedInputValue(nextValue));
+    focusChatInput();
   }
 
   function resetConversation() {
@@ -595,8 +641,10 @@ export function ChatShell({ character }: { character: Character }) {
               <input
                 ref={inputRef}
                 value={input}
+                onBeforeInput={handleBeforeInput}
+                onPaste={handlePaste}
                 onChange={(event) =>
-                  setInput(limitTextToTokenBudget(event.target.value, USER_INPUT_MAX_TOKENS))
+                  setInput(getLimitedInputValue(event.target.value))
                 }
                 onKeyDown={(event) => {
                   if (event.key === "Enter") sendMessage();
