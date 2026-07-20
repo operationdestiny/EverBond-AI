@@ -16,6 +16,8 @@ export type EverBondModelResult = {
 const DEV_FALLBACK =
   'She glances over for a second, trying not to smile too much. "I heard you. I just need a minute to figure out what to say."';
 
+const AI_REPLY_MAX_TOKENS = 65;
+
 function cleanBaseUrl(value: string) {
   return value.replace(/\/$/, "");
 }
@@ -66,24 +68,65 @@ function getNumberEnv(name: string, fallback: number) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function splitTokens(text: string) {
+  return text.trim().match(/\S+/g) ?? [];
+}
+
+function findLastSentenceEnd(text: string) {
+  const matches = [...text.matchAll(/[.!?]["')\]]?/g)];
+  const last = matches.at(-1);
+
+  if (!last || last.index === undefined || last.index < 20) {
+    return "";
+  }
+
+  return text.slice(0, last.index + last[0].length).trim();
+}
+
+function limitToCompleteReply(text: string) {
+  const tokens = splitTokens(text);
+
+  if (tokens.length <= AI_REPLY_MAX_TOKENS) {
+    return text;
+  }
+
+  const limited = tokens.slice(0, AI_REPLY_MAX_TOKENS).join(" ");
+  const completeSentence = findLastSentenceEnd(limited);
+
+  if (completeSentence) {
+    return completeSentence;
+  }
+
+  return tokens.slice(0, Math.max(12, AI_REPLY_MAX_TOKENS - 8)).join(" ").replace(/[—–,\s]+$/, "") + ".";
+}
+
 function cleanModelContent(content: unknown) {
   if (typeof content !== "string") return "";
 
   let text = content
     .trim()
     .replace(/\n{3,}/g, "\n\n")
-    .replace(/\b(something else|something)\s*[—–-]\s*\1\b/gi, "$1");
+    .replace(/\bsomething(?:\s+else)?\s*[—–-]\s*something(?:\s+else)?\b/gi, "something")
+    .replace(/\bsomething\s*(?:\.{3}|…)/gi, "something")
+    .replace(/([—–-]\s*){2,}/g, "—")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  text = limitToCompleteReply(text);
 
   const looksCutOff =
     /[—–-]\s*$/.test(text) ||
     /\.{3}\s*$/.test(text) ||
+    /…\s*$/.test(text) ||
     /[,;:]\s*$/.test(text);
 
   if (looksCutOff) {
-    const completeSentence = text.match(/^([\s\S]*[.!?]["')\]]?)(?:\s|$)/);
+    const completeSentence = findLastSentenceEnd(text);
 
-    if (completeSentence?.[1] && completeSentence[1].trim().length > 20) {
-      text = completeSentence[1].trim();
+    if (completeSentence) {
+      text = completeSentence;
+    } else {
+      text = text.replace(/[—–,\s.]+$/, "") + ".";
     }
   }
 
@@ -117,7 +160,7 @@ export async function callEverBondModel(
 ): Promise<EverBondModelResult> {
   const config = getProviderConfig();
 
-  const maxTokens = Math.min(getNumberEnv("AI_MAX_TOKENS", 80), 80);
+  const maxTokens = Math.min(Math.max(getNumberEnv("AI_MAX_TOKENS", 95), 90), 95);
   const temperature = getNumberEnv("AI_TEMPERATURE", 0.9);
   const topP = getNumberEnv("AI_TOP_P", 0.95);
 
