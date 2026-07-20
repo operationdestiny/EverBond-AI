@@ -16,6 +16,7 @@ export type EverBondModelResult = {
 const DEV_FALLBACK =
   'She glances over for a second, trying not to smile too much. "I heard you. I just need a minute to figure out what to say."';
 
+const AI_REPLY_SOFT_TOKENS = 40;
 const AI_REPLY_MAX_TOKENS = 65;
 
 function cleanBaseUrl(value: string) {
@@ -72,39 +73,72 @@ function splitTokens(text: string) {
   return text.trim().match(/\S+/g) ?? [];
 }
 
+function endsWithCompleteSentence(text: string) {
+  return /[.!?]["')\]]?\s*$/.test(text.trim());
+}
+
 function findLastSentenceEnd(text: string) {
   const matches = [...text.matchAll(/[.!?]["')\]]?/g)];
   const last = matches.at(-1);
 
-  if (!last || last.index === undefined || last.index < 20) {
+  if (!last || last.index === undefined || last.index < 8) {
     return "";
   }
 
   return text.slice(0, last.index + last[0].length).trim();
 }
 
-function limitToCompleteReply(text: string) {
+function textFromFirstTokens(text: string, maxTokens: number) {
+  return splitTokens(text).slice(0, maxTokens).join(" ");
+}
+
+function limitToCompleteReply(text: string, finishReason?: string) {
   const tokens = splitTokens(text);
 
-  if (tokens.length <= AI_REPLY_MAX_TOKENS) {
+  if (
+    tokens.length <= AI_REPLY_SOFT_TOKENS &&
+    endsWithCompleteSentence(text) &&
+    finishReason !== "length"
+  ) {
     return text;
   }
 
-  const limited = tokens.slice(0, AI_REPLY_MAX_TOKENS).join(" ");
-  const completeSentence = findLastSentenceEnd(limited);
+  const softLimited = textFromFirstTokens(text, AI_REPLY_SOFT_TOKENS);
+  const softComplete = findLastSentenceEnd(softLimited);
 
-  if (completeSentence) {
-    return completeSentence;
+  if (softComplete && splitTokens(softComplete).length >= 4) {
+    return softComplete;
   }
 
-  return tokens.slice(0, Math.max(12, AI_REPLY_MAX_TOKENS - 8)).join(" ").replace(/[—–,\s]+$/, "") + ".";
+  if (
+    tokens.length <= AI_REPLY_MAX_TOKENS &&
+    endsWithCompleteSentence(text) &&
+    finishReason !== "length"
+  ) {
+    return text;
+  }
+
+  const hardLimited = textFromFirstTokens(text, AI_REPLY_MAX_TOKENS);
+  const hardComplete = findLastSentenceEnd(hardLimited);
+
+  if (hardComplete && splitTokens(hardComplete).length >= 4) {
+    return hardComplete;
+  }
+
+  if (tokens.length <= AI_REPLY_MAX_TOKENS && finishReason !== "length") {
+    return text.replace(/[—–,\s.]+$/, "") + ".";
+  }
+
+  return textFromFirstTokens(text, Math.max(10, AI_REPLY_SOFT_TOKENS - 6))
+    .replace(/[—–,\s.]+$/, "") + ".";
 }
 
-function cleanModelContent(content: unknown) {
+function cleanModelContent(content: unknown, finishReason?: string) {
   if (typeof content !== "string") return "";
 
   let text = content
     .trim()
+    .replace(/^[A-Za-zÀ-ÖØ-öø-ÿ' -]{1,40}:\s*/, "")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/\bsomething(?:\s+else)?\s*[—–-]\s*something(?:\s+else)?\b/gi, "something")
     .replace(/\bsomething\s*(?:\.{3}|…)/gi, "something")
@@ -112,13 +146,14 @@ function cleanModelContent(content: unknown) {
     .replace(/\s+/g, " ")
     .trim();
 
-  text = limitToCompleteReply(text);
+  text = limitToCompleteReply(text, finishReason);
 
   const looksCutOff =
     /[—–-]\s*$/.test(text) ||
     /\.{3}\s*$/.test(text) ||
     /…\s*$/.test(text) ||
-    /[,;:]\s*$/.test(text);
+    /[,;:]\s*$/.test(text) ||
+    !endsWithCompleteSentence(text);
 
   if (looksCutOff) {
     const completeSentence = findLastSentenceEnd(text);
@@ -160,7 +195,7 @@ export async function callEverBondModel(
 ): Promise<EverBondModelResult> {
   const config = getProviderConfig();
 
-  const maxTokens = Math.min(Math.max(getNumberEnv("AI_MAX_TOKENS", 95), 90), 95);
+  const maxTokens = Math.min(Math.max(getNumberEnv("AI_MAX_TOKENS", 140), 120), 140);
   const temperature = getNumberEnv("AI_TEMPERATURE", 0.9);
   const topP = getNumberEnv("AI_TOP_P", 0.95);
 
@@ -206,7 +241,8 @@ export async function callEverBondModel(
     });
   }
 
-  const content = cleanModelContent(data.choices?.[0]?.message?.content);
+  const choice = data.choices?.[0];
+  const content = cleanModelContent(choice?.message?.content, choice?.finish_reason);
 
   return {
     content,
