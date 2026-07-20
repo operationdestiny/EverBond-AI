@@ -18,6 +18,10 @@ const TRIAL_ENDED_MESSAGE =
 
 const PAID_SUBSCRIPTION_STATUSES = new Set(["standard", "premium", "elite"]);
 
+const USER_MESSAGE_MAX_TOKENS = 80;
+const USER_MESSAGE_MODEL_TARGET_TOKENS = 35;
+const CHARACTER_CONTEXT_MAX_TOKENS = 65;
+
 const SupportedLanguageSchema = z
   .enum(["English", "Spanish", "French", "German", "Japanese", "Korean"])
   .default("English");
@@ -49,6 +53,63 @@ type ProfileRow = {
   trial_messages_used: number;
   trial_message_limit: number;
 };
+
+function splitTokens(text: string) {
+  return text.trim().match(/\S+/g) ?? [];
+}
+
+function limitTextToTokenBudget(text: string, maxTokens: number) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const tokens = splitTokens(normalized);
+
+  if (tokens.length <= maxTokens) return normalized;
+
+  return tokens.slice(0, maxTokens).join(" ");
+}
+
+function compactUserTextForModel(text: string) {
+  const limited = limitTextToTokenBudget(text, USER_MESSAGE_MAX_TOKENS);
+  const tokens = splitTokens(limited);
+
+  if (tokens.length <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
+    return limited;
+  }
+
+  const cleaned = limited
+    .replace(/\b(just|really|actually|basically|literally|kind of|sort of|you know|i mean)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const cleanedTokens = splitTokens(cleaned);
+
+  if (cleanedTokens.length <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
+    return cleaned;
+  }
+
+  const sentences =
+    cleaned
+      .match(/[^.!?]+[.!?]?/g)
+      ?.map((sentence) => sentence.trim())
+      .filter(Boolean) ?? [];
+
+  if (sentences.length > 1) {
+    const first = sentences[0];
+    const last = sentences[sentences.length - 1];
+    const combined = first === last ? first : `${first} ${last}`;
+    const combinedTokens = splitTokens(combined);
+
+    if (combinedTokens.length <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
+      return combined;
+    }
+  }
+
+  const startCount = 15;
+  const endCount = USER_MESSAGE_MODEL_TARGET_TOKENS - startCount - 2;
+  const start = cleanedTokens.slice(0, startCount).join(" ");
+  const end = cleanedTokens.slice(-endCount).join(" ");
+
+  return `${start} [middle shortened] ${end}`.trim();
+}
 
 async function getAuthUser(request: Request): Promise<AuthUser | null> {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
@@ -307,16 +368,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Character not found" }, { status: 404 });
   }
 
-  const lastUserMessage = body.data.messages
-    .filter((m) => m.role === "user")
-    .at(-1)?.content ?? "";
+  const rawUserMessage =
+    body.data.messages
+      .filter((m) => m.role === "user")
+      .at(-1)?.content ?? "";
 
-  if (!lastUserMessage.trim()) {
+  const userMessageForStorage = limitTextToTokenBudget(
+    rawUserMessage,
+    USER_MESSAGE_MAX_TOKENS
+  );
+
+  if (!userMessageForStorage.trim()) {
     return NextResponse.json(
       { error: "Missing user message" },
       { status: 400 }
     );
   }
+
+  const userMessageForModel = compactUserTextForModel(userMessageForStorage);
 
   const supabase = getSupabaseServiceClient();
   const authUser = await getAuthUser(request);
@@ -408,7 +477,12 @@ export async function POST(request: Request) {
 
   const recent = body.data.messages.slice(-8).map((m) => {
     const role = m.role === "character" ? character.name : "user";
-    return `${role}: ${m.content}`;
+    const content =
+      m.role === "user"
+        ? compactUserTextForModel(m.content)
+        : limitTextToTokenBudget(m.content, CHARACTER_CONTEXT_MAX_TOKENS);
+
+    return `${role}: ${content}`;
   });
 
   const prompt = buildChatModePrompt(character, memory, recent, language);
@@ -416,7 +490,7 @@ export async function POST(request: Request) {
   await supabase.from("messages").insert({
     conversation_id: conversationId,
     role: "user",
-    content: lastUserMessage
+    content: userMessageForStorage
   });
 
   const result = await callEverBondModel([
@@ -426,7 +500,7 @@ export async function POST(request: Request) {
     },
     {
       role: "user",
-      content: lastUserMessage
+      content: userMessageForModel
     }
   ]);
 
