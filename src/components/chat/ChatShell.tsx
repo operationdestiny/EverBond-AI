@@ -137,6 +137,8 @@ export function ChatShell({ character }: { character: Character }) {
     if (!authReady || !session?.access_token) return;
     if (typeof window === "undefined") return;
 
+    const accessToken = session.access_token;
+
     const savedPendingMessage = window.sessionStorage.getItem(
       pendingMessageStorageKey
     );
@@ -154,7 +156,7 @@ export function ChatShell({ character }: { character: Character }) {
           {
             method: "GET",
             headers: {
-              Authorization: `Bearer ${session.access_token}`
+              Authorization: `Bearer ${accessToken}`
             }
           }
         );
