@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient, type Session } from "@supabase/supabase-js";
 import { RefreshCcw, Send, Share2, Star, UserRound, X } from "lucide-react";
 import { Character } from "@/types/character";
@@ -58,6 +58,10 @@ export function ChatShell({ character }: { character: Character }) {
   const [authError, setAuthError] = useState("");
   const [authNotice, setAuthNotice] = useState("");
   const [pendingMessage, setPendingMessage] = useState("");
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const isPublicCreation = character.category === "public-creations";
 
@@ -86,6 +90,10 @@ export function ChatShell({ character }: { character: Character }) {
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [messages, isTyping, historyLoading]);
 
   useEffect(() => {
     if (!supabase) {
@@ -124,6 +132,64 @@ export function ChatShell({ character }: { character: Character }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, pendingMessageStorageKey]);
+
+  useEffect(() => {
+    if (!authReady || !session?.access_token) return;
+    if (typeof window === "undefined") return;
+
+    const savedPendingMessage = window.sessionStorage.getItem(
+      pendingMessageStorageKey
+    );
+
+    if (savedPendingMessage) return;
+
+    let cancelled = false;
+
+    async function loadHistory() {
+      setHistoryLoading(true);
+
+      try {
+        const response = await fetch(
+          `/api/chat?characterSlug=${encodeURIComponent(character.slug)}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`
+            }
+          }
+        );
+
+        const data = await response.json().catch(() => ({}));
+
+        if (cancelled || !response.ok) return;
+
+        setConversationId(data.conversationId ?? null);
+
+        if (Array.isArray(data.messages) && data.messages.length > 0) {
+          setMessages([
+            { role: "character", content: initialCharacterMessage },
+            ...data.messages
+          ]);
+        } else {
+          setMessages([{ role: "character", content: initialCharacterMessage }]);
+        }
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    }
+
+    loadHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authReady,
+    session?.access_token,
+    character.slug,
+    initialCharacterMessage,
+    pendingMessageStorageKey
+  ]);
 
   const similarHref = useMemo(() => {
     const tag = character.tags.find((item) => item !== "Ever Memory™") ?? "Romance";
@@ -266,6 +332,7 @@ export function ChatShell({ character }: { character: Character }) {
         body: JSON.stringify({
           characterSlug: character.slug,
           language: getApiLanguage(),
+          conversationId: conversationId ?? undefined,
           messages: nextMessages.slice(-12)
         })
       });
@@ -289,6 +356,8 @@ export function ChatShell({ character }: { character: Character }) {
         throw new Error(data?.message || data?.error || "Chat failed");
       }
 
+      setConversationId(data.conversationId ?? conversationId);
+
       setMessages((current) => [
         ...current,
         { role: "character", content: data.reply }
@@ -311,9 +380,9 @@ export function ChatShell({ character }: { character: Character }) {
     .slice(0, 4);
 
   return (
-    <div className="grid min-h-[calc(100vh-64px)] bg-transparent lg:grid-cols-[415px_1fr]">
-      <aside className="hidden border-r border-white/5 bg-black/10 p-2 lg:block">
-        <div className="sticky top-20 flex min-h-[calc(100vh-96px)] flex-col pt-3">
+    <div className="grid h-[calc(100dvh-64px)] overflow-hidden bg-transparent lg:grid-cols-[415px_1fr]">
+      <aside className="hidden h-[calc(100dvh-64px)] overflow-hidden border-r border-white/5 bg-black/10 p-2 lg:block">
+        <div className="flex h-full flex-col pt-3">
           <div className="overflow-hidden rounded-[1.75rem] border border-bond-rose/20 bg-white/[0.035] shadow-[0_0_34px_rgba(255,92,168,0.08)]">
             <button
               type="button"
@@ -400,8 +469,8 @@ export function ChatShell({ character }: { character: Character }) {
         </div>
       </aside>
 
-      <section className="flex min-h-[calc(100vh-64px)] flex-col">
-        <div className="flex items-center justify-between border-b border-white/5 p-4 lg:hidden">
+      <section className="flex h-[calc(100dvh-64px)] min-h-0 flex-col overflow-hidden">
+        <div className="flex shrink-0 items-center justify-between border-b border-white/5 p-4 lg:hidden">
           <button
             type="button"
             onClick={() => setShowPortrait(true)}
@@ -424,37 +493,49 @@ export function ChatShell({ character }: { character: Character }) {
           <LanguageSelector />
         </div>
 
-        <div className="flex flex-1 flex-col justify-end overflow-hidden">
-          <div className="no-scrollbar flex flex-1 flex-col justify-end space-y-3.5 overflow-y-auto p-3.5 md:p-5">
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`mx-auto flex w-full max-w-4xl ${
-                  message.role === "user" ? "justify-end" : "justify-start"
-                }`}
-              >
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto p-3.5 md:p-5">
+            <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col justify-end space-y-3.5">
+              {historyLoading && (
+                <div className="flex justify-start">
+                  <div className="rounded-[1.5rem] border border-bond-rose/35 bg-white/[0.03] px-5 py-4 text-bond-muted">
+                    <span className="animate-pulse">Restoring your bond...</span>
+                  </div>
+                </div>
+              )}
+
+              {messages.map((message, index) => (
                 <div
-                  className={`max-w-[720px] whitespace-pre-line rounded-[1.3rem] px-4 py-3 leading-7 ${
-                    message.role === "user"
-                      ? "bg-bond-rose text-white"
-                      : "border border-bond-rose/55 bg-white/[0.04] text-bond-text"
+                  key={index}
+                  className={`flex w-full ${
+                    message.role === "user" ? "justify-end" : "justify-start"
                   }`}
                 >
-                  <p>{message.content}</p>
+                  <div
+                    className={`max-w-[720px] whitespace-pre-line rounded-[1.3rem] px-4 py-3 leading-7 ${
+                      message.role === "user"
+                        ? "bg-bond-rose text-white"
+                        : "border border-bond-rose/55 bg-white/[0.04] text-bond-text"
+                    }`}
+                  >
+                    <p>{message.content}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
 
-            {isTyping && (
-              <div className="flex justify-start">
-                <div className="rounded-[1.5rem] border border-bond-rose/55 bg-white/[0.04] px-5 py-4 text-bond-muted">
-                  <span className="animate-pulse">{t("typing")}</span>
+              {isTyping && (
+                <div className="flex justify-start">
+                  <div className="rounded-[1.5rem] border border-bond-rose/55 bg-white/[0.04] px-5 py-4 text-bond-muted">
+                    <span className="animate-pulse">{t("typing")}</span>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
           </div>
 
-          <div className="border-t border-white/5 bg-bond-bg/88 p-3 backdrop-blur-xl">
+          <div className="shrink-0 border-t border-white/5 bg-bond-bg/88 p-3 backdrop-blur-xl">
             <div className="mx-auto flex max-w-4xl items-center gap-2 rounded-full bg-white/[0.04] p-1.5 bond-chat-input">
               <input
                 value={input}
