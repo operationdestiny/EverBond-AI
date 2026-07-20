@@ -40,14 +40,39 @@ function getApiLanguage() {
   return "English";
 }
 
-function splitTokens(text: string) {
-  return text.trim().match(/\S+/g) ?? [];
+function estimateTokenCount(text: string) {
+  const normalized = text.trim();
+  if (!normalized) return 0;
+
+  const wordCount = normalized.match(/\S+/g)?.length ?? 0;
+  const charCount = normalized.length;
+  const cjkCount =
+    normalized.match(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/g)?.length ?? 0;
+
+  return Math.max(wordCount, Math.ceil(charCount / 4), cjkCount);
 }
 
 function limitTextToTokenBudget(text: string, maxTokens: number) {
-  const tokens = splitTokens(text);
-  if (tokens.length <= maxTokens) return text;
-  return tokens.slice(0, maxTokens).join(" ");
+  const normalized = text.replace(/\s+/g, " ").trimStart();
+
+  if (estimateTokenCount(normalized) <= maxTokens) {
+    return normalized;
+  }
+
+  const parts = normalized.match(/\S+\s*/g) ?? [];
+  let result = "";
+
+  for (const part of parts) {
+    const candidate = result + part;
+
+    if (estimateTokenCount(candidate) > maxTokens) {
+      break;
+    }
+
+    result = candidate;
+  }
+
+  return result.trimEnd();
 }
 
 export function ChatShell({ character }: { character: Character }) {
