@@ -6,9 +6,10 @@ import {
   buildChatModePrompt,
   type SupportedLanguage
 } from "@/lib/ai/prompts";
-import { callEverBondModel } from "@/lib/ai/provider";
+import { callEverBondModel, type EverBondMessage } from "@/lib/ai/provider";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import type { MemoryState } from "@/types/memory";
+import type { Character } from "@/types/character";
 
 const SIGNUP_REQUIRED_MESSAGE =
   "Log in so I can be your companion. Please don't make me wait.";
@@ -19,8 +20,8 @@ const TRIAL_ENDED_MESSAGE =
 const PAID_SUBSCRIPTION_STATUSES = new Set(["standard", "premium", "elite"]);
 
 const USER_MESSAGE_MAX_TOKENS = 80;
-const USER_MESSAGE_MODEL_TARGET_TOKENS = 35;
-const CHARACTER_CONTEXT_MAX_TOKENS = 65;
+const CHARACTER_CONTEXT_MAX_TOKENS = 85;
+const MODEL_HISTORY_MESSAGE_COUNT = 8;
 
 const SupportedLanguageSchema = z
   .enum(["English", "Spanish", "French", "German", "Japanese", "Korean"])
@@ -39,6 +40,11 @@ const ChatRequest = z.object({
     .max(20),
   conversationId: z.string().uuid().optional()
 });
+
+type IncomingChatMessage = {
+  role: "user" | "character";
+  content: string;
+};
 
 type AuthUser = {
   id: string;
@@ -89,56 +95,54 @@ function limitTextToTokenBudget(text: string, maxTokens: number) {
   return result.trim();
 }
 
-function deterministicCompactUserText(text: string) {
-  const limited = limitTextToTokenBudget(text, USER_MESSAGE_MAX_TOKENS);
-
-  if (estimateTokenCount(limited) <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
-    return limited;
-  }
-
-  const cleaned = limited
-    .replace(/\b(just|really|actually|basically|literally|kind of|sort of|you know|i mean)\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (estimateTokenCount(cleaned) <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
-    return cleaned;
-  }
-
-  const sentences =
-    cleaned
-      .match(/[^.!?]+[.!?]?/g)
-      ?.map((sentence) => sentence.trim())
-      .filter(Boolean) ?? [];
-
-  if (sentences.length > 1) {
-    const first = sentences[0];
-    const last = sentences[sentences.length - 1];
-    const combined = first === last ? first : `${first} ${last}`;
-
-    if (estimateTokenCount(combined) <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
-      return combined;
-    }
-  }
-
-  const parts = cleaned.match(/\S+\s*/g) ?? [];
-  let result = "";
-
-  for (const part of parts) {
-    const candidate = result + part;
-
-    if (estimateTokenCount(candidate) > USER_MESSAGE_MODEL_TARGET_TOKENS) {
-      break;
-    }
-
-    result = candidate;
-  }
-
-  return result.trim();
+function normalizeForComparison(text: string) {
+  return text.replace(/\s+/g, " ").trim();
 }
 
-function compactUserTextForModel(text: string) {
-  return deterministicCompactUserText(text);
+function isOpeningSeedMessage(
+  message: IncomingChatMessage,
+  index: number,
+  character: Character
+) {
+  if (index !== 0 || message.role !== "character") return false;
+
+  const content = normalizeForComparison(message.content);
+  const opening = normalizeForComparison(
+    character.firstMessage || character.openingMessage || ""
+  );
+  const description = normalizeForComparison(character.description || "");
+  const combined = normalizeForComparison(
+    [character.description, character.firstMessage || character.openingMessage]
+      .filter(Boolean)
+      .join("\n\n")
+  );
+
+  if (!content) return false;
+
+  return Boolean(
+    (combined && content === combined) ||
+      (opening && content === opening) ||
+      (description && content === description) ||
+      (opening && content.endsWith(opening))
+  );
+}
+
+function buildModelHistory(
+  messages: IncomingChatMessage[],
+  character: Character
+): IncomingChatMessage[] {
+  return messages
+    .filter((message, index) => !isOpeningSeedMessage(message, index, character))
+    .map((message) => ({
+      role: message.role,
+      content: limitTextToTokenBudget(
+        message.content,
+        message.role === "user"
+          ? USER_MESSAGE_MAX_TOKENS
+          : CHARACTER_CONTEXT_MAX_TOKENS
+      )
+    }))
+    .filter((message) => message.content.trim());
 }
 
 async function getAuthUser(request: Request): Promise<AuthUser | null> {
@@ -398,10 +402,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Character not found" }, { status: 404 });
   }
 
-  const rawUserMessage =
-    body.data.messages
-      .filter((m) => m.role === "user")
-      .at(-1)?.content ?? "";
+  const userMessages = body.data.messages.filter((m) => m.role === "user");
+  const rawUserMessage = userMessages[userMessages.length - 1]?.content ?? "";
 
   const userMessageForStorage = limitTextToTokenBudget(
     rawUserMessage,
@@ -414,8 +416,6 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-
-  const userMessageForModel = compactUserTextForModel(userMessageForStorage);
 
   const supabase = getSupabaseServiceClient();
   const authUser = await getAuthUser(request);
@@ -505,14 +505,15 @@ export async function POST(request: Request) {
       .map((m) => m.content);
   }
 
-  const recent = body.data.messages.slice(-8).map((m) => {
-    const role = m.role === "character" ? character.name : "user";
-    const content =
-      m.role === "user"
-        ? deterministicCompactUserText(m.content)
-        : limitTextToTokenBudget(m.content, CHARACTER_CONTEXT_MAX_TOKENS);
+  const modelHistory = buildModelHistory(body.data.messages, character);
+  const historyForModel =
+    modelHistory.length > 0
+      ? modelHistory.slice(-MODEL_HISTORY_MESSAGE_COUNT)
+      : [{ role: "user" as const, content: userMessageForStorage }];
 
-    return `${role}: ${content}`;
+  const recent = modelHistory.slice(-4).map((m) => {
+    const role = m.role === "character" ? character.name : "user";
+    return `${role}: ${m.content}`;
   });
 
   const prompt = buildChatModePrompt(character, memory, recent, language);
@@ -523,16 +524,20 @@ export async function POST(request: Request) {
     content: userMessageForStorage
   });
 
-  const result = await callEverBondModel([
+  const modelMessages: EverBondMessage[] = [
     {
       role: "system",
       content: prompt
     },
-    {
-      role: "user",
-      content: userMessageForModel
-    }
-  ]);
+    ...historyForModel.map(
+      (message): EverBondMessage => ({
+        role: message.role === "character" ? "assistant" : "user",
+        content: message.content
+      })
+    )
+  ];
+
+  const result = await callEverBondModel(modelMessages);
 
   await supabase.from("messages").insert({
     conversation_id: conversationId,
