@@ -16,7 +16,7 @@ export type EverBondModelResult = {
 const DEV_FALLBACK =
   'She glances over for a second, trying not to smile too much. "I heard you. I just need a minute to figure out what to say."';
 
-const AI_REPLY_SOFT_TOKENS = 40;
+const AI_REPLY_SOFT_TOKENS = 32;
 const AI_REPLY_MAX_TOKENS = 65;
 
 function cleanBaseUrl(value: string) {
@@ -195,7 +195,7 @@ export async function callEverBondModel(
 ): Promise<EverBondModelResult> {
   const config = getProviderConfig();
 
-  const maxTokens = Math.min(Math.max(getNumberEnv("AI_MAX_TOKENS", 140), 120), 140);
+  const maxTokens = Math.min(Math.max(getNumberEnv("AI_MAX_TOKENS", 90), 80), 90);
   const temperature = getNumberEnv("AI_TEMPERATURE", 0.9);
   const topP = getNumberEnv("AI_TOP_P", 0.95);
 
