@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LANGUAGE_OPTIONS, useSiteLanguage } from "@/lib/site-language";
+import {
+  LANGUAGE_OPTIONS,
+  type LanguageCode,
+  useSiteLanguage
+} from "@/lib/site-language";
 
 export function LanguageSelector() {
   const { language, setLanguage, t } = useSiteLanguage();
@@ -19,7 +23,7 @@ export function LanguageSelector() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  function handleLanguageSelect(code: string) {
+  function handleLanguageSelect(code: LanguageCode) {
     setLanguage(code);
 
     if (typeof window !== "undefined") {
