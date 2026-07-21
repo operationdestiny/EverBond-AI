@@ -175,22 +175,6 @@ Memory rules: ${compactText(memoryRules, 18)}.
 function buildRuntimeMemoryBlock(memory: MemoryState) {
   return `
 EVERMEMORY ACTIVE:
- character.card.motivations,
-    34
-  )}.
-Opening scenario: ${compactText(
-    character.openingScenario || character.description,
-    34
-  )}.
-FIRST MESSAGE / ACTIVE SCENE ANCHOR: ${compactText(firstMessage, 55)}
-Voice example: ${compactList(sampleDialogue, 1, 22) || "Use the first message voice."}
-Memory rules: ${compactText(memoryRules, 18)}.
-`.replace(/\n{3,}/g, "\n\n").trim();
-}
-
-function buildRuntimeMemoryBlock(memory: MemoryState) {
-  return `
-EVERMEMORY ACTIVE:
 Story: ${compactText(memory.story_summary, 34, "No long-term summary yet.")}
 User facts: ${compactList(memory.user_facts, 5, 9) || "None yet."}
 Relationship state: ${compactText(memory.relationship_state, 16, "New bond.")}
