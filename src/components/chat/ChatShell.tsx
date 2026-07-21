@@ -11,6 +11,14 @@ import { useSiteLanguage } from "@/lib/site-language";
 type Message = { role: "user" | "character"; content: string };
 type GateMode = "signup" | "upgrade" | null;
 
+type ApiLanguage =
+  | "English"
+  | "Spanish"
+  | "French"
+  | "German"
+  | "Japanese"
+  | "Korean";
+
 const SIGNUP_REQUIRED_MESSAGE =
   "Log in so I can be your companion. Please don't make me wait.";
 
@@ -19,23 +27,14 @@ const TRIAL_ENDED_MESSAGE =
 
 const USER_INPUT_MAX_TOKENS = 80;
 
-function getApiLanguage() {
-  if (typeof window === "undefined") return "English";
+function getApiLanguage(languageCode: string): ApiLanguage {
+  const normalized = languageCode.toLowerCase();
 
-  const stored =
-    window.localStorage.getItem("everbond-language") ||
-    window.localStorage.getItem("site-language") ||
-    window.localStorage.getItem("language") ||
-    document.documentElement.lang ||
-    "en";
-
-  const normalized = stored.toLowerCase();
-
-  if (normalized.startsWith("es")) return "Spanish";
-  if (normalized.startsWith("fr")) return "French";
-  if (normalized.startsWith("de")) return "German";
-  if (normalized.startsWith("ja")) return "Japanese";
-  if (normalized.startsWith("ko")) return "Korean";
+  if (normalized === "es" || normalized === "spanish") return "Spanish";
+  if (normalized === "fr" || normalized === "french") return "French";
+  if (normalized === "de" || normalized === "german") return "German";
+  if (normalized === "ja" || normalized === "japanese") return "Japanese";
+  if (normalized === "ko" || normalized === "korean") return "Korean";
 
   return "English";
 }
@@ -80,7 +79,7 @@ function limitTextToTokenBudget(text: string, maxTokens: number) {
 }
 
 export function ChatShell({ character }: { character: Character }) {
-  const { t } = useSiteLanguage();
+  const { t, language } = useSiteLanguage();
   const initialCharacterMessage = `${character.description}\n\n${character.openingMessage}`;
 
   const [messages, setMessages] = useState<Message[]>([
@@ -431,7 +430,7 @@ export function ChatShell({ character }: { character: Character }) {
         },
         body: JSON.stringify({
           characterSlug: character.slug,
-          language: getApiLanguage(),
+          language: getApiLanguage(language),
           conversationId: conversationId ?? undefined,
           messages: nextMessages.slice(-12)
         })
