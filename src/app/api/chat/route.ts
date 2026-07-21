@@ -137,37 +137,8 @@ function deterministicCompactUserText(text: string) {
   return result.trim();
 }
 
-async function compactUserTextForModel(text: string) {
-  const limited = limitTextToTokenBudget(text, USER_MESSAGE_MAX_TOKENS);
-
-  if (estimateTokenCount(limited) <= USER_MESSAGE_MODEL_TARGET_TOKENS) {
-    return limited;
-  }
-
-  try {
-    const summary = await callEverBondModel([
-      {
-        role: "system",
-        content:
-          "Compress the user's message into one neutral context note under 35 tokens. Preserve all facts, names, numbers, requests, boundaries, and emotional intent. Do not answer. Do not add details."
-      },
-      {
-        role: "user",
-        content: limited
-      }
-    ]);
-
-    const compacted = limitTextToTokenBudget(
-      summary.content,
-      USER_MESSAGE_MODEL_TARGET_TOKENS
-    );
-
-    if (compacted) return compacted;
-  } catch {
-    // Fall back to deterministic compaction below.
-  }
-
-  return deterministicCompactUserText(limited);
+function compactUserTextForModel(text: string) {
+  return deterministicCompactUserText(text);
 }
 
 async function getAuthUser(request: Request): Promise<AuthUser | null> {
@@ -444,7 +415,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const userMessageForModel = await compactUserTextForModel(userMessageForStorage);
+  const userMessageForModel = compactUserTextForModel(userMessageForStorage);
 
   const supabase = getSupabaseServiceClient();
   const authUser = await getAuthUser(request);
