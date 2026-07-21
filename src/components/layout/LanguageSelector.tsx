@@ -19,7 +19,21 @@ export function LanguageSelector() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const selected = LANGUAGE_OPTIONS.find((item) => item.code === language) ?? LANGUAGE_OPTIONS[0];
+  function handleLanguageSelect(code: string) {
+    setLanguage(code);
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("everbond-language", code);
+      window.dispatchEvent(new Event("everbond-language-change"));
+      document.documentElement.lang = code.toLowerCase();
+    }
+
+    setOpen(false);
+  }
+
+  const selected =
+    LANGUAGE_OPTIONS.find((item) => item.code === language) ??
+    LANGUAGE_OPTIONS[0];
 
   return (
     <div ref={ref} className="relative">
@@ -42,18 +56,15 @@ export function LanguageSelector() {
         >
           {LANGUAGE_OPTIONS.map(({ code, label }) => {
             const active = code === language;
+
             return (
               <div
                 key={code}
-                onClick={() => {
-                  setLanguage(code);
-                  setOpen(false);
-                }}
+                onClick={() => handleLanguageSelect(code)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
-                    setLanguage(code);
-                    setOpen(false);
+                    handleLanguageSelect(code);
                   }
                 }}
                 className={`v84-language-option ${
