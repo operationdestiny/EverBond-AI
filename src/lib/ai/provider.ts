@@ -16,8 +16,7 @@ export type EverBondModelResult = {
 const DEV_FALLBACK =
   'She glances over for a second, trying not to smile too much. "I heard you. I just need a minute to figure out what to say."';
 
-const AI_REPLY_SOFT_TOKENS = 32;
-const AI_REPLY_MAX_TOKENS = 65;
+const AI_REPLY_MAX_TOKENS = 85;
 
 function cleanBaseUrl(value: string) {
   return value.replace(/\/$/, "");
@@ -74,12 +73,12 @@ function splitTokens(text: string) {
 }
 
 function endsWithCompleteSentence(text: string) {
-  return /[.!?]["')\]]?\s*$/.test(text.trim());
+  return /[.!?。！？]["')\]”’」』）]*\s*$/.test(text.trim());
 }
 
 function findLastSentenceEnd(text: string) {
-  const matches = [...text.matchAll(/[.!?]["')\]]?/g)];
-  const last = matches.at(-1);
+  const matches = [...text.matchAll(/[.!?。！？]["')\]”’」』）]*/g)];
+  const last = matches[matches.length - 1];
 
   if (!last || last.index === undefined || last.index < 8) {
     return "";
@@ -96,41 +95,32 @@ function limitToCompleteReply(text: string, finishReason?: string) {
   const tokens = splitTokens(text);
 
   if (
-    tokens.length <= AI_REPLY_SOFT_TOKENS &&
-    endsWithCompleteSentence(text) &&
-    finishReason !== "length"
-  ) {
-    return text;
-  }
-
-  const softLimited = textFromFirstTokens(text, AI_REPLY_SOFT_TOKENS);
-  const softComplete = findLastSentenceEnd(softLimited);
-
-  if (softComplete && splitTokens(softComplete).length >= 4) {
-    return softComplete;
-  }
-
-  if (
     tokens.length <= AI_REPLY_MAX_TOKENS &&
-    endsWithCompleteSentence(text) &&
-    finishReason !== "length"
+    finishReason !== "length" &&
+    endsWithCompleteSentence(text)
   ) {
     return text;
-  }
-
-  const hardLimited = textFromFirstTokens(text, AI_REPLY_MAX_TOKENS);
-  const hardComplete = findLastSentenceEnd(hardLimited);
-
-  if (hardComplete && splitTokens(hardComplete).length >= 4) {
-    return hardComplete;
   }
 
   if (tokens.length <= AI_REPLY_MAX_TOKENS && finishReason !== "length") {
     return text.replace(/[—–,\s.]+$/, "") + ".";
   }
 
-  return textFromFirstTokens(text, Math.max(10, AI_REPLY_SOFT_TOKENS - 6))
-    .replace(/[—–,\s.]+$/, "") + ".";
+  const hardLimited = textFromFirstTokens(text, AI_REPLY_MAX_TOKENS);
+  const hardComplete = findLastSentenceEnd(hardLimited);
+
+  if (hardComplete && splitTokens(hardComplete).length >= 8) {
+    return hardComplete;
+  }
+
+  const shorter = textFromFirstTokens(text, 60);
+  const shorterComplete = findLastSentenceEnd(shorter);
+
+  if (shorterComplete && splitTokens(shorterComplete).length >= 8) {
+    return shorterComplete;
+  }
+
+  return textFromFirstTokens(text, 48).replace(/[—–,\s.]+$/, "") + ".";
 }
 
 function cleanModelContent(content: unknown, finishReason?: string) {
@@ -195,7 +185,7 @@ export async function callEverBondModel(
 ): Promise<EverBondModelResult> {
   const config = getProviderConfig();
 
-  const maxTokens = Math.min(Math.max(getNumberEnv("AI_MAX_TOKENS", 90), 80), 90);
+  const maxTokens = Math.min(Math.max(getNumberEnv("AI_MAX_TOKENS", 110), 100), 120);
   const temperature = getNumberEnv("AI_TEMPERATURE", 0.9);
   const topP = getNumberEnv("AI_TOP_P", 0.95);
 
