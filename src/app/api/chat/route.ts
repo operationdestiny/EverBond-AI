@@ -20,7 +20,7 @@ const PAID_SUBSCRIPTION_STATUSES = new Set(["standard", "premium", "elite"]);
 
 const USER_MESSAGE_MAX_TOKENS = 80;
 const CHARACTER_CONTEXT_MAX_TOKENS = 85;
-const MODEL_HISTORY_MESSAGE_COUNT = 8;
+const MODEL_HISTORY_MESSAGE_COUNT = 6;
 const EVER_MEMORY_LIMIT = 12;
 
 const SupportedLanguageSchema = z
@@ -450,6 +450,7 @@ export async function POST(request: Request) {
   );
 
   const conversationId = conversation.id;
+
   let memory: MemoryState = {
     ...defaultMemory,
     ...(conversation.memory_state ?? {})
@@ -502,8 +503,6 @@ export async function POST(request: Request) {
     ].slice(0, EVER_MEMORY_LIMIT);
   }
 
-  const prompt = buildChatModePrompt(character, memory, [], language);
-
   const { error: userInsertError } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     role: "user",
@@ -513,6 +512,17 @@ export async function POST(request: Request) {
   if (userInsertError) throw userInsertError;
 
   const historyForModel = await loadModelHistory(supabase, conversationId);
+
+  const promptContext = historyForModel
+    .slice(-6)
+    .map((message) => `${message.role}: ${message.content}`);
+
+  const prompt = buildChatModePrompt(
+    character,
+    memory,
+    promptContext,
+    language
+  );
 
   const modelMessages: EverBondMessage[] = [
     {
