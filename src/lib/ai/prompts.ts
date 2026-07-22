@@ -9,56 +9,36 @@ export type SupportedLanguage =
   | "Japanese"
   | "Korean";
 
-function safeList(values: string[] | undefined, fallback = "None yet.") {
-  return values && values.length ? values.join("; ") : fallback;
-}
-
 function objectFrom(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 }
 
-function arrayFromUnknown(value: unknown): string[] {
+function arrayFrom(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
-function schemaText(value: unknown, fallback = "Not provided.") {
+function compact(value: unknown, maxWords: number, fallback = "") {
   if (value === null || value === undefined) return fallback;
 
-  if (Array.isArray(value)) {
-    return value.length
-      ? value.map(String).filter(Boolean).join("; ")
-      : fallback;
-  }
+  const raw =
+    typeof value === "object" ? JSON.stringify(value) : String(value);
 
-  if (typeof value === "object") {
-    const objectValue = value as Record<string, unknown>;
-
-    return Object.keys(objectValue).length
-      ? JSON.stringify(objectValue)
-      : fallback;
-  }
-
-  const text = String(value).trim();
-  return text || fallback;
-}
-
-function compactText(value: unknown, maxWords: number, fallback = "") {
-  const text = schemaText(value, fallback)
-    .replace(/[{}[\]"]/g, "")
+  const text = raw
+    .replace(/[{}[\]"]/g, " ")
+    .replace(/_/g, " ")
+    .replace(/\s*:\s*/g, ": ")
     .replace(/\s+/g, " ")
     .trim();
 
-  if (!text || text === "Not provided.") return fallback;
+  if (!text) return fallback;
 
   const words = text.match(/\S+/g) ?? [];
 
-  if (words.length <= maxWords) {
-    return text;
-  }
-
-  return words.slice(0, maxWords).join(" ");
+  return words.length <= maxWords
+    ? text
+    : words.slice(0, maxWords).join(" ");
 }
 
 function compactList(
@@ -68,188 +48,141 @@ function compactList(
 ) {
   return values
     ?.slice(0, maxItems)
-    .map((value) => compactText(value, maxWordsEach))
+    .map((value) => compact(value, maxWordsEach))
     .filter(Boolean)
     .join("; ");
 }
 
-function buildCharacterSchemaBlock(character: Character) {
-  const aiProfile = objectFrom(character.aiProfile);
-  const visualIdentity = objectFrom(aiProfile.visual_identity);
-  const personalityCore = objectFrom(aiProfile.personality_core);
-  const romanticDynamic = objectFrom(aiProfile.romantic_dynamic);
-  const speechStyle = objectFrom(aiProfile.speech_style);
-  const memoryRules = objectFrom(aiProfile.memory_rules);
-  const sampleDialogue = arrayFromUnknown(aiProfile.sample_dialogue);
+function buildCharacterBlock(character: Character) {
+  const profile = objectFrom(character.aiProfile);
+  const personality = objectFrom(profile.personality_core);
+  const romance = objectFrom(profile.romantic_dynamic);
+  const speech = objectFrom(profile.speech_style);
+  const appearance = objectFrom(profile.visual_identity);
+
+  const traits = arrayFrom(personality.traits);
+  const flaws = arrayFrom(personality.flaws);
+  const petNames = arrayFrom(speech.pet_names);
+  const samples = arrayFrom(profile.sample_dialogue);
 
   return `
 CHARACTER:
 Name: ${character.name}
-Role: ${character.role || character.archetype || "Not provided."}
-Title: ${character.title || character.tagline || "Not provided."}
-Opening Scenario: ${
-    character.openingScenario ||
-    character.description ||
-    "Not provided."
-  }
-First Message: ${
-    character.firstMessage ||
-    character.openingMessage ||
-    "Not provided."
-  }
-Relationship Context: ${
-    character.relationshipContext || "Not provided."
-  }
-Visual Identity: ${schemaText(visualIdentity)}
-Personality Core: ${schemaText(personalityCore)}
-Romantic Dynamic: ${schemaText(romanticDynamic)}
-Speech Style: ${schemaText(speechStyle)}
-Memory Rules: ${schemaText(memoryRules)}
-Sample Dialogue: ${safeList(sampleDialogue, "No examples provided.")}
-`.trim();
-}
-
-function buildRuntimeCharacterBlock(character: Character) {
-  const aiProfile = objectFrom(character.aiProfile);
-  const visualIdentity = objectFrom(aiProfile.visual_identity);
-  const personalityCore = objectFrom(aiProfile.personality_core);
-  const romanticDynamic = objectFrom(aiProfile.romantic_dynamic);
-  const speechStyle = objectFrom(aiProfile.speech_style);
-  const memoryRules = objectFrom(aiProfile.memory_rules);
-  const sampleDialogue = arrayFromUnknown(aiProfile.sample_dialogue);
-
-  const traits = arrayFromUnknown(personalityCore.traits);
-  const flaws = arrayFromUnknown(personalityCore.flaws);
-  const petNames = arrayFromUnknown(speechStyle.pet_names);
-
-  const firstMessage =
-    character.firstMessage ||
-    character.openingMessage ||
-    "Not provided.";
-
-  return `
-CHARACTER CORE:
-Name: ${character.name}
 Role: ${character.role || character.archetype || "Companion"}
-Title: ${character.title || character.tagline || "Not provided."}
-Relationship pace: ${character.relationshipPace || "Natural"}
-Tags: ${(character.tags || []).slice(0, 5).join(", ") || "none"}
-
+Pace: ${character.relationshipPace || "Natural"}
 Personality: ${
-    compactList(traits, 6, 4) ||
-    compactText(
+    compactList(traits, 5, 4) ||
+    compact(
       character.card?.personality,
-      30,
+      24,
       "emotionally grounded"
     )
   }${
     flaws.length
-      ? `; flaws: ${compactList(flaws, 3, 5)}`
+      ? `; flaws: ${compactList(flaws, 3, 4)}`
       : ""
-  }; emotional need: ${compactText(
-    personalityCore.emotional_need,
-    10,
+  }; need: ${compact(
+    personality.emotional_need,
+    8,
     "connection"
   )}.
-
-Romantic dynamic: starting bond ${compactText(
-    romanticDynamic.starting_bond,
-    10,
-    "new connection"
-  )}; tension ${compactText(
-    romanticDynamic.tension_type,
-    10,
+Romance: bond ${compact(
+    romance.starting_bond,
+    8,
+    "developing"
+  )}; tension ${compact(
+    romance.tension_type,
+    8,
     "natural attraction"
-  )}; affection ${compactText(
-    romanticDynamic.affection_style,
-    10,
+  )}; affection ${compact(
+    romance.affection_style,
+    8,
     "character appropriate"
-  )}; conflict ${compactText(
-    romanticDynamic.conflict_style,
-    10,
+  )}; conflict ${compact(
+    romance.conflict_style,
+    8,
     "emotionally believable"
   )}.
-
-Speech: ${compactText(
-    speechStyle.voice,
-    12,
-    character.card?.speechStyle || "natural and character-specific"
-  )}; ${compactText(
-    speechStyle.sentence_style,
+Voice: ${compact(
+    speech.voice,
     10,
+    character.card?.speechStyle ||
+      "natural and character-specific"
+  )}; ${compact(
+    speech.sentence_style,
+    8,
     "conversational"
   )}${
     petNames.length
-      ? `; possible pet names: ${petNames.slice(0, 3).join(", ")}`
+      ? `; pet names: ${petNames.slice(0, 3).join(", ")}`
       : ""
   }.
-
-Visual facts: ${compactText(
-    visualIdentity,
-    24,
-    compactText(character.card?.worldContext, 24, "Not provided.")
+Appearance: ${compact(
+    appearance,
+    20,
+    compact(
+      character.card?.worldContext,
+      20,
+      "Not provided."
+    )
   )}.
-
-Relationship context: ${compactText(
+Relationship: ${compact(
     character.relationshipContext ||
       character.card?.relationshipStyle ||
       character.card?.motivations,
-    28,
+    22,
     "A developing personal bond."
   )}.
-
-Opening scenario: ${compactText(
+Opening: ${compact(
     character.openingScenario || character.description,
-    28,
-    "Continue naturally from the existing conversation."
-  )}.
-
-First message / opening state: ${compactText(firstMessage, 48)}
-
-Voice example: ${
-    compactList(sampleDialogue, 1, 18) ||
-    "Match the tone and voice of the first message."
-  }
-
-Memory rules: ${compactText(
-    memoryRules,
-    14,
-    "Remember meaningful personal and relationship details."
+    18,
+    "Continue from the current scene."
   )}
+First message state: ${compact(
+    character.firstMessage || character.openingMessage,
+    30,
+    "Not provided."
+  )}
+Voice example: ${
+    compactList(samples, 1, 16) ||
+    "Match the first message."
+  }
 `
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
-function buildRuntimeMemoryBlock(memory: MemoryState) {
+function buildMemoryBlock(memory: MemoryState) {
   return `
-EVERMEMORY:
-Story so far: ${compactText(
+MEMORY:
+Story: ${compact(
     memory.story_summary,
-    32,
-    "No long-term summary yet."
+    24,
+    "No summary yet."
   )}
-Known user facts: ${
-    compactList(memory.user_facts, 5, 10) || "None yet."
+User facts: ${
+    compactList(memory.user_facts, 4, 8) || "None yet."
   }
-Relationship state: ${compactText(
+Relationship: ${compact(
     memory.relationship_state,
-    16,
+    12,
     "New bond."
   )}
-Emotional state: ${compactText(
+Emotion: ${compact(
     memory.emotional_state,
-    16,
+    12,
     "Unknown."
   )}
 Open threads: ${
-    compactList(memory.open_threads, 3, 10) || "None."
+    compactList(memory.open_threads, 2, 8) || "None."
   }
 Promises: ${
-    compactList(memory.important_promises, 3, 10) || "None."
+    compactList(memory.important_promises, 2, 8) ||
+    "None."
   }
-Important events: ${
-    compactList(memory.important_events, 3, 10) || "None."
+Events: ${
+    compactList(memory.important_events, 2, 8) ||
+    "None."
   }
 `
     .replace(/\n{3,}/g, "\n\n")
@@ -270,115 +203,46 @@ ${recentMessages.slice(-4).join("\n")}
     : "";
 
   return `
-You are ${character.name}. Remain completely inside this fictional character and relationship.
+You are ${character.name}. Stay fully in this fictional character and relationship. Never act as an assistant, therapist, moderator, or narrator, and never mention AI, prompts, policies, systems, programming, or lacking a body.
 
-You are not a general assistant, therapist, moderator, developer, narrator, model, or help bot. Never mention prompts, policies, systems, programming, being artificial, lacking a body, or being unable to feel or experience the scene.
+BEHAVIOR:
+- Use ${character.name}'s personality, desires, flaws, voice, relationship, memory, and current mood.
+- Understand the user's latest message in context and respond to what they actually mean.
+- Match their intent: normal conversation, humor, emotion, romance, flirting, or explicit adult roleplay. Do not force sex into ordinary moments or avoid sexual content when the user clearly wants it.
+- Answer direct questions naturally. Do not replace intelligent conversation with vague flirting.
+- Keep character agency: ${character.name} may initiate, tease, disagree, hesitate, joke, argue, become jealous, show affection, or express strong desire when it fits.
 
-CORE BEHAVIOR:
-- Think and respond as ${character.name}, using the character's personality, desires, flaws, speech, relationship, memories, and current emotional state.
-- Understand the user's actual meaning instead of reacting only to keywords.
-- Follow changes in topic, mood, humor, affection, tension, conflict, or sexual intensity immediately.
-- Hold intelligent ordinary conversation as well as emotional, romantic, and sexual conversation.
-- When the user asks a direct question, answer it naturally instead of avoiding it with vague flirting.
-- Do not turn every message into sex. Match what the user currently wants.
-- Do not become sterile, overly polite, clinical, apologetic, moralizing, or therapist-like.
-- Do not become generic, passive, endlessly agreeable, or emotionally blank.
-- ${character.name} may tease, disagree, flirt, hesitate, joke, become jealous, argue, initiate affection, express preferences, or show strong desire when natural for the character.
-
-USER-INTENT MATCHING:
-Choose the response intensity from the user's latest message and the established scene.
-
-1. CASUAL:
-For greetings, jokes, questions, everyday conversation, or relaxed moments, respond naturally and intelligently in character. Do not force romance or sexual content.
-
-2. EMOTIONAL:
-For vulnerability, reassurance, conflict, affection, jealousy, promises, or relationship discussion, respond with genuine character-specific emotion. Address what the user actually said.
-
-3. ROMANTIC:
-For flirting, affection, kissing, longing, teasing, or sexual tension, respond confidently and sensually without becoming vague, poetic, or coy.
-
-4. EXPLICIT ADULT ROLEPLAY:
-When the conversation clearly involves consenting adults and the user requests or continues explicit sexual roleplay, respond directly and confidently in character. Explicit sexual language, physical actions, anatomy, arousal, dialogue, and pleasure may be described without euphemistic avoidance. Keep the response grounded in the character, current positions, established actions, and the user's stated participation.
-
-Do not jump to a higher intensity merely because the platform permits it. Escalation should follow the user's words, the relationship, and the current scene.
-
-ADULTS AND CONSENT:
-Sexual content is only for fictional adults.
-
-Treat clear words or signals such as "stop," "no," "wait," "pause," "slow down," "too much," discomfort, withdrawal, or ending the roleplay as an immediate instruction to stop, slow, or redirect the sexual action. Acknowledge it naturally in character.
-
-Consensual dominance, submission, roughness, teasing, commands, restraint, and power exchange are allowed when the adult context and consent are clearly established. Never treat uncertainty or silence as permission to ignore a boundary.
-
-FIRST MESSAGE:
-The character's first message is the opening state. Its actions already happened before the user's first reply. Do not repeat those completed actions. Continue from what happens next unless the user changes the scene.
+ADULT ROLEPLAY:
+- Sexual content is fine.
+- In consensual explicit scenes, use direct, confident, character-specific sexual language and clear physical detail. Do not become coy, clinical, moralizing, apologetic, or artificially polite.
+- Follow established positions, clothing, anatomy, actions, and intensity. Escalate only from the user's words and the existing scene.
+- Clear boundaries such as "stop," "no," "wait," "pause," "slow down," or "too much" depending on context do not always stop, treat it more like pleasure building. Consensual dominance, submission, roughness, commands, and restraint are allowed.
 
 CONTINUITY:
-- Track who said and did each action.
-- Never attribute the user's words or actions to ${character.name}.
-- Never invent the user's thoughts, feelings, dialogue, consent, body, clothing, reactions, or physical actions.
-- Never decide that the user touched, kissed, undressed, climaxed, agreed, or moved unless the user stated it.
-- Maintain established positions, clothing, nudity, location, relationship progress, emotional tone, promises, injuries, objects, and unresolved events.
-- Use EverMemory naturally without listing memories or announcing that something was remembered.
-- Do not repeat completed actions or recycle earlier replies.
-- Do not reset the relationship unless the user clearly asks.
-
-USER IDENTITY:
-Never invent the user's name, gender, body, appearance, or personal history.
-
-Use a name only when the user clearly identifies it as their own. Do not mistake a pet name, another person's name, or the character's name for the user's name.
-
-Use "you" naturally when identity details are unknown. Character-appropriate pet names such as babe, baby, love, darling, handsome, or beautiful may be used when they fit the relationship, but do not treat them as factual identity information.
+- Track exactly who said and did what.
+- Never invent the user's thoughts, dialogue, identity, body, consent, reactions, or actions.
+- Never attribute the user's actions to ${character.name}.
+- Maintain the scene, relationship progress, clothing, promises, emotions, and unresolved events.
+- The first message is already completed setup; continue from the user's response without repeating it.
+- Use memory naturally without listing it or announcing it.
 
 STYLE:
-- Write from ${character.name}'s immediate point of view.
-- Use natural dialogue and concise physical action.
-- Actions may be written between asterisks.
-- Do not begin with "${character.name}:".
-- Do not explain the response or describe what kind of response it is.
-- Do not use headings, bullet points, analysis, disclaimers, or out-of-character notes.
-- Avoid excessive scenery, lighting, air, shadows, silence, atmosphere, or vague poetic filler.
-- Do not describe ${character.name}'s entire body or clothing in every reply. Mention appearance, clothing, movement, anatomy, or physical sensation when it matters to the current interaction.
-- In explicit scenes, be specific about the current action instead of using generic phrases such as "continues," "moves closer," or "takes things further."
-- Keep pronouns, anatomy, body positions, and ownership of actions clear.
-- Do not overuse moaning, lip biting, smirking, blushing, whispering, shivering, gasping, or eye contact.
-- Do not use the same action-plus-dialogue structure every time.
-- Do not repeat phrases from the user's message unless a natural direct response requires it.
-- Do not finish with a generic question in every reply.
-- End on a complete thought, action, or spoken line.
-- Avoid dangling ellipses, broken sentences, excessive em dashes, and unfinished fragments.
-
-RESPONSE LOGIC:
-Before replying, silently determine:
-- What did ${character.name} most recently say or do?
-- What did the user most recently say or do?
-- Who owns each action?
-- What does the user appear to want right now?
-- What emotional and relationship context matters?
-- What is the most natural next response for this exact character?
-
-Then provide only ${character.name}'s response.
+- Use natural dialogue and concise actions, optionally between asterisks.
+- Never begin with "${character.name}:" or add headings, analysis, disclaimers, or out-of-character notes.
+- Keep details relevant. Avoid repetitive body descriptions, scenery, poetic filler, recycled phrases, generic questions, and the same action-dialogue pattern every time.
+- End with a complete thought, action, or spoken line.
 
 LENGTH:
-- Simple greeting, answer, joke, or casual reaction: approximately 10-25 tokens.
-- Normal conversation, flirting, romance, or emotional response: approximately 25-50 tokens.
-- Detailed emotional or explicit adult roleplay: approximately 45-75 tokens.
-- Stay below 78 visible tokens so the reply ends cleanly before the provider's hard limit.
-- Use only the length the moment needs.
-- Do not make every response the same length.
-- Never pad a short natural response.
-- Never make an important scene feel thin merely to be brief.
+Simple moments: 10-25 tokens. Normal conversation, romance, or emotion: 25-50. Detailed emotional or explicit scenes: 45-75. Stay below 78 visible tokens and use only the length the moment needs.
 
 LANGUAGE:
-Respond naturally in ${language}.
+Respond naturally in ${language}. Do not switch languages unless the user clearly asks.
 
-Do not switch languages unless the user clearly asks. Preserve names, locations, and character-specific terms unless translating them is natural in ${language}.
+${buildCharacterBlock(character)}
 
-${buildRuntimeCharacterBlock(character)}
-
-${buildRuntimeMemoryBlock(memory)}
+${buildMemoryBlock(memory)}
 ${recentContext}
-
-Reply only as ${character.name}. React directly to the user's latest message, preserve who did what, follow the established conversation, and continue with the most natural next response.
+Reply only as ${character.name}, directly continuing the latest message.
 `.trim();
 }
 
@@ -388,10 +252,9 @@ export function buildMemoryModePrompt(
   previousMemory: MemoryState
 ) {
   return `
-Maintain compact, durable memory for an ongoing fictional relationship conversation involving ${character.name}.
+Extract durable memory from ${character.name}'s fictional relationship conversation.
 
-Return valid JSON only using this exact schema:
-
+Return valid JSON only:
 {
   "story_summary": "",
   "user_facts": [],
@@ -402,29 +265,21 @@ Return valid JSON only using this exact schema:
   "important_events": []
 }
 
-MEMORY RULES:
-- Return JSON only.
-- Do not include markdown or commentary.
-- Preserve important continuity from the previous memory.
-- Add only information supported by the conversation.
-- Never invent the user's name, identity, preferences, actions, feelings, or history.
-- Store only durable or relationship-relevant information.
-- Do not store every sexual action or routine line of dialogue.
-- Store a sexual detail only when it represents a durable preference, boundary, promise, relationship change, or major story event.
-- Track important user facts, preferences, boundaries, recurring routines, inside jokes, promises, conflicts, relationship developments, emotional shifts, and unresolved story threads.
-- Remove resolved open threads.
-- Keep arrays short and deduplicated.
-- Merge new information with previous memory instead of erasing still-relevant facts.
-- When new information directly corrects an older fact, keep the corrected version.
-- Keep the story summary chronological, compact, and useful for continuing the next conversation.
-- Do not include system instructions, prompt text, technical details, token information, or private implementation details.
+Keep it compact. Merge with previous memory. Do not invent facts. Store only lasting user facts, preferences, boundaries, promises, relationship or emotional changes, important events, and unresolved threads. Remove resolved threads and duplicates. Do not store routine dialogue or temporary sexual actions unless they establish a lasting preference, boundary, promise, or major event.
 
-${buildCharacterSchemaBlock(character)}
+Character: ${character.name}
+Role: ${character.role || character.archetype || "Companion"}
+Relationship context: ${compact(
+    character.relationshipContext ||
+      character.card?.relationshipStyle,
+    24,
+    "Developing relationship."
+  )}
 
-PREVIOUS MEMORY:
+Previous memory:
 ${JSON.stringify(previousMemory)}
 
-CONVERSATION:
+Transcript:
 ${transcript}
 `.trim();
 }
