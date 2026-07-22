@@ -9,7 +9,6 @@ import {
 import { callEverBondModel, type EverBondMessage } from "@/lib/ai/provider";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import type { MemoryState } from "@/types/memory";
-import type { Character } from "@/types/character";
 
 const SIGNUP_REQUIRED_MESSAGE =
   "Log in so I can be your companion. Please don't make me wait.";
@@ -22,6 +21,7 @@ const PAID_SUBSCRIPTION_STATUSES = new Set(["standard", "premium", "elite"]);
 const USER_MESSAGE_MAX_TOKENS = 80;
 const CHARACTER_CONTEXT_MAX_TOKENS = 85;
 const MODEL_HISTORY_MESSAGE_COUNT = 8;
+const EVER_MEMORY_LIMIT = 12;
 
 const SupportedLanguageSchema = z
   .enum(["English", "Spanish", "French", "German", "Japanese", "Korean"])
@@ -41,11 +41,6 @@ const ChatRequest = z.object({
   conversationId: z.string().uuid().optional()
 });
 
-type IncomingChatMessage = {
-  role: "user" | "character";
-  content: string;
-};
-
 type AuthUser = {
   id: string;
   email: string | null;
@@ -58,6 +53,11 @@ type ProfileRow = {
   trial_status: "not_started" | "active" | "ended";
   trial_messages_used: number;
   trial_message_limit: number;
+};
+
+type StoredMessageRow = {
+  role: string;
+  content: string;
 };
 
 function estimateTokenCount(text: string) {
@@ -93,56 +93,6 @@ function limitTextToTokenBudget(text: string, maxTokens: number) {
   }
 
   return result.trim();
-}
-
-function normalizeForComparison(text: string) {
-  return text.replace(/\s+/g, " ").trim();
-}
-
-function isOpeningSeedMessage(
-  message: IncomingChatMessage,
-  index: number,
-  character: Character
-) {
-  if (index !== 0 || message.role !== "character") return false;
-
-  const content = normalizeForComparison(message.content);
-  const opening = normalizeForComparison(
-    character.firstMessage || character.openingMessage || ""
-  );
-  const description = normalizeForComparison(character.description || "");
-  const combined = normalizeForComparison(
-    [character.description, character.firstMessage || character.openingMessage]
-      .filter(Boolean)
-      .join("\n\n")
-  );
-
-  if (!content) return false;
-
-  return Boolean(
-    (combined && content === combined) ||
-      (opening && content === opening) ||
-      (description && content === description) ||
-      (opening && content.endsWith(opening))
-  );
-}
-
-function buildModelHistory(
-  messages: IncomingChatMessage[],
-  character: Character
-): IncomingChatMessage[] {
-  return messages
-    .filter((message, index) => !isOpeningSeedMessage(message, index, character))
-    .map((message) => ({
-      role: message.role,
-      content: limitTextToTokenBudget(
-        message.content,
-        message.role === "user"
-          ? USER_MESSAGE_MAX_TOKENS
-          : CHARACTER_CONTEXT_MAX_TOKENS
-      )
-    }))
-    .filter((message) => message.content.trim());
 }
 
 async function getAuthUser(request: Request): Promise<AuthUser | null> {
@@ -280,7 +230,7 @@ async function getConversationForCharacter(
   userId: string,
   characterId: string,
   conversationId?: string
-): Promise<{ id: string; memory_state: MemoryState | null }> {
+): Promise<{ id: string; memory_state: Partial<MemoryState> | null }> {
   if (conversationId) {
     const { data: existingById, error } = await supabase
       .from("conversations")
@@ -293,7 +243,10 @@ async function getConversationForCharacter(
     if (error) throw error;
 
     if (existingById) {
-      return existingById as { id: string; memory_state: MemoryState | null };
+      return existingById as {
+        id: string;
+        memory_state: Partial<MemoryState> | null;
+      };
     }
   }
 
@@ -309,7 +262,10 @@ async function getConversationForCharacter(
   if (existingError) throw existingError;
 
   if (existing) {
-    return existing as { id: string; memory_state: MemoryState | null };
+    return existing as {
+      id: string;
+      memory_state: Partial<MemoryState> | null;
+    };
   }
 
   const { data: created, error: createError } = await supabase
@@ -323,7 +279,40 @@ async function getConversationForCharacter(
 
   if (createError) throw createError;
 
-  return created as { id: string; memory_state: MemoryState | null };
+  return created as {
+    id: string;
+    memory_state: Partial<MemoryState> | null;
+  };
+}
+
+async function loadModelHistory(
+  supabase: ReturnType<typeof getSupabaseServiceClient>,
+  conversationId: string
+): Promise<EverBondMessage[]> {
+  const { data, error } = await supabase
+    .from("messages")
+    .select("role,content")
+    .eq("conversation_id", conversationId)
+    .in("role", ["user", "character"])
+    .order("created_at", { ascending: false })
+    .limit(MODEL_HISTORY_MESSAGE_COUNT);
+
+  if (error) throw error;
+
+  return ((data ?? []) as StoredMessageRow[])
+    .reverse()
+    .map((message) => {
+      const isUser = message.role === "user";
+
+      return {
+        role: isUser ? ("user" as const) : ("assistant" as const),
+        content: limitTextToTokenBudget(
+          message.content,
+          isUser ? USER_MESSAGE_MAX_TOKENS : CHARACTER_CONTEXT_MAX_TOKENS
+        )
+      };
+    })
+    .filter((message) => message.content.trim());
 }
 
 export async function GET(request: Request) {
@@ -378,7 +367,7 @@ export async function GET(request: Request) {
   const messages = (rows ?? [])
     .reverse()
     .map((message) => ({
-      role: message.role === "user" ? "user" : "character",
+      role: message.role === "user" ? ("user" as const) : ("character" as const),
       content: message.content
     }))
     .filter((message) => message.content);
@@ -461,7 +450,10 @@ export async function POST(request: Request) {
   );
 
   const conversationId = conversation.id;
-  let memory: MemoryState = conversation.memory_state ?? defaultMemory;
+  let memory: MemoryState = {
+    ...defaultMemory,
+    ...(conversation.memory_state ?? {})
+  };
 
   const language = body.data.language as SupportedLanguage;
 
@@ -481,7 +473,7 @@ export async function POST(request: Request) {
     .eq("character_id", character.id)
     .order("importance", { ascending: false })
     .order("updated_at", { ascending: false })
-    .limit(24);
+    .limit(EVER_MEMORY_LIMIT);
 
   if (relationship) {
     memory = {
@@ -498,48 +490,41 @@ export async function POST(request: Request) {
   }
 
   if (memories) {
-    memory.user_facts = memories
-      .filter((m) =>
-        ["fact", "preference", "routine", "inside_joke"].includes(m.memory_type)
-      )
-      .map((m) => m.content);
+    memory.user_facts = [
+      ...(memory.user_facts ?? []),
+      ...memories
+        .filter((m) =>
+          ["fact", "preference", "routine", "inside_joke"].includes(
+            m.memory_type
+          )
+        )
+        .map((m) => m.content)
+    ].slice(0, EVER_MEMORY_LIMIT);
   }
 
-  const modelHistory = buildModelHistory(body.data.messages, character);
-  const historyForModel =
-    modelHistory.length > 0
-      ? modelHistory.slice(-MODEL_HISTORY_MESSAGE_COUNT)
-      : [{ role: "user" as const, content: userMessageForStorage }];
+  const prompt = buildChatModePrompt(character, memory, [], language);
 
-  const recent = modelHistory.slice(-4).map((m) => {
-    const role = m.role === "character" ? character.name : "user";
-    return `${role}: ${m.content}`;
-  });
-
-  const prompt = buildChatModePrompt(character, memory, recent, language);
-
-  await supabase.from("messages").insert({
+  const { error: userInsertError } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     role: "user",
     content: userMessageForStorage
   });
+
+  if (userInsertError) throw userInsertError;
+
+  const historyForModel = await loadModelHistory(supabase, conversationId);
 
   const modelMessages: EverBondMessage[] = [
     {
       role: "system",
       content: prompt
     },
-    ...historyForModel.map(
-      (message): EverBondMessage => ({
-        role: message.role === "character" ? "assistant" : "user",
-        content: message.content
-      })
-    )
+    ...historyForModel
   ];
 
   const result = await callEverBondModel(modelMessages);
 
-  await supabase.from("messages").insert({
+  const { error: characterInsertError } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     role: "character",
     content: result.content,
@@ -547,6 +532,8 @@ export async function POST(request: Request) {
     output_tokens: result.outputTokens,
     model_id: result.model
   });
+
+  if (characterInsertError) throw characterInsertError;
 
   await supabase
     .from("conversations")
