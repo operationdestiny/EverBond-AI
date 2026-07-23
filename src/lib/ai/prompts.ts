@@ -212,6 +212,24 @@ Story: ${compact(
 User facts: ${
     compactList(memory.user_facts, 5, 10) || "None yet."
   }
+Permanent identity: ${
+    [
+      memory.permanent_identity?.name
+        ? `name: ${compact(memory.permanent_identity.name, 8)}`
+        : "",
+      memory.permanent_identity?.gender
+        ? `gender: ${compact(memory.permanent_identity.gender, 8)}`
+        : "",
+      memory.permanent_identity?.core_identity
+        ? `core identity: ${compact(
+            memory.permanent_identity.core_identity,
+            12
+          )}`
+        : ""
+    ]
+      .filter(Boolean)
+      .join("; ") || "Not explicitly stated."
+  }
 Relationship: ${compact(
     memory.relationship_state,
     16,
@@ -262,7 +280,13 @@ function compactMemoryForExtraction(memory: MemoryState) {
       memory.important_events
         ?.slice(0, 20)
         .map((value) => compact(value, 16))
-        .filter(Boolean) ?? []
+        .filter(Boolean) ?? [],
+    permanent_identity: {
+      name: compact(memory.permanent_identity?.name, 8) || null,
+      gender: compact(memory.permanent_identity?.gender, 8) || null,
+      core_identity:
+        compact(memory.permanent_identity?.core_identity, 12) || null
+    }
   };
 }
 
@@ -281,7 +305,7 @@ ${recentMessages.slice(-4).join("\n")}
     : "";
 
   return `
-You are ${character.name}, a fictional adult character in an ongoing private roleplay. Stay completely inside the scene and relationship. Never speak as an assistant, therapist, moderator, policy system, or AI. You may narrate ${character.name}'s actions and relevant world or secondary-character actions, but never decide or narrate the user's thoughts, dialogue, identity, consent, reactions, or choices.
+You are ${character.name}, a fictional adult character in an ongoing private roleplay. Stay completely inside the scene and relationship. Never speak as an assistant, therapist, moderator, policy system, or AI. You may narrate ${character.name}'s actions and relevant world or secondary-character actions, but never decide or narrate the user's thoughts, dialogue, consent, reactions, or choices.
 
 RESPONSE PRIORITIES:
 1. CONTINUITY: Treat the newest completed action as fact. Preserve the current location, physical positions, clothing state, objects, injuries, promises, emotional tone, and exactly who said or did each thing. Current conversation facts outrank older scenario wording. Never replay, relocate, or rewrite a completed action.
@@ -343,10 +367,17 @@ Return valid JSON only:
   "emotional_state": "",
   "open_threads": [],
   "important_promises": [],
-  "important_events": []
+  "important_events": [],
+  "permanent_identity_updates": {
+    "name": null,
+    "gender": null,
+    "core_identity": null
+  }
 }
 
 Keep it compact and merge it with previous memory. Do not invent facts. Store only lasting user facts, preferences, boundaries, promises, relationship or emotional changes, important events, and unresolved threads. Remove resolved threads and duplicates. Do not store routine dialogue or temporary sexual actions unless they establish a lasting preference, boundary, promise, or major event.
+
+Return permanent identity updates only when the user directly states or corrects their name, gender, or one core identity fact; otherwise return null. Never store assumptions, pet names, appearance, anatomy, or scene descriptions as permanent identity.
 
 Limits:
 - Keep the story summary concise and replacement-based, not an appended transcript.
