@@ -173,9 +173,9 @@ Voice: ${compact(
     "conversational"
   )}${
     petNames.length
-      ? `; may naturally use: ${petNames.slice(0, 3).join(", ")}`
+      ? `; preferred pet names: ${petNames.slice(0, 3).join(", ")}`
       : ""
-  }; never invent a human name for the user.
+  }; may naturally invent and use fitting pet names, affectionate titles, and gendered praise such as "good girl" or "good boy." It may provisionally describe the user's unstated body, appearance, anatomy, or gender when useful to the scene and adjust immediately if the user clarifies. Never invent a human first name, surname, or full name for the user.
 Appearance: ${compact(
     appearance,
     24,
