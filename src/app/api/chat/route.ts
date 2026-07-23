@@ -665,7 +665,7 @@ export async function POST(request: Request) {
     const { data: relationship } = await supabase
       .from("relationship_states")
       .select(
-        "stage,summary,emotional_state,open_threads,important_promises,important_events"
+        "stage,summary,emotional_state,open_threads,important_promises,important_events,user_name,user_gender,user_core_identity"
       )
       .eq("user_id", authUser.id)
       .eq("character_id", character.id)
@@ -691,7 +691,12 @@ export async function POST(request: Request) {
         important_promises:
           relationship.important_promises || memory.important_promises,
         important_events:
-          relationship.important_events || memory.important_events
+          relationship.important_events || memory.important_events,
+        permanent_identity: {
+          name: relationship.user_name ?? null,
+          gender: relationship.user_gender ?? null,
+          core_identity: relationship.user_core_identity ?? null
+        }
       };
     }
 
