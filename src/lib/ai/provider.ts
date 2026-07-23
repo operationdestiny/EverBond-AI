@@ -185,7 +185,7 @@ export async function callEverBondModel(
 ): Promise<EverBondModelResult> {
   const config = getProviderConfig();
 
-  const maxTokens = 85;
+  const maxTokens = 110;
   const temperature = getNumberEnv("AI_TEMPERATURE", 0.9);
   const topP = getNumberEnv("AI_TOP_P", 0.95);
 
