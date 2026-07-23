@@ -21,7 +21,6 @@ const PAID_SUBSCRIPTION_STATUSES = new Set(["standard", "premium", "elite"]);
 const USER_MESSAGE_MAX_TOKENS = 80;
 const CHARACTER_CONTEXT_MAX_TOKENS = 85;
 const MODEL_HISTORY_MESSAGE_COUNT = 6;
-const MODEL_INPUT_TOKEN_BUDGET = 5000;
 const EVER_MEMORY_LIMIT = 12;
 
 const SupportedLanguageSchema = z
@@ -94,38 +93,6 @@ function limitTextToTokenBudget(text: string, maxTokens: number) {
   }
 
   return result.trim();
-}
-
-function estimateModelMessagesTokenCount(messages: EverBondMessage[]) {
-  return (
-    messages.reduce(
-      (total, message) =>
-        total + estimateTokenCount(message.content) + 4,
-      0
-    ) + 2
-  );
-}
-
-function buildModelMessagesWithinBudget(
-  prompt: string,
-  history: EverBondMessage[]
-): EverBondMessage[] {
-  const modelMessages: EverBondMessage[] = [
-    {
-      role: "system",
-      content: prompt
-    },
-    ...history
-  ];
-
-  if (
-    estimateModelMessagesTokenCount(modelMessages) >
-    MODEL_INPUT_TOKEN_BUDGET
-  ) {
-    throw new Error("EverBond model input exceeds the configured token budget.");
-  }
-
-  return modelMessages;
 }
 
 async function getAuthUser(request: Request): Promise<AuthUser | null> {
@@ -360,13 +327,19 @@ export async function GET(request: Request) {
   const characterSlug = url.searchParams.get("characterSlug");
 
   if (!characterSlug) {
-    return NextResponse.json({ error: "Missing characterSlug" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing characterSlug" },
+      { status: 400 }
+    );
   }
 
   const character = await getCharacterBySlugFromSupabase(characterSlug);
 
   if (!character) {
-    return NextResponse.json({ error: "Character not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Character not found" },
+      { status: 404 }
+    );
   }
 
   const { data: conversation, error: conversationError } = await supabase
@@ -415,17 +388,29 @@ export async function POST(request: Request) {
   const body = ChatRequest.safeParse(await request.json());
 
   if (!body.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request" },
+      { status: 400 }
+    );
   }
 
-  const character = await getCharacterBySlugFromSupabase(body.data.characterSlug);
+  const character = await getCharacterBySlugFromSupabase(
+    body.data.characterSlug
+  );
 
   if (!character) {
-    return NextResponse.json({ error: "Character not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Character not found" },
+      { status: 404 }
+    );
   }
 
-  const userMessages = body.data.messages.filter((m) => m.role === "user");
-  const rawUserMessage = userMessages[userMessages.length - 1]?.content ?? "";
+  const userMessages = body.data.messages.filter(
+    (message) => message.role === "user"
+  );
+
+  const rawUserMessage =
+    userMessages[userMessages.length - 1]?.content ?? "";
 
   const userMessageForStorage = rawUserMessage
     .replace(/\s+/g, " ")
@@ -434,19 +419,6 @@ export async function POST(request: Request) {
   if (!userMessageForStorage) {
     return NextResponse.json(
       { error: "Missing user message" },
-      { status: 400 }
-    );
-  }
-
-  if (
-    estimateTokenCount(userMessageForStorage) >
-    USER_MESSAGE_MAX_TOKENS
-  ) {
-    return NextResponse.json(
-      {
-        error: "MESSAGE_TOO_LONG",
-        message: "Messages can be up to 80 tokens."
-      },
       { status: 400 }
     );
   }
@@ -495,6 +467,7 @@ export async function POST(request: Request) {
   );
 
   const conversationId = conversation.id;
+
   let memory: MemoryState = {
     ...defaultMemory,
     ...(conversation.memory_state ?? {})
@@ -525,7 +498,8 @@ export async function POST(request: Request) {
       ...memory,
       story_summary: relationship.summary || memory.story_summary,
       relationship_state: relationship.stage || memory.relationship_state,
-      emotional_state: relationship.emotional_state || memory.emotional_state,
+      emotional_state:
+        relationship.emotional_state || memory.emotional_state,
       open_threads: relationship.open_threads || memory.open_threads,
       important_promises:
         relationship.important_promises || memory.important_promises,
@@ -538,24 +512,29 @@ export async function POST(request: Request) {
     memory.user_facts = [
       ...(memory.user_facts ?? []),
       ...memories
-        .filter((m) =>
+        .filter((memoryRow) =>
           ["fact", "preference", "routine", "inside_joke"].includes(
-            m.memory_type
+            memoryRow.memory_type
           )
         )
-        .map((m) => m.content)
+        .map((memoryRow) => memoryRow.content)
     ].slice(0, EVER_MEMORY_LIMIT);
   }
 
-  const { error: userInsertError } = await supabase.from("messages").insert({
-    conversation_id: conversationId,
-    role: "user",
-    content: userMessageForStorage
-  });
+  const { error: userInsertError } = await supabase
+    .from("messages")
+    .insert({
+      conversation_id: conversationId,
+      role: "user",
+      content: userMessageForStorage
+    });
 
   if (userInsertError) throw userInsertError;
 
-  const historyForModel = await loadModelHistory(supabase, conversationId);
+  const historyForModel = await loadModelHistory(
+    supabase,
+    conversationId
+  );
 
   const previousCharacterReplies = historyForModel.filter(
     (message) => message.role === "assistant"
@@ -571,30 +550,40 @@ export async function POST(request: Request) {
     includeOpening
   );
 
-  const modelMessages = buildModelMessagesWithinBudget(
-    prompt,
-    historyForModel
-  );
+  const modelMessages: EverBondMessage[] = [
+    {
+      role: "system",
+      content: prompt
+    },
+    ...historyForModel
+  ];
 
   const result = await callEverBondModel(modelMessages);
 
-  const { error: characterInsertError } = await supabase.from("messages").insert({
-    conversation_id: conversationId,
-    role: "character",
-    content: result.content,
-    input_tokens: result.inputTokens,
-    output_tokens: result.outputTokens,
-    model_id: result.model
-  });
+  const { error: characterInsertError } = await supabase
+    .from("messages")
+    .insert({
+      conversation_id: conversationId,
+      role: "character",
+      content: result.content,
+      input_tokens: result.inputTokens,
+      output_tokens: result.outputTokens,
+      model_id: result.model
+    });
 
   if (characterInsertError) throw characterInsertError;
 
   await supabase
     .from("conversations")
-    .update({ updated_at: new Date().toISOString() })
+    .update({
+      updated_at: new Date().toISOString()
+    })
     .eq("id", conversationId);
 
-  await recordSuccessfulTrialMessage(supabase, access.profile);
+  await recordSuccessfulTrialMessage(
+    supabase,
+    access.profile
+  );
 
   return NextResponse.json({
     reply: result.content,
