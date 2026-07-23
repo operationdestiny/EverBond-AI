@@ -502,8 +502,6 @@ export async function POST(request: Request) {
     ].slice(0, EVER_MEMORY_LIMIT);
   }
 
-  const prompt = buildChatModePrompt(character, memory, [], language);
-
   const { error: userInsertError } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     role: "user",
@@ -513,6 +511,20 @@ export async function POST(request: Request) {
   if (userInsertError) throw userInsertError;
 
   const historyForModel = await loadModelHistory(supabase, conversationId);
+
+  const previousCharacterReplies = historyForModel.filter(
+    (message) => message.role === "assistant"
+  ).length;
+
+  const includeOpening = previousCharacterReplies < 3;
+
+  const prompt = buildChatModePrompt(
+    character,
+    memory,
+    [],
+    language,
+    includeOpening
+  );
 
   const modelMessages: EverBondMessage[] = [
     {
