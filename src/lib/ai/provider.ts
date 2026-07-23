@@ -246,3 +246,65 @@ export async function callEverBondModel(
     model: config.model
   };
 }
+
+export async function callEverBondMemoryModel(
+  prompt: string
+): Promise<EverBondModelResult> {
+  const config = getProviderConfig();
+
+  if (
+    !config.apiBaseUrl ||
+    !config.apiKey ||
+    !config.model ||
+    config.model === "everbond-model-not-configured"
+  ) {
+    return {
+      content: "",
+      inputTokens: 0,
+      outputTokens: 0,
+      provider: "dev_fallback",
+      model: config.model
+    };
+  }
+
+  const endpoint = buildChatCompletionsEndpoint(config.apiBaseUrl);
+
+  const requestBody: Record<string, unknown> = {
+    model: config.model,
+    messages: [
+      {
+        role: "system",
+        content: prompt
+      }
+    ],
+    max_tokens: 600,
+    temperature: 0.1,
+    top_p: 0.95
+  };
+
+  if (config.useVeniceParameters) {
+    requestBody.venice_parameters = {
+      include_venice_system_prompt: false,
+      enable_web_search: "off"
+    };
+  }
+
+  const data: any = await postChatCompletion(
+    endpoint,
+    config.apiKey,
+    requestBody
+  );
+
+  const content =
+    typeof data.choices?.[0]?.message?.content === "string"
+      ? data.choices[0].message.content.trim()
+      : "";
+
+  return {
+    content,
+    inputTokens: data.usage?.prompt_tokens ?? 0,
+    outputTokens: data.usage?.completion_tokens ?? 0,
+    provider: config.provider,
+    model: config.model
+  };
+}
