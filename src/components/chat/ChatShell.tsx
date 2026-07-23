@@ -58,24 +58,21 @@ function limitTextToTokenBudget(text: string, maxTokens: number) {
     return normalized;
   }
 
-  const parts = normalized.match(/\S+\s*/g) ?? [];
-  let result = "";
+  let low = 0;
+  let high = normalized.length;
 
-  for (const part of parts) {
-    const candidate = result + part;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    const candidate = normalized.slice(0, middle);
 
-    if (estimateTokenCount(candidate) > maxTokens) {
-      break;
+    if (estimateTokenCount(candidate) <= maxTokens) {
+      low = middle;
+    } else {
+      high = middle - 1;
     }
-
-    result = candidate;
   }
 
-  if (!result && normalized) {
-    return normalized.slice(0, maxTokens * 4).trimEnd();
-  }
-
-  return result.trimEnd();
+  return normalized.slice(0, low).trimEnd();
 }
 
 export function ChatShell({ character }: { character: Character }) {
@@ -103,6 +100,7 @@ export function ChatShell({ character }: { character: Character }) {
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const sendInFlightRef = useRef(false);
 
   const isPublicCreation = character.category === "public-creations";
 
@@ -288,6 +286,8 @@ export function ChatShell({ character }: { character: Character }) {
   }
 
   function resetConversation() {
+    if (sendInFlightRef.current) return;
+
     setMessages([{ role: "character", content: initialCharacterMessage }]);
     setInput("");
     setIsTyping(false);
@@ -391,12 +391,11 @@ export function ChatShell({ character }: { character: Character }) {
   }
 
   async function sendMessage(messageOverride?: string, sessionOverride?: Session | null) {
-    const trimmed = limitTextToTokenBudget(
-      (messageOverride ?? input).trim(),
-      USER_INPUT_MAX_TOKENS
-    );
+    const trimmed = (messageOverride ?? input)
+      .replace(/\s+/g, " ")
+      .trim();
 
-    if (!trimmed || isTyping) {
+    if (!trimmed || sendInFlightRef.current) {
       focusChatInput();
       return;
     }
@@ -410,6 +409,9 @@ export function ChatShell({ character }: { character: Character }) {
       return;
     }
 
+    sendInFlightRef.current = true;
+
+    const requestId = crypto.randomUUID();
     const previousMessages = messages;
     const nextMessages: Message[] = [
       ...messages,
@@ -429,10 +431,16 @@ export function ChatShell({ character }: { character: Character }) {
           Authorization: `Bearer ${activeSession.access_token}`
         },
         body: JSON.stringify({
+          requestId,
           characterSlug: character.slug,
           language: getApiLanguage(language),
           conversationId: conversationId ?? undefined,
-          messages: nextMessages.slice(-12)
+          messages: [
+            {
+              role: "user",
+              content: trimmed
+            }
+          ]
         })
       });
 
@@ -470,6 +478,7 @@ export function ChatShell({ character }: { character: Character }) {
         }
       ]);
     } finally {
+      sendInFlightRef.current = false;
       setIsTyping(false);
       focusChatInput();
     }
@@ -646,7 +655,13 @@ export function ChatShell({ character }: { character: Character }) {
                   setInput(getLimitedInputValue(event.target.value))
                 }
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") sendMessage();
+                  if (
+                    event.key === "Enter" &&
+                    !event.nativeEvent.isComposing
+                  ) {
+                    event.preventDefault();
+                    sendMessage();
+                  }
                 }}
                 placeholder={`${t("messageCharacter")} ${character.name}...`}
                 className="min-w-0 flex-1 bg-transparent px-4 py-2 text-sm outline-none placeholder:text-bond-muted"
