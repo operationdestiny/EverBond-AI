@@ -185,7 +185,7 @@ export async function callEverBondModel(
 ): Promise<EverBondModelResult> {
   const config = getProviderConfig();
 
-  const maxTokens = Math.min(Math.max(getNumberEnv("AI_MAX_TOKENS", 95), 85), 105);
+  const maxTokens = 85;
   const temperature = getNumberEnv("AI_TEMPERATURE", 0.9);
   const topP = getNumberEnv("AI_TOP_P", 0.95);
 
@@ -221,15 +221,11 @@ export async function callEverBondModel(
     };
   }
 
-  let data: any;
-
-  try {
-    data = await postChatCompletion(endpoint, config.apiKey, requestBody);
-  } catch (firstError) {
-    data = await postChatCompletion(endpoint, config.apiKey, requestBody).catch(() => {
-      throw firstError;
-    });
-  }
+  const data: any = await postChatCompletion(
+    endpoint,
+    config.apiKey,
+    requestBody
+  );
 
   const choice = data.choices?.[0];
   const content = cleanModelContent(choice?.message?.content, choice?.finish_reason);
