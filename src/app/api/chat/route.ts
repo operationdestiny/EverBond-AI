@@ -4,9 +4,14 @@ import { getCharacterBySlugFromSupabase } from "@/lib/characters-db";
 import { defaultMemory } from "@/lib/memory/defaultMemory";
 import {
   buildChatModePrompt,
+  buildMemoryModePrompt,
   type SupportedLanguage
 } from "@/lib/ai/prompts";
-import { callEverBondModel, type EverBondMessage } from "@/lib/ai/provider";
+import {
+  callEverBondMemoryModel,
+  callEverBondModel,
+  type EverBondMessage
+} from "@/lib/ai/provider";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import type { MemoryState } from "@/types/memory";
 
@@ -45,6 +50,27 @@ const ChatRequest = z
     conversationId: z.string().uuid().optional()
   })
   .strict();
+
+const MemoryExtractionSchema = z
+  .object({
+    story_summary: z.string(),
+    user_facts: z.array(z.string()).max(12),
+    relationship_state: z.string(),
+    emotional_state: z.string(),
+    open_threads: z.array(z.string()).max(12),
+    important_promises: z.array(z.string()).max(12),
+    important_events: z.array(z.string()).max(20),
+    permanent_identity_updates: z
+      .object({
+        name: z.string().nullable().optional(),
+        gender: z.string().nullable().optional(),
+        core_identity: z.string().nullable().optional()
+      })
+      .optional()
+  })
+  .passthrough();
+
+type MemoryExtraction = z.infer<typeof MemoryExtractionSchema>;
 
 type AuthUser = {
   id: string;
@@ -116,6 +142,258 @@ function limitTextToTokenBudget(text: string, maxTokens: number) {
   }
 
   return normalized.slice(0, low).trim();
+}
+
+function cleanMemoryText(value: unknown, maxCharacters: number) {
+  if (typeof value !== "string") return "";
+
+  const normalized = value.replace(/\s+/g, " ").trim();
+
+  return Array.from(normalized)
+    .slice(0, maxCharacters)
+    .join("")
+    .trim();
+}
+
+function cleanMemoryList(
+  values: string[],
+  maxItems: number,
+  maxCharacters: number
+) {
+  const seen = new Set<string>();
+
+  return values
+    .map((value) => cleanMemoryText(value, maxCharacters))
+    .filter((value) => {
+      if (!value) return false;
+
+      const key = value.toLocaleLowerCase();
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    })
+    .slice(0, maxItems);
+}
+
+function parseMemoryExtraction(
+  content: string
+): MemoryExtraction | null {
+  const withoutFences = content
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  const start = withoutFences.indexOf("{");
+  const end = withoutFences.lastIndexOf("}");
+
+  if (start < 0 || end <= start) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(
+      withoutFences.slice(start, end + 1)
+    );
+
+    const result = MemoryExtractionSchema.safeParse(parsed);
+
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function mergeExtractedMemory(
+  currentMemory: MemoryState,
+  extraction: MemoryExtraction
+): MemoryState {
+  const identityUpdates =
+    extraction.permanent_identity_updates ?? {};
+
+  return {
+    story_summary:
+      cleanMemoryText(extraction.story_summary, 1200) ||
+      currentMemory.story_summary,
+    user_facts: cleanMemoryList(
+      extraction.user_facts,
+      12,
+      300
+    ),
+    relationship_state:
+      cleanMemoryText(extraction.relationship_state, 120) ||
+      currentMemory.relationship_state,
+    emotional_state:
+      cleanMemoryText(extraction.emotional_state, 300) ||
+      currentMemory.emotional_state,
+    open_threads: cleanMemoryList(
+      extraction.open_threads,
+      12,
+      300
+    ),
+    important_promises: cleanMemoryList(
+      extraction.important_promises,
+      12,
+      300
+    ),
+    important_events: cleanMemoryList(
+      extraction.important_events,
+      20,
+      300
+    ),
+    permanent_identity: {
+      name:
+        cleanMemoryText(identityUpdates.name, 80) ||
+        currentMemory.permanent_identity?.name ||
+        null,
+      gender:
+        cleanMemoryText(identityUpdates.gender, 80) ||
+        currentMemory.permanent_identity?.gender ||
+        null,
+      core_identity:
+        cleanMemoryText(identityUpdates.core_identity, 160) ||
+        currentMemory.permanent_identity?.core_identity ||
+        null
+    }
+  };
+}
+
+async function persistExtractedMemory(
+  supabase: ReturnType<typeof getSupabaseServiceClient>,
+  values: {
+    userId: string;
+    characterId: string;
+    conversationId: string;
+    memory: MemoryState;
+  }
+) {
+  const now = new Date().toISOString();
+
+  const { error: conversationMemoryError } = await supabase
+    .from("conversations")
+    .update({
+      memory_state: values.memory,
+      updated_at: now
+    })
+    .eq("id", values.conversationId)
+    .eq("user_id", values.userId);
+
+  if (conversationMemoryError) {
+    throw conversationMemoryError;
+  }
+
+  const { error: relationshipError } = await supabase
+    .from("relationship_states")
+    .upsert(
+      {
+        user_id: values.userId,
+        character_id: values.characterId,
+        stage: values.memory.relationship_state || "new",
+        summary: values.memory.story_summary,
+        emotional_state: values.memory.emotional_state,
+        open_threads: values.memory.open_threads,
+        important_promises: values.memory.important_promises,
+        important_events: values.memory.important_events,
+        user_name:
+          values.memory.permanent_identity?.name ?? null,
+        user_gender:
+          values.memory.permanent_identity?.gender ?? null,
+        user_core_identity:
+          values.memory.permanent_identity?.core_identity ?? null,
+        updated_at: now
+      },
+      {
+        onConflict: "user_id,character_id"
+      }
+    );
+
+  if (relationshipError) {
+    throw relationshipError;
+  }
+
+  const memoryCandidates = [
+    ...values.memory.user_facts.map((content) => ({
+      memory_type: "fact",
+      content,
+      importance: 70
+    })),
+    ...values.memory.open_threads.map((content) => ({
+      memory_type: "open_thread",
+      content,
+      importance: 85
+    })),
+    ...values.memory.important_promises.map((content) => ({
+      memory_type: "promise",
+      content,
+      importance: 90
+    })),
+    ...values.memory.important_events.map((content) => ({
+      memory_type: "event",
+      content,
+      importance: 80
+    }))
+  ];
+
+  if (!memoryCandidates.length) {
+    return;
+  }
+
+  const { data: existingMemories, error: existingMemoryError } =
+    await supabase
+      .from("ever_memory")
+      .select("memory_type,content")
+      .eq("user_id", values.userId)
+      .eq("character_id", values.characterId);
+
+  if (existingMemoryError) {
+    throw existingMemoryError;
+  }
+
+  const existingKeys = new Set(
+    (existingMemories ?? []).map(
+      (memoryRow) =>
+        `${memoryRow.memory_type}:${memoryRow.content
+          .trim()
+          .toLocaleLowerCase()}`
+    )
+  );
+
+  const newRows = memoryCandidates
+    .filter((candidate) => {
+      const key = `${candidate.memory_type}:${candidate.content
+        .trim()
+        .toLocaleLowerCase()}`;
+
+      if (existingKeys.has(key)) {
+        return false;
+      }
+
+      existingKeys.add(key);
+      return true;
+    })
+    .map((candidate) => ({
+      user_id: values.userId,
+      character_id: values.characterId,
+      conversation_id: values.conversationId,
+      memory_type: candidate.memory_type,
+      content: candidate.content,
+      importance: candidate.importance
+    }));
+
+  if (!newRows.length) {
+    return;
+  }
+
+  const { error: memoryInsertError } = await supabase
+    .from("ever_memory")
+    .insert(newRows);
+
+  if (memoryInsertError) {
+    throw memoryInsertError;
+  }
 }
 
 async function claimChatRequest(
@@ -752,6 +1030,62 @@ export async function POST(request: Request) {
 
     const result = await callEverBondModel(modelMessages);
 
+    let memoryInputTokens = 0;
+    let memoryOutputTokens = 0;
+
+    try {
+      const transcript = [
+        ...historyForModel.map(
+          (message) =>
+            `${message.role === "assistant" ? character.name : "User"}: ${
+              message.content
+            }`
+        ),
+        `${character.name}: ${result.content}`
+      ].join("\n");
+
+      const memoryPrompt = buildMemoryModePrompt(
+        character,
+        transcript,
+        memory
+      );
+
+      const memoryResult = await callEverBondMemoryModel(
+        memoryPrompt
+      );
+
+      memoryInputTokens = memoryResult.inputTokens;
+      memoryOutputTokens = memoryResult.outputTokens;
+
+      const extraction = parseMemoryExtraction(
+        memoryResult.content
+      );
+
+      if (extraction) {
+        const updatedMemory = mergeExtractedMemory(
+          memory,
+          extraction
+        );
+
+        await persistExtractedMemory(supabase, {
+          userId: authUser.id,
+          characterId: character.id,
+          conversationId,
+          memory: updatedMemory
+        });
+      }
+    } catch (memoryError) {
+      console.error(
+        "EverBond memory update failed:",
+        memoryError
+      );
+    }
+
+    const totalInputTokens =
+      result.inputTokens + memoryInputTokens;
+    const totalOutputTokens =
+      result.outputTokens + memoryOutputTokens;
+
     await supabase
       .from("conversations")
       .update({
@@ -769,8 +1103,8 @@ export async function POST(request: Request) {
       requestId: body.data.requestId,
       conversationId,
       reply: result.content,
-      inputTokens: result.inputTokens,
-      outputTokens: result.outputTokens,
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
       provider: result.provider,
       model: result.model,
       language
@@ -780,8 +1114,8 @@ export async function POST(request: Request) {
       reply: result.content,
       conversationId,
       usage: {
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
         provider: result.provider,
         model: result.model,
         language
