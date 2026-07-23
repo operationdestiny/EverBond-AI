@@ -20,8 +20,8 @@ const PAID_SUBSCRIPTION_STATUSES = new Set(["standard", "premium", "elite"]);
 
 const USER_MESSAGE_MAX_TOKENS = 80;
 const CHARACTER_CONTEXT_MAX_TOKENS = 85;
-const MODEL_HISTORY_MESSAGE_COUNT = 8;
-const MODEL_INPUT_TOKEN_BUDGET = 4000;
+const MODEL_HISTORY_MESSAGE_COUNT = 6;
+const MODEL_INPUT_TOKEN_BUDGET = 5000;
 const EVER_MEMORY_LIMIT = 12;
 
 const SupportedLanguageSchema = z
@@ -110,31 +110,13 @@ function buildModelMessagesWithinBudget(
   prompt: string,
   history: EverBondMessage[]
 ): EverBondMessage[] {
-  const limitedHistory = [...history];
-
-  let modelMessages: EverBondMessage[] = [
+  const modelMessages: EverBondMessage[] = [
     {
       role: "system",
       content: prompt
     },
-    ...limitedHistory
+    ...history
   ];
-
-  while (
-    limitedHistory.length > 1 &&
-    estimateModelMessagesTokenCount(modelMessages) >
-      MODEL_INPUT_TOKEN_BUDGET
-  ) {
-    limitedHistory.shift();
-
-    modelMessages = [
-      {
-        role: "system",
-        content: prompt
-      },
-      ...limitedHistory
-    ];
-  }
 
   if (
     estimateModelMessagesTokenCount(modelMessages) >
@@ -445,14 +427,26 @@ export async function POST(request: Request) {
   const userMessages = body.data.messages.filter((m) => m.role === "user");
   const rawUserMessage = userMessages[userMessages.length - 1]?.content ?? "";
 
-  const userMessageForStorage = limitTextToTokenBudget(
-    rawUserMessage,
-    USER_MESSAGE_MAX_TOKENS
-  );
+  const userMessageForStorage = rawUserMessage
+    .replace(/\s+/g, " ")
+    .trim();
 
-  if (!userMessageForStorage.trim()) {
+  if (!userMessageForStorage) {
     return NextResponse.json(
       { error: "Missing user message" },
+      { status: 400 }
+    );
+  }
+
+  if (
+    estimateTokenCount(userMessageForStorage) >
+    USER_MESSAGE_MAX_TOKENS
+  ) {
+    return NextResponse.json(
+      {
+        error: "MESSAGE_TOO_LONG",
+        message: "Messages can be up to 80 tokens."
+      },
       { status: 400 }
     );
   }
