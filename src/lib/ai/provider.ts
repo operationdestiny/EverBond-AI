@@ -130,7 +130,10 @@ function cleanModelContent(content: unknown, finishReason?: string) {
     .trim()
     .replace(/^[A-Za-zÀ-ÖØ-öø-ÿ' -]{1,40}:\s*/, "")
     .replace(/\n{3,}/g, "\n\n")
-    .replace(/\bsomething(?:\s+else)?\s*[—–-]\s*something(?:\s+else)?\b/gi, "something")
+    .replace(
+      /\bsomething(?:\s+else)?\s*[—–-]\s*something(?:\s+else)?\b/gi,
+      "something"
+    )
     .replace(/\bsomething\s*(?:\.{3}|…)/gi, "something")
     .replace(/([—–-]\s*){2,}/g, "—")
     .replace(/\s+/g, " ")
@@ -174,7 +177,9 @@ async function postChatCompletion(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`EverBond AI provider request failed: ${response.status} ${text}`);
+    throw new Error(
+      `EverBond AI provider request failed: ${response.status} ${text}`
+    );
   }
 
   return response.json();
@@ -228,7 +233,10 @@ export async function callEverBondModel(
   );
 
   const choice = data.choices?.[0];
-  const content = cleanModelContent(choice?.message?.content, choice?.finish_reason);
+  const content = cleanModelContent(
+    choice?.message?.content,
+    choice?.finish_reason
+  );
 
   return {
     content,
