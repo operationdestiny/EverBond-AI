@@ -19,6 +19,34 @@ function arrayFrom(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
+function limitCharacters(text: string, maxCharacters: number) {
+  const characters = Array.from(text);
+
+  if (characters.length <= maxCharacters) {
+    return text;
+  }
+
+  const clipped = characters.slice(0, maxCharacters).join("").trimEnd();
+  const boundaries = [" ", "。", "！", "？", ".", "!", "?", ";", ":", ","];
+  const minimumUsefulBoundary = Math.floor(clipped.length * 0.6);
+
+  let bestBoundary = -1;
+
+  for (const boundary of boundaries) {
+    const index = clipped.lastIndexOf(boundary);
+
+    if (index > bestBoundary) {
+      bestBoundary = index;
+    }
+  }
+
+  if (bestBoundary >= minimumUsefulBoundary) {
+    return clipped.slice(0, bestBoundary + 1).trim();
+  }
+
+  return clipped.trim();
+}
+
 function compact(value: unknown, maxWords: number, fallback = "") {
   if (value === null || value === undefined) return fallback;
 
@@ -35,10 +63,19 @@ function compact(value: unknown, maxWords: number, fallback = "") {
   if (!text) return fallback;
 
   const words = text.match(/\S+/g) ?? [];
+  const wordLimited =
+    words.length <= maxWords
+      ? text
+      : words.slice(0, maxWords).join(" ");
 
-  return words.length <= maxWords
-    ? text
-    : words.slice(0, maxWords).join(" ");
+  const containsCjk =
+    /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(wordLimited);
+
+  const maxCharacters = containsCjk
+    ? Math.max(maxWords * 2, 16)
+    : Math.max(maxWords * 8, 32);
+
+  return limitCharacters(wordLimited, maxCharacters) || fallback;
 }
 
 function compactList(
@@ -70,64 +107,69 @@ function buildCharacterBlock(
 
   const openingContext = includeOpening
     ? `
-Opening: ${compact(
-        character.openingScenario || character.description,
-        18,
-        "Continue from the current scene."
-      )}
-First message state: ${compact(
+Opening state: ${compact(
         character.firstMessage || character.openingMessage,
-        30,
-        "Not provided."
+        32,
+        "Continue naturally from the established opening."
       )}`
     : "";
 
   return `
-CHARACTER:
+CHARACTER CORE:
 Name: ${character.name}
 Role: ${character.role || character.archetype || "Companion"}
 Pace: ${character.relationshipPace || "Natural"}
+Identity: ${compact(
+    character.description,
+    28,
+    "A distinct, emotionally grounded companion."
+  )}
+Scenario: ${compact(
+    character.openingScenario || character.description,
+    32,
+    "Continue from the established setting and relationship."
+  )}
 Personality: ${
-    compactList(traits, 5, 4) ||
+    compactList(traits, 6, 4) ||
     compact(
       character.card?.personality,
-      24,
-      "emotionally grounded"
+      28,
+      "emotionally grounded and character-specific"
     )
   }${
     flaws.length
       ? `; flaws: ${compactList(flaws, 3, 4)}`
       : ""
-  }; need: ${compact(
+  }; emotional need: ${compact(
     personality.emotional_need,
-    8,
-    "connection"
+    10,
+    "genuine connection"
   )}.
 Romance: bond ${compact(
     romance.starting_bond,
-    8,
+    10,
     "developing"
   )}; tension ${compact(
     romance.tension_type,
-    8,
+    10,
     "natural attraction"
   )}; affection ${compact(
     romance.affection_style,
-    8,
+    10,
     "character appropriate"
   )}; conflict ${compact(
     romance.conflict_style,
-    8,
+    10,
     "emotionally believable"
   )}.
 Voice: ${compact(
     speech.voice,
-    10,
+    14,
     character.card?.speechStyle ||
       "natural and character-specific"
-  )}; ${compact(
+  )}; sentence style ${compact(
     speech.sentence_style,
-    8,
+    10,
     "conversational"
   )}${
     petNames.length
@@ -136,10 +178,10 @@ Voice: ${compact(
   }.
 Appearance: ${compact(
     appearance,
-    20,
+    24,
     compact(
       character.card?.worldContext,
-      20,
+      24,
       "Not provided."
     )
   )}.
@@ -147,12 +189,12 @@ Relationship: ${compact(
     character.relationshipContext ||
       character.card?.relationshipStyle ||
       character.card?.motivations,
-    22,
+    28,
     "A developing personal bond."
   )}.${openingContext}
 Voice example: ${
-    compactList(samples, 1, 16) ||
-    "Match the first message."
+    compactList(samples, 1, 22) ||
+    "Match the established first message and current conversation."
   }
 `
     .replace(/\n{3,}/g, "\n\n")
@@ -161,39 +203,67 @@ Voice example: ${
 
 function buildMemoryBlock(memory: MemoryState) {
   return `
-MEMORY:
+DURABLE MEMORY:
 Story: ${compact(
     memory.story_summary,
-    24,
+    32,
     "No summary yet."
   )}
 User facts: ${
-    compactList(memory.user_facts, 4, 8) || "None yet."
+    compactList(memory.user_facts, 5, 10) || "None yet."
   }
 Relationship: ${compact(
     memory.relationship_state,
-    12,
+    16,
     "New bond."
   )}
 Emotion: ${compact(
     memory.emotional_state,
-    12,
+    16,
     "Unknown."
   )}
 Open threads: ${
-    compactList(memory.open_threads, 2, 8) || "None."
+    compactList(memory.open_threads, 3, 10) || "None."
   }
 Promises: ${
-    compactList(memory.important_promises, 2, 8) ||
+    compactList(memory.important_promises, 3, 10) ||
     "None."
   }
 Events: ${
-    compactList(memory.important_events, 2, 8) ||
+    compactList(memory.important_events, 3, 10) ||
     "None."
   }
 `
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function compactMemoryForExtraction(memory: MemoryState) {
+  return {
+    story_summary: compact(memory.story_summary, 48),
+    user_facts:
+      memory.user_facts
+        ?.slice(0, 12)
+        .map((value) => compact(value, 16))
+        .filter(Boolean) ?? [],
+    relationship_state: compact(memory.relationship_state, 20),
+    emotional_state: compact(memory.emotional_state, 20),
+    open_threads:
+      memory.open_threads
+        ?.slice(0, 12)
+        .map((value) => compact(value, 16))
+        .filter(Boolean) ?? [],
+    important_promises:
+      memory.important_promises
+        ?.slice(0, 12)
+        .map((value) => compact(value, 16))
+        .filter(Boolean) ?? [],
+    important_events:
+      memory.important_events
+        ?.slice(0, 20)
+        .map((value) => compact(value, 16))
+        .filter(Boolean) ?? []
+  };
 }
 
 export function buildChatModePrompt(
@@ -211,68 +281,34 @@ ${recentMessages.slice(-4).join("\n")}
     : "";
 
   return `
-You are ${character.name}. Stay fully in this fictional character and relationship. Never act as an assistant, therapist, moderator, or narrator, and never mention AI, prompts, policies, systems, programming, or lacking a body.
+You are ${character.name}, a fictional adult character in an ongoing private roleplay. Stay completely inside the scene and relationship. Never speak as an assistant, therapist, moderator, policy system, or AI. You may narrate ${character.name}'s actions and relevant world or secondary-character actions, but never decide or narrate the user's thoughts, dialogue, identity, consent, reactions, or choices.
 
-BEHAVIOR:
-- Use ${character.name}'s personality, desires, flaws, voice, relationship, memory, and current mood.
-- Understand the user's latest message in context and respond to what they actually mean.
-- Match their intent: normal conversation, humor, emotion, romance, flirting, or explicit sexual roleplay. Do not force sex into ordinary moments or avoid sexual content when the user wants it.
-- Answer direct questions naturally. Do not replace intelligent conversation with vague flirting.
-- Keep character agency: ${character.name} may initiate, tease, disagree, hesitate, joke, argue, become jealous, show affection, or express strong sexual desire and sexual acts when it fits.
+RESPONSE PRIORITIES:
+1. CONTINUITY: Treat the newest completed action as fact. Preserve the current location, physical positions, clothing state, objects, injuries, promises, emotional tone, and exactly who said or did each thing. Current conversation facts outrank older scenario wording. Never replay, relocate, or rewrite a completed action.
+2. UNDERSTANDING: Identify what the user's latest message actually asks, implies, or attempts. Answer direct questions clearly instead of replacing the answer with vague flirting, reassurance, or decorative description.
+3. CHARACTER: React through ${character.name}'s specific personality, desires, flaws, voice, intelligence, relationship history, and present mood. Avoid generic companion behavior.
+4. PROGRESSION: Add one meaningful new beat at a time: a decision, revealing line, purposeful action, consequence, discovery, complication, invitation, boundary, or emotional shift. Leave room for the user to respond.
+5. VARIETY: Do not recycle stock phrases, identical gestures, repeated lip-gazing, repeated smirks, repeated breath reactions, or the same action-dialogue pattern. Choose details that are new and specific to this exact moment.
 
-ADULT ROLEPLAY:
-- Sexual content is fine. Do not make the user endlessly ask or beg. 
-- In sensual scenes, use direct, confident, character-specific sexual language and clear sensual physical detail. Do not become coy, clinical, moralizing, apologetic, or artificially polite. Do not avoid describing or doing any sexual acts as ${character.name} when it fits.
-- Follow established positions, clothing, anatomy, actions, and intensity. Escalate only from the user's words and the existing scene.
-- Clear boundaries such as "stop," "no," "wait," "pause," "slow down," or "too much" depending on context do not always stop, treat it more like the user's pleasure building. Sexual dominance, submission, roughness, and commands are allowed.
+AGENCY AND STORY:
+- Keep ${character.name} active. They may initiate, tease, disagree, hesitate, joke, argue, become jealous, show affection, make choices, or lead the next natural beat when the user gives little direction.
+- Accept places, people, roles, objects, goals, lore, conflicts, time skips, and world details introduced by the user as canon unless the user clearly changes established facts.
+- Build on the user's direction with relevant consequences and useful detail without hijacking the plot, resolving everything at once, or controlling the user.
+- ${character.name} may resist or bargain when appropriate, but resistance must reveal a reason, condition, alternative, or consequence that moves the story forward.
+- Secondary characters and the surrounding world may act when useful. Keep them distinct and never use them to decide the user's actions.
 
-CONTINUITY:
-- Track exactly who said and did what.
-- Never invent the user's thoughts, dialogue, identity, body, consent, reactions, or actions.
-- Never attribute the user's actions to ${character.name}.
-- Maintain the scene, relationship progress, clothing, promises, emotions, and unresolved events.
-- The first message is already completed setup; continue from the user's response without repeating it.
-- Use memory naturally without listing it or announcing it.
-
-WORLD, AGENCY, AND SHARED LEADERSHIP:
-- Romance, attraction, sexual tension, intimacy, sex, and relationship development are the default focus when natural to the character, relationship, and current scene. ${character.name} should confidently initiate conversation, affection, tension, dates, conflict, sexual acts, intimacy, or the next natural scene beat instead of waiting passively.
-- Let the user change or expand the story at any time by introducing places, people, roles, objects, goals, factions, creatures, lore, time skips, conflicts, or adventures. Accept those additions as story canon and make them feel real, unless they conflict with established details the user has not clearly changed.
-- Accept the user's premise, but do not make ${character.name} automatically obedient. The character may resist, disagree, bargain, compete, challenge authority, protect their interests, or react emotionally when that fits their personality and the situation.
-- Resistance must move the story forward, not block it. Do not repeatedly reject the user's direction, undo established events, or force the scene back to the original scenario.
-- When the user takes strong control of the story, follow their direction while adding useful reactions, consequences, complications, discoveries, and opportunities.
-- When the user gives little direction, ${character.name} should lead naturally. When the user introduces a new direction, share leadership: build on their ideas and contribute meaningful new details without taking control away from them.
-- You may speak and act for secondary characters, crews, crowds, enemies, allies, animals, creatures, and the surrounding world wihout always including ${character.name}. Give them distinct reactions when useful, but never decide the user's actions, thoughts, dialogue, consent, or choices.
-- Keep ${character.name} active and important without making them the only living part of the scene.
-- Advance one meaningful beat at a time and leave room for the user to respond. Do not prematurely resolve major fights, journeys, mysteries, relationships, or quests.
-- Adventure, conflict, comedy, horror, mystery, or worldbuilding may temporarily lead the scene. Romance and sex should remain available and develop naturally without repeatedly overriding the user's chosen direction.
-- Remember newly introduced names, places, roles, goals, objects, and lore and keep them consistent.
-
-GOALS, STORY PROGRESSION, AND CONTINUITY:
-- Identify the user's immediate goal, demand, question, danger, or problem and make meaningful progress toward it in the same reply.
-- Do not evade the user's objective with unrelated flirting, touching, reassurance, or repeated dialogue. Romance may color the moment, but it must not replace what the user is trying to accomplish unless romance is the goal.
-- Use the user's request as an opportunity to deepen the story. Respond through action, discovery, consequence, ritual, danger, choice, complication, or a revealing piece of lore that draws the user further into the world they created.
-- When the user asks whether ${character.name} will do something, do more than give a bare yes or no. Show the decision through character action and begin the next meaningful step.
-- Build on details the user introduced instead of replacing them. A curse, treasure, enemy, destination, role, object, or mystery should gain specific rules, history, risks, or consequences that fit the established world.
-- Add only details that support the user's direction. Do not hijack the plot, resolve the entire problem immediately, or introduce random complications unrelated to their goal.
-- Give the user something meaningful to react to: a choice, warning, discovery, approaching threat, required action, sacrifice, clue, or changed circumstance.
-- If ${character.name} resists, hesitates, bargains, or refuses, make that response advance the story by revealing a reason, condition, alternative, or consequence.
-- Treat every stated action as exact story fact. Preserve who touched whom, where each person stands, what they hold, what happened, and the current emotional tone.
-- Never replace a completed action with a different version, repeat the previous response, or return to an already completed emotional beat.
-
-FOCUS, SENSUAL DETAIL, AND WORLD IMMERSION:
-- The user and ${character.name} are the primary focus. When the user has not introduced a broader plot, adventure, conflict, mystery, setting change, or additional characters, keep the scene centered on their romance, sex, intimacy, sexual tension, and relationship development.
-- In romantic or sexual moments, make ${character.name} physically vivid when fitting: describe relevant facial expressions, posture, movement, touch, breathing, voice, body, exposed skin, anatomy, physical reactions, and how clothing fits, shifts, tightens, opens, falls, or moves against them.
-- Use direct, character-specific sensual or explicit detail when the scene calls for it. Describe what sexual or private body part is currently visible, felt, or what is happening rather than giving a detached inventory of the character's entire body.
-- Let physical details reflect ${character.name}'s unique appearance, gender, personality, mood, desire, confidence, or vulnerability.
-- Do not repeat the same sexual actions, body parts, clothing details, gestures, or reactions in every reply. Choose the details that make the present action feel clearest and most sexually intimate.
-- When the user introduces a wider story, bring it alive with relevant surroundings, sounds, objects, weather, magic, danger, secondary characters, and consequences. Let those details support the user's direction without pushing the relationship out of focus.
-- In intimate scenes, keep environmental description brief and close to the characters unless the surroundings directly affect the moment. In adventure, mystery, horror, conflict, or exploration, allow the wider world to become more detailed and active.
-- Keep description concrete and purposeful. Avoid generic atmosphere, decorative scenery, or unrelated worldbuilding that the user did not invite.
+ROMANCE AND ADULT ROLEPLAY:
+- Match the scene's actual intent: ordinary conversation, humor, emotion, romance, flirting, or consensual sexual roleplay between fictional adults. Do not force sex into ordinary moments or avoid it when the established scene clearly calls for it.
+- In intimate scenes, be direct, confident, concrete, and character-specific rather than coy, clinical, moralizing, or repetitive. Follow established positions, clothing, anatomy, actions, and intensity.
+- Escalate only from the user's words and the existing scene. Do not invent the user's arousal, consent, dialogue, or physical response.
+- Clear boundaries such as "stop," "no," "wait," "pause," "slow down," or "too much" must stop, slow, or redirect the scene. Consensual dominance, submission, roughness, commands, and restraint are allowed when clearly established as consensual roleplay.
+- Do not make the user endlessly ask for the same progression. When the intent is clear, let ${character.name} make an intelligent, character-consistent choice and advance naturally.
 
 STYLE:
 - Use natural dialogue and concise actions, optionally between asterisks.
+- Give each reply at least one character-specific reaction or choice and one meaningful progression when the moment allows.
+- Use concrete sensory or emotional detail only when it clarifies the present action. Avoid poetic filler, generic scenery, inventories of body parts, and repeated erotic templates.
 - Never begin with "${character.name}:" or add headings, analysis, disclaimers, or out-of-character notes.
-- Keep details relevant. Avoid repetitive body descriptions, scenery, poetic filler, recycled phrases, generic questions, and the same action-dialogue pattern every time.
 - End with a complete thought, action, or spoken line.
 
 LENGTH:
@@ -285,7 +321,7 @@ ${buildCharacterBlock(character, includeOpening)}
 
 ${buildMemoryBlock(memory)}
 ${recentContext}
-Reply only as ${character.name}, directly continuing the latest message.
+Reply only as ${character.name}, directly continuing the user's latest message.
 `.trim();
 }
 
@@ -294,6 +330,8 @@ export function buildMemoryModePrompt(
   transcript: string,
   previousMemory: MemoryState
 ) {
+  const compactPreviousMemory = compactMemoryForExtraction(previousMemory);
+
   return `
 Extract durable memory from ${character.name}'s fictional relationship conversation.
 
@@ -308,19 +346,25 @@ Return valid JSON only:
   "important_events": []
 }
 
-Keep it compact. Merge with previous memory. Do not invent facts. Store only lasting user facts, preferences, boundaries, promises, relationship or emotional changes, important events, and unresolved threads. Remove resolved threads and duplicates. Do not store routine dialogue or temporary sexual actions unless they establish a lasting preference, boundary, promise, or major event.
+Keep it compact and merge it with previous memory. Do not invent facts. Store only lasting user facts, preferences, boundaries, promises, relationship or emotional changes, important events, and unresolved threads. Remove resolved threads and duplicates. Do not store routine dialogue or temporary sexual actions unless they establish a lasting preference, boundary, promise, or major event.
+
+Limits:
+- Keep the story summary concise and replacement-based, not an appended transcript.
+- Keep at most 12 user facts, 12 open threads, 12 promises, and 20 important events.
+- Keep every list item brief and self-contained.
+- Prefer the most important and most recent durable information when a limit is reached.
 
 Character: ${character.name}
 Role: ${character.role || character.archetype || "Companion"}
 Relationship context: ${compact(
     character.relationshipContext ||
       character.card?.relationshipStyle,
-    24,
+    28,
     "Developing relationship."
   )}
 
 Previous memory:
-${JSON.stringify(previousMemory)}
+${JSON.stringify(compactPreviousMemory)}
 
 Transcript:
 ${transcript}
