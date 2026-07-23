@@ -21,6 +21,7 @@ const PAID_SUBSCRIPTION_STATUSES = new Set(["standard", "premium", "elite"]);
 const USER_MESSAGE_MAX_TOKENS = 80;
 const CHARACTER_CONTEXT_MAX_TOKENS = 85;
 const MODEL_HISTORY_MESSAGE_COUNT = 8;
+const MODEL_INPUT_TOKEN_BUDGET = 4000;
 const EVER_MEMORY_LIMIT = 12;
 
 const SupportedLanguageSchema = z
@@ -93,6 +94,56 @@ function limitTextToTokenBudget(text: string, maxTokens: number) {
   }
 
   return result.trim();
+}
+
+function estimateModelMessagesTokenCount(messages: EverBondMessage[]) {
+  return (
+    messages.reduce(
+      (total, message) =>
+        total + estimateTokenCount(message.content) + 4,
+      0
+    ) + 2
+  );
+}
+
+function buildModelMessagesWithinBudget(
+  prompt: string,
+  history: EverBondMessage[]
+): EverBondMessage[] {
+  const limitedHistory = [...history];
+
+  let modelMessages: EverBondMessage[] = [
+    {
+      role: "system",
+      content: prompt
+    },
+    ...limitedHistory
+  ];
+
+  while (
+    limitedHistory.length > 1 &&
+    estimateModelMessagesTokenCount(modelMessages) >
+      MODEL_INPUT_TOKEN_BUDGET
+  ) {
+    limitedHistory.shift();
+
+    modelMessages = [
+      {
+        role: "system",
+        content: prompt
+      },
+      ...limitedHistory
+    ];
+  }
+
+  if (
+    estimateModelMessagesTokenCount(modelMessages) >
+    MODEL_INPUT_TOKEN_BUDGET
+  ) {
+    throw new Error("EverBond model input exceeds the configured token budget.");
+  }
+
+  return modelMessages;
 }
 
 async function getAuthUser(request: Request): Promise<AuthUser | null> {
@@ -526,13 +577,10 @@ export async function POST(request: Request) {
     includeOpening
   );
 
-  const modelMessages: EverBondMessage[] = [
-    {
-      role: "system",
-      content: prompt
-    },
-    ...historyForModel
-  ];
+  const modelMessages = buildModelMessagesWithinBudget(
+    prompt,
+    historyForModel
+  );
 
   const result = await callEverBondModel(modelMessages);
 
