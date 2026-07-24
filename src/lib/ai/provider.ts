@@ -161,6 +161,100 @@ function cleanModelContent(content: unknown, finishReason?: string) {
   return text;
 }
 
+function normalizeForSimilarity(text: string) {
+  return text
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function ngramSet(tokens: string[], size: number) {
+  const values = new Set<string>();
+
+  for (let index = 0; index <= tokens.length - size; index += 1) {
+    values.add(tokens.slice(index, index + size).join(" "));
+  }
+
+  return values;
+}
+
+function isTooSimilarToPreviousReply(
+  candidate: string,
+  previousReply: string
+) {
+  const candidateNormalized = normalizeForSimilarity(candidate);
+  const previousNormalized = normalizeForSimilarity(previousReply);
+
+  if (!candidateNormalized || !previousNormalized) {
+    return false;
+  }
+
+  if (candidateNormalized === previousNormalized) {
+    return true;
+  }
+
+  const candidateTokens = candidateNormalized.split(" ");
+  const previousTokens = previousNormalized.split(" ");
+
+  if (candidateTokens.length < 14 || previousTokens.length < 14) {
+    return false;
+  }
+
+  const candidateNgrams = ngramSet(candidateTokens, 3);
+  const previousNgrams = ngramSet(previousTokens, 3);
+
+  if (!candidateNgrams.size || !previousNgrams.size) {
+    return false;
+  }
+
+  let shared = 0;
+
+  for (const value of candidateNgrams) {
+    if (previousNgrams.has(value)) {
+      shared += 1;
+    }
+  }
+
+  const containment =
+    shared / Math.min(candidateNgrams.size, previousNgrams.size);
+
+  return containment >= 0.62;
+}
+
+function messagesWithAntiRepeatCorrection(
+  messages: EverBondMessage[]
+) {
+  const correction =
+    "RETRY CORRECTION: The draft repeated the character's previous reply. " +
+    "Respond to the user's newest message from the exact current action. " +
+    "Use new wording, do not reuse the prior opening, question, pet name, " +
+    "gesture, or description, and add one genuinely new beat.";
+
+  const firstSystemIndex = messages.findIndex(
+    (message) => message.role === "system"
+  );
+
+  if (firstSystemIndex < 0) {
+    return [
+      {
+        role: "system" as const,
+        content: correction
+      },
+      ...messages
+    ];
+  }
+
+  return messages.map((message, index) =>
+    index === firstSystemIndex
+      ? {
+          ...message,
+          content: `${message.content}\n\n${correction}`
+        }
+      : message
+  );
+}
+
 async function postChatCompletion(
   endpoint: string,
   apiKey: string,
@@ -191,8 +285,16 @@ export async function callEverBondModel(
   const config = getProviderConfig();
 
   const maxTokens = 110;
-  const temperature = getNumberEnv("AI_TEMPERATURE", 0.9);
-  const topP = getNumberEnv("AI_TOP_P", 0.95);
+  const temperature = getNumberEnv("AI_TEMPERATURE", 0.85);
+  const topP = getNumberEnv("AI_TOP_P", 0.9);
+  const frequencyPenalty = getNumberEnv(
+    "AI_FREQUENCY_PENALTY",
+    0.12
+  );
+  const repetitionPenalty = getNumberEnv(
+    "AI_REPETITION_PENALTY",
+    1.06
+  );
 
   if (
     !config.apiBaseUrl ||
@@ -211,37 +313,86 @@ export async function callEverBondModel(
 
   const endpoint = buildChatCompletionsEndpoint(config.apiBaseUrl);
 
-  const requestBody: Record<string, unknown> = {
-    model: config.model,
-    messages,
-    max_tokens: maxTokens,
-    temperature,
-    top_p: topP
+  const buildRequestBody = (
+    requestMessages: EverBondMessage[]
+  ): Record<string, unknown> => {
+    const requestBody: Record<string, unknown> = {
+      model: config.model,
+      messages: requestMessages,
+      max_tokens: maxTokens,
+      temperature,
+      top_p: topP,
+      frequency_penalty: frequencyPenalty,
+      repetition_penalty: repetitionPenalty
+    };
+
+    if (config.useVeniceParameters) {
+      requestBody.venice_parameters = {
+        include_venice_system_prompt: false,
+        enable_web_search: "off"
+      };
+    }
+
+    return requestBody;
   };
 
-  if (config.useVeniceParameters) {
-    requestBody.venice_parameters = {
-      include_venice_system_prompt: false,
-      enable_web_search: "off"
+  const firstData: any = await postChatCompletion(
+    endpoint,
+    config.apiKey,
+    buildRequestBody(messages)
+  );
+
+  const firstChoice = firstData.choices?.[0];
+  const firstContent = cleanModelContent(
+    firstChoice?.message?.content,
+    firstChoice?.finish_reason
+  );
+
+  const previousAssistantReply =
+    [...messages]
+      .reverse()
+      .find((message) => message.role === "assistant")
+      ?.content ?? "";
+
+  if (
+    previousAssistantReply &&
+    isTooSimilarToPreviousReply(
+      firstContent,
+      previousAssistantReply
+    )
+  ) {
+    const retryMessages =
+      messagesWithAntiRepeatCorrection(messages);
+
+    const retryData: any = await postChatCompletion(
+      endpoint,
+      config.apiKey,
+      buildRequestBody(retryMessages)
+    );
+
+    const retryChoice = retryData.choices?.[0];
+    const retryContent = cleanModelContent(
+      retryChoice?.message?.content,
+      retryChoice?.finish_reason
+    );
+
+    return {
+      content: retryContent || firstContent,
+      inputTokens:
+        (firstData.usage?.prompt_tokens ?? 0) +
+        (retryData.usage?.prompt_tokens ?? 0),
+      outputTokens:
+        (firstData.usage?.completion_tokens ?? 0) +
+        (retryData.usage?.completion_tokens ?? 0),
+      provider: config.provider,
+      model: config.model
     };
   }
 
-  const data: any = await postChatCompletion(
-    endpoint,
-    config.apiKey,
-    requestBody
-  );
-
-  const choice = data.choices?.[0];
-  const content = cleanModelContent(
-    choice?.message?.content,
-    choice?.finish_reason
-  );
-
   return {
-    content,
-    inputTokens: data.usage?.prompt_tokens ?? 0,
-    outputTokens: data.usage?.completion_tokens ?? 0,
+    content: firstContent,
+    inputTokens: firstData.usage?.prompt_tokens ?? 0,
+    outputTokens: firstData.usage?.completion_tokens ?? 0,
     provider: config.provider,
     model: config.model
   };
