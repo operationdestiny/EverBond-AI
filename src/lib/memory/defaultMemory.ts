@@ -7,5 +7,13 @@ export const defaultMemory: MemoryState = {
   emotional_state: "",
   open_threads: [],
   important_promises: [],
-  important_events: []
+  important_events: [],
+  current_scene: {
+    location: "",
+    character_clothing: "",
+    user_clothing: "",
+    character_position: "",
+    user_position: "",
+    current_action: ""
+  }
 };
