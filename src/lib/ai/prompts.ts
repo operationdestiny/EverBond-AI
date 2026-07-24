@@ -209,6 +209,37 @@ Story: ${compact(
     32,
     "No summary yet."
   )}
+Current scene:
+Location: ${compact(
+    memory.current_scene?.location,
+    20,
+    "Not established."
+  )}
+Character clothing: ${compact(
+    memory.current_scene?.character_clothing,
+    30,
+    "Not established."
+  )}
+User clothing: ${compact(
+    memory.current_scene?.user_clothing,
+    30,
+    "Not established."
+  )}
+Character position: ${compact(
+    memory.current_scene?.character_position,
+    20,
+    "Not established."
+  )}
+User position: ${compact(
+    memory.current_scene?.user_position,
+    20,
+    "Not established."
+  )}
+Current action: ${compact(
+    memory.current_scene?.current_action,
+    24,
+    "No active action."
+  )}
 User facts: ${
     compactList(memory.user_facts, 5, 10) || "None yet."
   }
@@ -281,6 +312,32 @@ function compactMemoryForExtraction(memory: MemoryState) {
         ?.slice(0, 20)
         .map((value) => compact(value, 16))
         .filter(Boolean) ?? [],
+    current_scene: {
+      location: compact(
+        memory.current_scene?.location,
+        20
+      ),
+      character_clothing: compact(
+        memory.current_scene?.character_clothing,
+        30
+      ),
+      user_clothing: compact(
+        memory.current_scene?.user_clothing,
+        30
+      ),
+      character_position: compact(
+        memory.current_scene?.character_position,
+        20
+      ),
+      user_position: compact(
+        memory.current_scene?.user_position,
+        20
+      ),
+      current_action: compact(
+        memory.current_scene?.current_action,
+        24
+      )
+    },
     permanent_identity: {
       name: compact(memory.permanent_identity?.name, 8) || null,
       gender: compact(memory.permanent_identity?.gender, 8) || null,
@@ -371,12 +428,22 @@ Return valid JSON only:
     "name": null,
     "gender": null,
     "core_identity": null
+  },
+  "current_scene": {
+    "location": "",
+    "character_clothing": "",
+    "user_clothing": "",
+    "character_position": "",
+    "user_position": "",
+    "current_action": ""
   }
 }
 
 Keep it compact and merge it with previous memory. Do not invent facts. Store only lasting user facts, preferences, boundaries, promises, relationship or emotional changes, important events, and unresolved threads. Remove resolved threads and duplicates. Do not store routine dialogue or temporary sexual actions unless they establish a lasting preference, boundary, promise, or major event.
 
 Return permanent identity updates only when the user directly states or corrects their name, gender, or one core identity fact; otherwise return null. Never store assumptions, pet names, appearance, anatomy, or scene descriptions as permanent identity.
+
+Always return a complete current_scene object. Begin with the previous current_scene and update only what the newest transcript changes. Track the present location, each person's current clothing state, each person's current physical position, and the current active action. Clothing state must reflect items that are worn, removed, opened, unbuttoned, unzipped, raised, lowered, pulled aside, torn, or absent. Use "bare" or "none" only when clearly established. Never restore clothing, reverse an action, or reposition someone unless the transcript establishes that change. If an action has ended with no replacement, use "none" for current_action. current_scene is temporary conversation state; never copy routine clothing, positions, or physical actions into permanent identity or durable user facts.
 
 Limits:
 - Keep the story summary concise and replacement-based, not an appended transcript.
