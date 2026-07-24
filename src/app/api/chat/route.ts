@@ -66,6 +66,16 @@ const MemoryExtractionSchema = z
         gender: z.string().nullable().optional(),
         core_identity: z.string().nullable().optional()
       })
+      .optional(),
+    current_scene: z
+      .object({
+        location: z.string().optional(),
+        character_clothing: z.string().optional(),
+        user_clothing: z.string().optional(),
+        character_position: z.string().optional(),
+        user_position: z.string().optional(),
+        current_action: z.string().optional()
+      })
       .optional()
   })
   .passthrough();
@@ -244,6 +254,50 @@ function mergeExtractedMemory(
       20,
       300
     ),
+    current_scene: {
+      location:
+        cleanMemoryText(
+          extraction.current_scene?.location,
+          200
+        ) ||
+        currentMemory.current_scene?.location ||
+        "",
+      character_clothing:
+        cleanMemoryText(
+          extraction.current_scene?.character_clothing,
+          300
+        ) ||
+        currentMemory.current_scene?.character_clothing ||
+        "",
+      user_clothing:
+        cleanMemoryText(
+          extraction.current_scene?.user_clothing,
+          300
+        ) ||
+        currentMemory.current_scene?.user_clothing ||
+        "",
+      character_position:
+        cleanMemoryText(
+          extraction.current_scene?.character_position,
+          200
+        ) ||
+        currentMemory.current_scene?.character_position ||
+        "",
+      user_position:
+        cleanMemoryText(
+          extraction.current_scene?.user_position,
+          200
+        ) ||
+        currentMemory.current_scene?.user_position ||
+        "",
+      current_action:
+        cleanMemoryText(
+          extraction.current_scene?.current_action,
+          300
+        ) ||
+        currentMemory.current_scene?.current_action ||
+        ""
+    },
     permanent_identity: {
       name:
         cleanMemoryText(identityUpdates.name, 80) ||
@@ -1056,6 +1110,10 @@ export async function POST(request: Request) {
 
     try {
       const transcript = [
+        ...openingTurn.map(
+          (message) =>
+            `${character.name}: ${message.content}`
+        ),
         ...historyForModel.map(
           (message) =>
             `${message.role === "assistant" ? character.name : "User"}: ${
