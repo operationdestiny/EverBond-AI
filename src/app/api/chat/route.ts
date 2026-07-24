@@ -1020,11 +1020,32 @@ export async function POST(request: Request) {
       includeOpening
     );
 
+    const openingMessage = (
+      character.firstMessage ||
+      character.openingMessage ||
+      ""
+    ).trim();
+
+    const hasAssistantHistory = historyForModel.some(
+      (message) => message.role === "assistant"
+    );
+
+    const openingTurn: EverBondMessage[] =
+      openingMessage && !hasAssistantHistory
+        ? [
+            {
+              role: "assistant",
+              content: openingMessage
+            }
+          ]
+        : [];
+
     const modelMessages: EverBondMessage[] = [
       {
         role: "system",
         content: prompt
       },
+      ...openingTurn,
       ...historyForModel
     ];
 
