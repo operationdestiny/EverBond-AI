@@ -147,10 +147,6 @@ export function CharactersPageClient({
           </button>
         </div>
       )}
-
-      <p className="pt-10 text-center font-display text-2xl font-bold text-bond-rose">
-        {t("moreExcitingCompanionsComing")}
-      </p>
     </main>
   );
 }

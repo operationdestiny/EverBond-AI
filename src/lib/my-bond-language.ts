@@ -68,6 +68,19 @@ export type MyBondCopy = {
   privateCompanionLoading: string;
   privateCompanionLoginRequired: string;
   privateCompanionUnavailable: string;
+  editCompanion: string;
+  deleteCompanion: string;
+  editCompanionTitle: string;
+  saveCompanion: string;
+  savingCompanion: string;
+  companionUpdated: string;
+  companionUpdateFailed: string;
+  deleteCompanionTitle: string;
+  deleteCompanionConfirmation: string;
+  deletingCompanion: string;
+  companionDeleted: string;
+  companionDeleteFailed: string;
+  optionalReplacementImage: string;
 };
 
 export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
@@ -140,7 +153,20 @@ export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
     noPublicCharacters: "This creator does not have any public companions yet.",
     privateCompanionLoading: "Loading your private companion...",
     privateCompanionLoginRequired: "Log in to open this private companion.",
-    privateCompanionUnavailable: "This private companion is only available to its creator."
+    privateCompanionUnavailable: "This private companion is only available to its creator.",
+    editCompanion: "Edit",
+    deleteCompanion: "Delete",
+    editCompanionTitle: "Edit Companion",
+    saveCompanion: "Save Changes",
+    savingCompanion: "Saving...",
+    companionUpdated: "Companion updated.",
+    companionUpdateFailed: "The companion could not be updated.",
+    deleteCompanionTitle: "Delete Companion",
+    deleteCompanionConfirmation: "Delete this companion permanently? Its chats and saved memory will also be removed.",
+    deletingCompanion: "Deleting...",
+    companionDeleted: "Companion deleted.",
+    companionDeleteFailed: "The companion could not be deleted.",
+    optionalReplacementImage: "Optional replacement image"
   },
   ES: {
     loginSignup: "Iniciar sesión / Registrarse",
@@ -211,7 +237,20 @@ export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
     noPublicCharacters: "Este creador todavía no tiene compañeros públicos.",
     privateCompanionLoading: "Cargando tu compañero privado...",
     privateCompanionLoginRequired: "Inicia sesión para abrir este compañero privado.",
-    privateCompanionUnavailable: "Este compañero privado solo está disponible para su creador."
+    privateCompanionUnavailable: "Este compañero privado solo está disponible para su creador.",
+    editCompanion: "Editar",
+    deleteCompanion: "Eliminar",
+    editCompanionTitle: "Editar compañero",
+    saveCompanion: "Guardar cambios",
+    savingCompanion: "Guardando...",
+    companionUpdated: "Compañero actualizado.",
+    companionUpdateFailed: "No se pudo actualizar el compañero.",
+    deleteCompanionTitle: "Eliminar compañero",
+    deleteCompanionConfirmation: "¿Eliminar este compañero permanentemente? También se eliminarán sus chats y memoria guardada.",
+    deletingCompanion: "Eliminando...",
+    companionDeleted: "Compañero eliminado.",
+    companionDeleteFailed: "No se pudo eliminar el compañero.",
+    optionalReplacementImage: "Imagen de reemplazo opcional"
   },
   FR: {
     loginSignup: "Connexion / Inscription",
@@ -282,7 +321,20 @@ export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
     noPublicCharacters: "Ce créateur ne possède encore aucun compagnon public.",
     privateCompanionLoading: "Chargement de votre compagnon privé...",
     privateCompanionLoginRequired: "Connectez-vous pour ouvrir ce compagnon privé.",
-    privateCompanionUnavailable: "Ce compagnon privé est uniquement accessible à son créateur."
+    privateCompanionUnavailable: "Ce compagnon privé est uniquement accessible à son créateur.",
+    editCompanion: "Modifier",
+    deleteCompanion: "Supprimer",
+    editCompanionTitle: "Modifier le compagnon",
+    saveCompanion: "Enregistrer",
+    savingCompanion: "Enregistrement...",
+    companionUpdated: "Compagnon mis à jour.",
+    companionUpdateFailed: "Impossible de mettre à jour le compagnon.",
+    deleteCompanionTitle: "Supprimer le compagnon",
+    deleteCompanionConfirmation: "Supprimer définitivement ce compagnon ? Ses chats et sa mémoire enregistrée seront également supprimés.",
+    deletingCompanion: "Suppression...",
+    companionDeleted: "Compagnon supprimé.",
+    companionDeleteFailed: "Impossible de supprimer le compagnon.",
+    optionalReplacementImage: "Image de remplacement facultative"
   },
   JA: {
     loginSignup: "ログイン / 新規登録",
@@ -353,7 +405,20 @@ export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
     noPublicCharacters: "このクリエイターには、まだ公開コンパニオンがありません。",
     privateCompanionLoading: "非公開コンパニオンを読み込んでいます...",
     privateCompanionLoginRequired: "この非公開コンパニオンを開くにはログインしてください。",
-    privateCompanionUnavailable: "この非公開コンパニオンは作成者のみ利用できます。"
+    privateCompanionUnavailable: "この非公開コンパニオンは作成者のみ利用できます。",
+    editCompanion: "編集",
+    deleteCompanion: "削除",
+    editCompanionTitle: "コンパニオンを編集",
+    saveCompanion: "変更を保存",
+    savingCompanion: "保存中...",
+    companionUpdated: "コンパニオンを更新しました。",
+    companionUpdateFailed: "コンパニオンを更新できませんでした。",
+    deleteCompanionTitle: "コンパニオンを削除",
+    deleteCompanionConfirmation: "このコンパニオンを完全に削除しますか？チャットと保存されたメモリーも削除されます。",
+    deletingCompanion: "削除中...",
+    companionDeleted: "コンパニオンを削除しました。",
+    companionDeleteFailed: "コンパニオンを削除できませんでした。",
+    optionalReplacementImage: "任意の差し替え画像"
   },
   DE: {
     loginSignup: "Anmelden / Registrieren",
@@ -424,7 +489,20 @@ export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
     noPublicCharacters: "Dieser Ersteller hat noch keine öffentlichen Begleiter.",
     privateCompanionLoading: "Dein privater Begleiter wird geladen...",
     privateCompanionLoginRequired: "Melde dich an, um diesen privaten Begleiter zu öffnen.",
-    privateCompanionUnavailable: "Dieser private Begleiter ist nur für seinen Ersteller verfügbar."
+    privateCompanionUnavailable: "Dieser private Begleiter ist nur für seinen Ersteller verfügbar.",
+    editCompanion: "Bearbeiten",
+    deleteCompanion: "Löschen",
+    editCompanionTitle: "Begleiter bearbeiten",
+    saveCompanion: "Änderungen speichern",
+    savingCompanion: "Speichern...",
+    companionUpdated: "Begleiter aktualisiert.",
+    companionUpdateFailed: "Der Begleiter konnte nicht aktualisiert werden.",
+    deleteCompanionTitle: "Begleiter löschen",
+    deleteCompanionConfirmation: "Diesen Begleiter dauerhaft löschen? Seine Chats und gespeicherte Erinnerung werden ebenfalls entfernt.",
+    deletingCompanion: "Löschen...",
+    companionDeleted: "Begleiter gelöscht.",
+    companionDeleteFailed: "Der Begleiter konnte nicht gelöscht werden.",
+    optionalReplacementImage: "Optionales Ersatzbild"
   },
   KO: {
     loginSignup: "로그인 / 회원가입",
@@ -495,6 +573,19 @@ export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
     noPublicCharacters: "이 제작자에게는 아직 공개 컴패니언이 없습니다.",
     privateCompanionLoading: "비공개 컴패니언을 불러오는 중...",
     privateCompanionLoginRequired: "이 비공개 컴패니언을 열려면 로그인하세요.",
-    privateCompanionUnavailable: "이 비공개 컴패니언은 제작자만 이용할 수 있습니다."
+    privateCompanionUnavailable: "이 비공개 컴패니언은 제작자만 이용할 수 있습니다.",
+    editCompanion: "편집",
+    deleteCompanion: "삭제",
+    editCompanionTitle: "컴패니언 편집",
+    saveCompanion: "변경 사항 저장",
+    savingCompanion: "저장 중...",
+    companionUpdated: "컴패니언이 업데이트되었습니다.",
+    companionUpdateFailed: "컴패니언을 업데이트하지 못했습니다.",
+    deleteCompanionTitle: "컴패니언 삭제",
+    deleteCompanionConfirmation: "이 컴패니언을 영구 삭제할까요? 채팅과 저장된 메모리도 함께 삭제됩니다.",
+    deletingCompanion: "삭제 중...",
+    companionDeleted: "컴패니언이 삭제되었습니다.",
+    companionDeleteFailed: "컴패니언을 삭제하지 못했습니다.",
+    optionalReplacementImage: "선택 사항인 교체 이미지"
   }
 };

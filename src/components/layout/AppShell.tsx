@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AuthProvider } from "@/components/auth/AuthProvider";
-import { ChatFavoriteBridge } from "@/components/character/ChatFavoriteBridge";
+import { ChatLayoutCleanup } from "@/components/chat/ChatLayoutCleanup";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { NavBar } from "@/components/layout/NavBar";
 
@@ -16,7 +16,7 @@ export function AppShell({
 
   return (
     <AuthProvider>
-      <ChatFavoriteBridge />
+      <ChatLayoutCleanup />
       <div
         className={`v18-shell ${
           collapsed

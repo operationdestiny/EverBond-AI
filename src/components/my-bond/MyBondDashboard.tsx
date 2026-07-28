@@ -19,6 +19,7 @@ import {
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { CreatorLink } from "@/components/character/CreatorLink";
+import { MyCompanionActions, type UpdatedCompanion } from "@/components/my-bond/MyCompanionActions";
 import { useSiteLanguage } from "@/lib/site-language";
 import { MY_BOND_COPY } from "@/lib/my-bond-language";
 
@@ -222,6 +223,66 @@ export function MyBondDashboard({
     } finally {
       setUsernameSaving(false);
     }
+  }
+
+
+  function handleCompanionUpdated(updated: UpdatedCompanion) {
+    setData((current) => {
+      if (!current) return current;
+
+      const updateItem = <T extends CompanionSummary>(item: T): T =>
+        item.id === updated.id
+          ? ({ ...item, ...updated } as T)
+          : item;
+
+      return {
+        ...current,
+        recentChats: current.recentChats.map(updateItem),
+        createdCompanions: current.createdCompanions.map(updateItem),
+        favorites: current.favorites.map(updateItem)
+      };
+    });
+  }
+
+  function handleCompanionDeleted(characterId: string) {
+    setData((current) => {
+      if (!current) return current;
+
+      const hadRecentChat = current.recentChats.some(
+        (item) => item.id === characterId
+      );
+      const wasFavorite = current.favorites.some(
+        (item) => item.id === characterId
+      );
+
+      return {
+        ...current,
+        counts: {
+          ...current.counts,
+          createdCompanions: Math.max(
+            current.counts.createdCompanions - 1,
+            0
+          ),
+          recentChats: Math.max(
+            current.counts.recentChats - (hadRecentChat ? 1 : 0),
+            0
+          ),
+          favorites: Math.max(
+            current.counts.favorites - (wasFavorite ? 1 : 0),
+            0
+          )
+        },
+        recentChats: current.recentChats.filter(
+          (item) => item.id !== characterId
+        ),
+        createdCompanions: current.createdCompanions.filter(
+          (item) => item.id !== characterId
+        ),
+        favorites: current.favorites.filter(
+          (item) => item.id !== characterId
+        )
+      };
+    });
   }
 
   useEffect(() => {
@@ -523,12 +584,20 @@ export function MyBondDashboard({
                             : copy.private}
                         </span>
                       </div>
-                      <Link
-                        href={`/chat/${companion.slug}`}
-                        className="mt-4 block rounded-full border border-bond-rose/45 px-4 py-2.5 text-center text-sm font-bold text-white transition hover:bg-bond-rose/10"
-                      >
-                        {copy.openCompanion}
-                      </Link>
+                      <div className="mt-4 grid grid-cols-3 gap-2">
+                        <Link
+                          href={`/chat/${companion.slug}`}
+                          className="inline-flex items-center justify-center rounded-full border border-bond-rose/45 px-3 py-2.5 text-center text-sm font-bold text-white transition hover:bg-bond-rose/10"
+                        >
+                          {copy.openCompanion}
+                        </Link>
+                        <MyCompanionActions
+                          companion={companion}
+                          session={session}
+                          onUpdated={handleCompanionUpdated}
+                          onDeleted={handleCompanionDeleted}
+                        />
+                      </div>
                     </div>
                   </article>
                 ))}

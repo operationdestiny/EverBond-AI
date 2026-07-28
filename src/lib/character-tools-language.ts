@@ -18,6 +18,13 @@ export type CharacterToolsCopy = {
   publicDescription: string;
   privateDescription: string;
   imageHelp: string;
+  reportCharacter: string;
+  chooseReportReason: string;
+  bugGlitch: string;
+  safetyIssue: string;
+  other: string;
+  submitReport: string;
+  reportSubmitted: string;
 };
 
 export const CHARACTER_TOOLS_COPY: Record<
@@ -45,7 +52,14 @@ export const CHARACTER_TOOLS_COPY: Record<
       "Everyone can discover and chat with this companion.",
     privateDescription:
       "Only you can see and chat with this companion.",
-    imageHelp: "JPG, PNG, or WebP. Maximum 5 MB."
+    imageHelp: "JPG, PNG, or WebP. Maximum 5 MB.",
+    reportCharacter: "Report companion",
+    chooseReportReason: "Choose one reason.",
+    bugGlitch: "bug/glitch",
+    safetyIssue: "safety issue",
+    other: "other",
+    submitReport: "Submit",
+    reportSubmitted: "Thanks, your report has been submitted."
   },
   ES: {
     saveFavorite: "Añadir a favoritos",
@@ -68,7 +82,14 @@ export const CHARACTER_TOOLS_COPY: Record<
       "Todos pueden descubrir y chatear con este compañero.",
     privateDescription:
       "Solo tú puedes ver y chatear con este compañero.",
-    imageHelp: "JPG, PNG o WebP. Máximo 5 MB."
+    imageHelp: "JPG, PNG o WebP. Máximo 5 MB.",
+    reportCharacter: "Reportar compañero",
+    chooseReportReason: "Elige un motivo.",
+    bugGlitch: "error/fallo",
+    safetyIssue: "problema de seguridad",
+    other: "otro",
+    submitReport: "Enviar",
+    reportSubmitted: "Gracias, tu reporte ha sido enviado."
   },
   FR: {
     saveFavorite: "Ajouter aux favoris",
@@ -92,7 +113,14 @@ export const CHARACTER_TOOLS_COPY: Record<
       "Tout le monde peut découvrir ce compagnon et discuter avec lui.",
     privateDescription:
       "Vous seul pouvez voir ce compagnon et discuter avec lui.",
-    imageHelp: "JPG, PNG ou WebP. 5 Mo maximum."
+    imageHelp: "JPG, PNG ou WebP. 5 Mo maximum.",
+    reportCharacter: "Signaler le compagnon",
+    chooseReportReason: "Choisissez un motif.",
+    bugGlitch: "bug/problème",
+    safetyIssue: "problème de sécurité",
+    other: "autre",
+    submitReport: "Envoyer",
+    reportSubmitted: "Merci, votre signalement a été envoyé."
   },
   DE: {
     saveFavorite: "Zu Favoriten hinzufügen",
@@ -116,7 +144,14 @@ export const CHARACTER_TOOLS_COPY: Record<
       "Jeder kann diesen Begleiter entdecken und mit ihm chatten.",
     privateDescription:
       "Nur du kannst diesen Begleiter sehen und mit ihm chatten.",
-    imageHelp: "JPG, PNG oder WebP. Maximal 5 MB."
+    imageHelp: "JPG, PNG oder WebP. Maximal 5 MB.",
+    reportCharacter: "Begleiter melden",
+    chooseReportReason: "Wähle einen Grund aus.",
+    bugGlitch: "Bug/Fehler",
+    safetyIssue: "Sicherheitsproblem",
+    other: "Sonstiges",
+    submitReport: "Senden",
+    reportSubmitted: "Danke, deine Meldung wurde übermittelt."
   },
   JA: {
     saveFavorite: "お気に入りに追加",
@@ -139,7 +174,14 @@ export const CHARACTER_TOOLS_COPY: Record<
       "すべてのユーザーがこのコンパニオンを見つけてチャットできます。",
     privateDescription:
       "このコンパニオンを見てチャットできるのはあなただけです。",
-    imageHelp: "JPG、PNG、WebP。最大5 MB。"
+    imageHelp: "JPG、PNG、WebP。最大5 MB。",
+    reportCharacter: "コンパニオンを報告",
+    chooseReportReason: "理由を1つ選択してください。",
+    bugGlitch: "バグ／不具合",
+    safetyIssue: "安全上の問題",
+    other: "その他",
+    submitReport: "送信",
+    reportSubmitted: "ありがとうございます。報告が送信されました。"
   },
   KO: {
     saveFavorite: "즐겨찾기에 추가",
@@ -162,6 +204,13 @@ export const CHARACTER_TOOLS_COPY: Record<
       "모든 사용자가 이 컴패니언을 발견하고 채팅할 수 있습니다.",
     privateDescription:
       "오직 나만 이 컴패니언을 보고 채팅할 수 있습니다.",
-    imageHelp: "JPG, PNG 또는 WebP. 최대 5 MB."
+    imageHelp: "JPG, PNG 또는 WebP. 최대 5 MB.",
+    reportCharacter: "컴패니언 신고",
+    chooseReportReason: "사유를 하나 선택하세요.",
+    bugGlitch: "버그/오류",
+    safetyIssue: "안전 문제",
+    other: "기타",
+    submitReport: "제출",
+    reportSubmitted: "감사합니다. 신고가 제출되었습니다."
   }
 };
