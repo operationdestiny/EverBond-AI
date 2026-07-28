@@ -1,0 +1,8 @@
+:global(.v74-top-actions) button.authButton:last-child::after,
+:global(.v51-top-actions) button.authButton:last-child::after,
+:global(.v50-top-actions) button.authButton:last-child::after,
+:global(.v49-top-actions) button.authButton:last-child::after,
+button.authButton::after {
+  content: none !important;
+  display: none !important;
+}

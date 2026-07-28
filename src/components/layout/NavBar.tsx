@@ -6,6 +6,7 @@ import { LanguageSelector } from "@/components/layout/LanguageSelector";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useSiteLanguage } from "@/lib/site-language";
 import { MY_BOND_COPY } from "@/lib/my-bond-language";
+import styles from "./NavBar.module.css";
 
 export function NavBar() {
   const { t, language } = useSiteLanguage();
@@ -33,7 +34,7 @@ export function NavBar() {
             <button
               type="button"
               onClick={() => void signOut()}
-              className="v18-control v51-top-pill v75-login-pill inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-white"
+              className={`${styles.authButton} v18-control v51-top-pill v75-login-pill inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-white`}
             >
               <LogOut size={16} />
               <span>{copy.logout}</span>
@@ -42,7 +43,7 @@ export function NavBar() {
             <button
               type="button"
               onClick={openAuthModal}
-              className="v18-control v51-top-pill v75-login-pill inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-white"
+              className={`${styles.authButton} v18-control v51-top-pill v75-login-pill inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-white`}
             >
               <LogIn size={16} />
               <span>{copy.loginSignup}</span>

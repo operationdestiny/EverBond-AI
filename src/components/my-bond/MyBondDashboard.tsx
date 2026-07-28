@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import {
+  Check,
   Heart,
   MessageCircleMore,
   MessagesSquare,
+  Pencil,
   Plus,
   RefreshCcw,
-  UserRound
+  UserRound,
+  X
 } from "lucide-react";
 import {
   useEffect,
@@ -15,6 +18,7 @@ import {
   useState
 } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { CreatorLink } from "@/components/character/CreatorLink";
 import { useSiteLanguage } from "@/lib/site-language";
 import { MY_BOND_COPY } from "@/lib/my-bond-language";
 
@@ -25,6 +29,7 @@ type CompanionSummary = {
   image: string;
   title: string;
   visibility: "public" | "private";
+  creatorUsername?: string;
 };
 
 type RecentChat = CompanionSummary & {
@@ -88,6 +93,11 @@ export function MyBondDashboard({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [filter, setFilter] = useState<CompanionFilter>("all");
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [usernameDraft, setUsernameDraft] = useState("");
+  const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameNotice, setUsernameNotice] = useState("");
+  const [usernameError, setUsernameError] = useState("");
 
   async function loadDashboard() {
     setLoading(true);
@@ -112,7 +122,9 @@ export function MyBondDashboard({
         );
       }
 
-      setData(payload as MyBondData);
+      const nextData = payload as MyBondData;
+      setData(nextData);
+      setUsernameDraft(nextData.profile.username);
     } catch (error) {
       setLoadError(
         error instanceof Error && error.message
@@ -121,6 +133,94 @@ export function MyBondDashboard({
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function saveUsername() {
+    const username = usernameDraft.trim().toLowerCase();
+
+    if (!/^[a-z0-9_]{3,30}$/.test(username)) {
+      setUsernameError(copy.invalidUsername);
+      setUsernameNotice("");
+      return;
+    }
+
+    setUsernameSaving(true);
+    setUsernameError("");
+    setUsernameNotice("");
+
+    try {
+      const response = await fetch("/api/my-bond", {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ username })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        if (payload?.error === "USERNAME_TAKEN") {
+          throw new Error(copy.usernameTaken);
+        }
+
+        if (payload?.error === "INVALID_USERNAME") {
+          throw new Error(copy.invalidUsername);
+        }
+
+        throw new Error(copy.usernameUpdateFailed);
+      }
+
+      const updatedUsername =
+        typeof payload?.username === "string"
+          ? payload.username
+          : username;
+
+      setData((current) => {
+        if (!current) return current;
+        const previousUsername = current.profile.username;
+
+        const updateCompanion = <T extends CompanionSummary>(
+          companion: T
+        ): T =>
+          companion.creatorUsername === previousUsername
+            ? {
+                ...companion,
+                creatorUsername: updatedUsername
+              }
+            : companion;
+
+        return {
+          ...current,
+          profile: {
+            ...current.profile,
+            username: updatedUsername
+          },
+          recentChats:
+            current.recentChats.map(updateCompanion),
+          createdCompanions:
+            current.createdCompanions.map((companion) => ({
+              ...companion,
+              creatorUsername: updatedUsername
+            })),
+          favorites:
+            current.favorites.map(updateCompanion)
+        };
+      });
+
+      setUsernameDraft(updatedUsername);
+      setEditingUsername(false);
+      setUsernameNotice(copy.usernameUpdated);
+    } catch (error) {
+      setUsernameError(
+        error instanceof Error
+          ? error.message
+          : copy.usernameUpdateFailed
+      );
+    } finally {
+      setUsernameSaving(false);
     }
   }
 
@@ -404,6 +504,18 @@ export function MyBondDashboard({
                           <p className="mt-1 line-clamp-2 text-sm leading-6 text-bond-muted">
                             {companion.title}
                           </p>
+                          {companion.creatorUsername && (
+                            companion.visibility === "public" ? (
+                              <CreatorLink
+                                username={companion.creatorUsername}
+                                className="mt-2 inline-flex text-xs"
+                              />
+                            ) : (
+                              <p className="mt-2 text-xs font-semibold text-bond-muted">
+                                @{companion.creatorUsername}
+                              </p>
+                            )
+                          )}
                         </div>
                         <span className="shrink-0 rounded-full border border-bond-rose/35 bg-bond-rose/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-bond-rose">
                           {companion.visibility === "public"
@@ -498,13 +610,99 @@ export function MyBondDashboard({
                     {data.profile.email}
                   </span>
                 </div>
-                <div className="flex flex-wrap justify-between gap-3 py-4">
-                  <span className="text-bond-muted">
-                    {copy.username}
-                  </span>
-                  <span className="font-semibold text-white">
-                    @{data.profile.username}
-                  </span>
+                <div className="py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-bond-muted">
+                      {copy.username}
+                    </span>
+
+                    {!editingUsername ? (
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-white">
+                          @{data.profile.username}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUsernameDraft(data.profile.username);
+                            setUsernameError("");
+                            setUsernameNotice("");
+                            setEditingUsername(true);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-bond-rose/45 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-bond-rose/10"
+                        >
+                          <Pencil size={13} />
+                          {copy.editUsername}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-full max-w-md">
+                        <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+                          <div className="flex min-w-0 flex-1 items-center rounded-xl border border-white/10 bg-black/30 px-3">
+                            <span className="text-bond-muted">@</span>
+                            <input
+                              value={usernameDraft}
+                              onChange={(event) =>
+                                setUsernameDraft(
+                                  event.target.value
+                                    .toLowerCase()
+                                    .replace(/[^a-z0-9_]/g, "")
+                                    .slice(0, 30)
+                                )
+                              }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  void saveUsername();
+                                }
+                              }}
+                              placeholder={copy.usernamePlaceholder}
+                              className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm text-white outline-none"
+                              autoComplete="username"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void saveUsername()}
+                            disabled={usernameSaving}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-bond-rose px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+                          >
+                            <Check size={15} />
+                            {usernameSaving
+                              ? copy.savingUsername
+                              : copy.saveUsername}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingUsername(false);
+                              setUsernameDraft(data.profile.username);
+                              setUsernameError("");
+                            }}
+                            disabled={usernameSaving}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+                          >
+                            <X size={15} />
+                            {copy.cancel}
+                          </button>
+                        </div>
+                        <p className="mt-2 text-xs leading-5 text-bond-muted">
+                          {copy.usernameRequirements}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {usernameNotice && (
+                    <p className="mt-3 text-sm text-emerald-300">
+                      {usernameNotice}
+                    </p>
+                  )}
+
+                  {usernameError && (
+                    <p className="mt-3 text-sm text-red-200">
+                      {usernameError}
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-wrap justify-between gap-3 py-4">
                   <span className="text-bond-muted">

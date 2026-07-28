@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Flag, RefreshCcw, Share2, Star } from "lucide-react";
+import { CreatorLink } from "@/components/character/CreatorLink";
 import { Character } from "@/types/character";
 import { useSiteLanguage } from "@/lib/site-language";
 
@@ -18,6 +19,10 @@ export function CharacterProfileShell({ character }: { character: Character }) {
   const displayTags = character.tags.filter((tag) => tag !== "Ever Memory™").slice(0, 4);
   const similarTag = character.tags.find((item) => item !== "Ever Memory™") ?? "Romance";
   const similarHref = `/characters?tag=${encodeURIComponent(similarTag)}`;
+  const showCreator =
+    character.category === "public-creations" &&
+    character.visibility !== "private" &&
+    Boolean(character.creatorUsername);
 
   return (
     <main className="min-h-[calc(100vh-64px)] px-4 py-10 md:px-6">
@@ -56,6 +61,13 @@ export function CharacterProfileShell({ character }: { character: Character }) {
                 </button>
               </div>
             </div>
+
+            {showCreator && character.creatorUsername && (
+              <CreatorLink
+                username={character.creatorUsername}
+                className="mt-5 inline-flex text-sm"
+              />
+            )}
 
             <p className="mt-6 text-base leading-8 text-bond-muted">
               {character.description}

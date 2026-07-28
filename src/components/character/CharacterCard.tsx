@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Eye, Star } from "lucide-react";
+import { CreatorLink } from "@/components/character/CreatorLink";
 import { Character } from "@/types/character";
 
 export function CharacterCard({ character, priority = false }: { character: Character; priority?: boolean; compact?: boolean }) {
@@ -30,6 +31,13 @@ export function CharacterCard({ character, priority = false }: { character: Char
           <h3 className="truncate font-display text-base font-bold leading-tight text-white">{character.name}</h3>
           <p className="mt-2 line-clamp-2 min-h-[2.45rem] text-[13px] leading-5 text-bond-muted">{character.tagline}</p>
         </Link>
+
+        {isPublicCreation && character.creatorUsername && (
+          <CreatorLink
+            username={character.creatorUsername}
+            className="mt-2 inline-flex text-xs"
+          />
+        )}
 
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {character.tags.filter((tag) => tag !== "Ever Memory™").slice(0, 4).map((tag) => (

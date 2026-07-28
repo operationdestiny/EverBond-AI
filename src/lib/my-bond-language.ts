@@ -51,6 +51,23 @@ export type MyBondCopy = {
   purchasesWillAppear: string;
   loadError: string;
   retry: string;
+  editUsername: string;
+  saveUsername: string;
+  cancel: string;
+  usernamePlaceholder: string;
+  usernameRequirements: string;
+  usernameUpdated: string;
+  usernameTaken: string;
+  invalidUsername: string;
+  usernameUpdateFailed: string;
+  savingUsername: string;
+  createdBy: string;
+  creatorPublicCharacters: string;
+  creatorPublicCharactersDescription: string;
+  noPublicCharacters: string;
+  privateCompanionLoading: string;
+  privateCompanionLoginRequired: string;
+  privateCompanionUnavailable: string;
 };
 
 export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
@@ -106,7 +123,24 @@ export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
     purchasesWillAppear:
       "Message-bundle and EverCoin purchases will appear here after Paddle is connected.",
     loadError: "My Bond could not be loaded.",
-    retry: "Try Again"
+    retry: "Try Again",
+    editUsername: "Edit",
+    saveUsername: "Save",
+    cancel: "Cancel",
+    usernamePlaceholder: "username",
+    usernameRequirements: "Use 3–30 lowercase letters, numbers, or underscores.",
+    usernameUpdated: "Username updated.",
+    usernameTaken: "That username is already taken.",
+    invalidUsername: "Enter a valid username using 3–30 lowercase letters, numbers, or underscores.",
+    usernameUpdateFailed: "The username could not be updated.",
+    savingUsername: "Saving...",
+    createdBy: "Created by",
+    creatorPublicCharacters: "Public Companions",
+    creatorPublicCharactersDescription: "Explore this creator’s public companions and start a chat.",
+    noPublicCharacters: "This creator does not have any public companions yet.",
+    privateCompanionLoading: "Loading your private companion...",
+    privateCompanionLoginRequired: "Log in to open this private companion.",
+    privateCompanionUnavailable: "This private companion is only available to its creator."
   },
   ES: {
     loginSignup: "Iniciar sesión / Registrarse",
@@ -160,7 +194,24 @@ export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
     purchasesWillAppear:
       "Las compras de paquetes de mensajes y EverCoin aparecerán aquí cuando Paddle esté conectado.",
     loadError: "No se pudo cargar Mi Vínculo.",
-    retry: "Intentar de nuevo"
+    retry: "Intentar de nuevo",
+    editUsername: "Editar",
+    saveUsername: "Guardar",
+    cancel: "Cancelar",
+    usernamePlaceholder: "nombre_de_usuario",
+    usernameRequirements: "Usa entre 3 y 30 letras minúsculas, números o guiones bajos.",
+    usernameUpdated: "Nombre de usuario actualizado.",
+    usernameTaken: "Ese nombre de usuario ya está en uso.",
+    invalidUsername: "Introduce un nombre válido de 3 a 30 letras minúsculas, números o guiones bajos.",
+    usernameUpdateFailed: "No se pudo actualizar el nombre de usuario.",
+    savingUsername: "Guardando...",
+    createdBy: "Creado por",
+    creatorPublicCharacters: "Compañeros públicos",
+    creatorPublicCharactersDescription: "Explora los compañeros públicos de este creador y comienza un chat.",
+    noPublicCharacters: "Este creador todavía no tiene compañeros públicos.",
+    privateCompanionLoading: "Cargando tu compañero privado...",
+    privateCompanionLoginRequired: "Inicia sesión para abrir este compañero privado.",
+    privateCompanionUnavailable: "Este compañero privado solo está disponible para su creador."
   },
   FR: {
     loginSignup: "Connexion / Inscription",
@@ -214,7 +265,24 @@ export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
     purchasesWillAppear:
       "Les achats de packs de messages et d’EverCoin apparaîtront ici une fois Paddle connecté.",
     loadError: "Impossible de charger Mon Lien.",
-    retry: "Réessayer"
+    retry: "Réessayer",
+    editUsername: "Modifier",
+    saveUsername: "Enregistrer",
+    cancel: "Annuler",
+    usernamePlaceholder: "nom_utilisateur",
+    usernameRequirements: "Utilisez 3 à 30 lettres minuscules, chiffres ou traits de soulignement.",
+    usernameUpdated: "Nom d’utilisateur mis à jour.",
+    usernameTaken: "Ce nom d’utilisateur est déjà utilisé.",
+    invalidUsername: "Saisissez un nom valide de 3 à 30 lettres minuscules, chiffres ou traits de soulignement.",
+    usernameUpdateFailed: "Le nom d’utilisateur n’a pas pu être mis à jour.",
+    savingUsername: "Enregistrement...",
+    createdBy: "Créé par",
+    creatorPublicCharacters: "Compagnons publics",
+    creatorPublicCharactersDescription: "Découvrez les compagnons publics de ce créateur et commencez un chat.",
+    noPublicCharacters: "Ce créateur ne possède encore aucun compagnon public.",
+    privateCompanionLoading: "Chargement de votre compagnon privé...",
+    privateCompanionLoginRequired: "Connectez-vous pour ouvrir ce compagnon privé.",
+    privateCompanionUnavailable: "Ce compagnon privé est uniquement accessible à son créateur."
   },
   JA: {
     loginSignup: "ログイン / 新規登録",
@@ -268,7 +336,24 @@ export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
     purchasesWillAppear:
       "Paddle 接続後、メッセージバンドルと EverCoin の購入がここに表示されます。",
     loadError: "My Bond を読み込めませんでした。",
-    retry: "再試行"
+    retry: "再試行",
+    editUsername: "編集",
+    saveUsername: "保存",
+    cancel: "キャンセル",
+    usernamePlaceholder: "ユーザー名",
+    usernameRequirements: "3〜30文字の小文字、数字、またはアンダースコアを使用してください。",
+    usernameUpdated: "ユーザー名を更新しました。",
+    usernameTaken: "そのユーザー名はすでに使用されています。",
+    invalidUsername: "3〜30文字の小文字、数字、またはアンダースコアで有効なユーザー名を入力してください。",
+    usernameUpdateFailed: "ユーザー名を更新できませんでした。",
+    savingUsername: "保存中...",
+    createdBy: "作成者",
+    creatorPublicCharacters: "公開コンパニオン",
+    creatorPublicCharactersDescription: "このクリエイターの公開コンパニオンを見て、チャットを始めましょう。",
+    noPublicCharacters: "このクリエイターには、まだ公開コンパニオンがありません。",
+    privateCompanionLoading: "非公開コンパニオンを読み込んでいます...",
+    privateCompanionLoginRequired: "この非公開コンパニオンを開くにはログインしてください。",
+    privateCompanionUnavailable: "この非公開コンパニオンは作成者のみ利用できます。"
   },
   DE: {
     loginSignup: "Anmelden / Registrieren",
@@ -322,7 +407,24 @@ export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
     purchasesWillAppear:
       "Nachrichtenpaket- und EverCoin-Käufe erscheinen hier, sobald Paddle verbunden ist.",
     loadError: "Meine Bindung konnte nicht geladen werden.",
-    retry: "Erneut versuchen"
+    retry: "Erneut versuchen",
+    editUsername: "Bearbeiten",
+    saveUsername: "Speichern",
+    cancel: "Abbrechen",
+    usernamePlaceholder: "benutzername",
+    usernameRequirements: "Verwende 3–30 Kleinbuchstaben, Zahlen oder Unterstriche.",
+    usernameUpdated: "Benutzername aktualisiert.",
+    usernameTaken: "Dieser Benutzername ist bereits vergeben.",
+    invalidUsername: "Gib einen gültigen Benutzernamen mit 3–30 Kleinbuchstaben, Zahlen oder Unterstrichen ein.",
+    usernameUpdateFailed: "Der Benutzername konnte nicht aktualisiert werden.",
+    savingUsername: "Wird gespeichert...",
+    createdBy: "Erstellt von",
+    creatorPublicCharacters: "Öffentliche Begleiter",
+    creatorPublicCharactersDescription: "Entdecke die öffentlichen Begleiter dieses Erstellers und beginne einen Chat.",
+    noPublicCharacters: "Dieser Ersteller hat noch keine öffentlichen Begleiter.",
+    privateCompanionLoading: "Dein privater Begleiter wird geladen...",
+    privateCompanionLoginRequired: "Melde dich an, um diesen privaten Begleiter zu öffnen.",
+    privateCompanionUnavailable: "Dieser private Begleiter ist nur für seinen Ersteller verfügbar."
   },
   KO: {
     loginSignup: "로그인 / 회원가입",
@@ -376,6 +478,23 @@ export const MY_BOND_COPY: Record<LanguageCode, MyBondCopy> = {
     purchasesWillAppear:
       "Paddle 연결 후 메시지 번들과 EverCoin 구매 내역이 여기에 표시됩니다.",
     loadError: "My Bond를 불러올 수 없습니다.",
-    retry: "다시 시도"
+    retry: "다시 시도",
+    editUsername: "수정",
+    saveUsername: "저장",
+    cancel: "취소",
+    usernamePlaceholder: "사용자_이름",
+    usernameRequirements: "영문 소문자, 숫자 또는 밑줄을 사용해 3~30자로 입력하세요.",
+    usernameUpdated: "사용자 이름이 업데이트되었습니다.",
+    usernameTaken: "이미 사용 중인 사용자 이름입니다.",
+    invalidUsername: "영문 소문자, 숫자 또는 밑줄을 사용해 3~30자의 유효한 사용자 이름을 입력하세요.",
+    usernameUpdateFailed: "사용자 이름을 업데이트할 수 없습니다.",
+    savingUsername: "저장 중...",
+    createdBy: "제작자",
+    creatorPublicCharacters: "공개 컴패니언",
+    creatorPublicCharactersDescription: "이 제작자의 공개 컴패니언을 둘러보고 채팅을 시작하세요.",
+    noPublicCharacters: "이 제작자에게는 아직 공개 컴패니언이 없습니다.",
+    privateCompanionLoading: "비공개 컴패니언을 불러오는 중...",
+    privateCompanionLoginRequired: "이 비공개 컴패니언을 열려면 로그인하세요.",
+    privateCompanionUnavailable: "이 비공개 컴패니언은 제작자만 이용할 수 있습니다."
   }
 };

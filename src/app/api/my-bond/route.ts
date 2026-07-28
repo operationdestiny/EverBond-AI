@@ -10,6 +10,7 @@ type CharacterRow = {
   category: string | null;
   title: string | null;
   visibility: string | null;
+  creator_username: string | null;
 };
 
 type ConversationRow = {
@@ -39,6 +40,7 @@ function toCompanion(character: CharacterRow) {
         ? `/character-assets/${character.category}/${character.image_file}`
         : ""),
     title: character.title || "",
+    creatorUsername: character.creator_username || undefined,
     visibility:
       character.visibility === "private"
         ? ("private" as const)
@@ -61,6 +63,64 @@ async function getAuthUser(request: Request) {
   }
 
   return data.user;
+}
+
+const USERNAME_PATTERN = /^[a-z0-9_]{3,30}$/;
+
+function normalizeUsername(value: unknown) {
+  return typeof value === "string"
+    ? value.trim().toLowerCase()
+    : "";
+}
+
+function defaultUsernameForUser(userId: string) {
+  return `member_${userId.replaceAll("-", "").slice(0, 8)}`;
+}
+
+async function ensureUsername(
+  supabase: ReturnType<typeof getSupabaseServiceClient>,
+  user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> },
+  currentUsername: unknown
+) {
+  const storedUsername = normalizeUsername(currentUsername);
+
+  if (USERNAME_PATTERN.test(storedUsername)) {
+    return storedUsername;
+  }
+
+  const metadataUsername = normalizeUsername(
+    user.user_metadata?.username
+  );
+  const username = USERNAME_PATTERN.test(metadataUsername)
+    ? metadataUsername
+    : defaultUsernameForUser(user.id);
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      username,
+      updated_at: new Date().toISOString()
+    })
+    .eq("user_id", user.id);
+
+  if (error) throw error;
+
+  await supabase
+    .from("characters")
+    .update({
+      creator_username: username,
+      updated_at: new Date().toISOString()
+    })
+    .eq("creator_id", user.id);
+
+  await supabase.auth.admin.updateUserById(user.id, {
+    user_metadata: {
+      ...(user.user_metadata ?? {}),
+      username
+    }
+  });
+
+  return username;
 }
 
 export async function GET(request: Request) {
@@ -88,11 +148,17 @@ export async function GET(request: Request) {
         }
       )
       .select(
-        "user_id,email,trial_messages_used,trial_message_limit"
+        "user_id,email,username,trial_messages_used,trial_message_limit"
       )
       .single();
 
     if (profileError) throw profileError;
+
+    const username = await ensureUsername(
+      supabase,
+      user,
+      profile.username
+    );
 
     const [
       conversationsResult,
@@ -108,7 +174,7 @@ export async function GET(request: Request) {
       supabase
         .from("characters")
         .select(
-          "id,slug,name,image_url,image_file,category,title,visibility",
+          "id,slug,name,image_url,image_file,category,title,visibility,creator_username",
           { count: "exact" }
         )
         .eq("creator_id", user.id)
@@ -154,7 +220,7 @@ export async function GET(request: Request) {
       const { data, error } = await supabase
         .from("characters")
         .select(
-          "id,slug,name,image_url,image_file,category,title,visibility"
+          "id,slug,name,image_url,image_file,category,title,visibility,creator_username"
         )
         .in("id", allCharacterIds);
 
@@ -238,9 +304,6 @@ export async function GET(request: Request) {
       user.email ||
       "";
 
-    const fallbackUsername =
-      email.split("@")[0] ||
-      "member";
 
     const trialLimit = Number(
       profile.trial_message_limit ?? 20
@@ -253,11 +316,7 @@ export async function GET(request: Request) {
       {
         profile: {
           email,
-          username:
-            (typeof user.user_metadata?.username === "string" &&
-            user.user_metadata.username.trim()
-              ? user.user_metadata.username.trim()
-              : fallbackUsername),
+          username,
           memberSince: user.created_at,
           messagesLeft: Math.max(
             trialLimit - trialUsed,
@@ -297,3 +356,123 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export async function PATCH(request: Request) {
+  try {
+    const user = await getAuthUser(request);
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "SIGNUP_REQUIRED" },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const username = normalizeUsername(body?.username);
+
+    if (!USERNAME_PATTERN.test(username)) {
+      return NextResponse.json(
+        { error: "INVALID_USERNAME" },
+        { status: 400 }
+      );
+    }
+
+    const supabase = getSupabaseServiceClient();
+
+    const { data: existing, error: existingError } =
+      await supabase
+        .from("profiles")
+        .select("user_id")
+        .ilike("username", username)
+        .neq("user_id", user.id)
+        .limit(1)
+        .maybeSingle();
+
+    if (existingError) throw existingError;
+
+    if (existing) {
+      return NextResponse.json(
+        { error: "USERNAME_TAKEN" },
+        { status: 409 }
+      );
+    }
+
+    const now = new Date().toISOString();
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          user_id: user.id,
+          email: user.email ?? null,
+          username,
+          updated_at: now
+        },
+        {
+          onConflict: "user_id"
+        }
+      );
+
+    if (profileError) {
+      if (
+        profileError.code === "23505" ||
+        profileError.message
+          .toLowerCase()
+          .includes("duplicate")
+      ) {
+        return NextResponse.json(
+          { error: "USERNAME_TAKEN" },
+          { status: 409 }
+        );
+      }
+
+      throw profileError;
+    }
+
+    const { error: characterError } = await supabase
+      .from("characters")
+      .update({
+        creator_username: username,
+        updated_at: now
+      })
+      .eq("creator_id", user.id);
+
+    if (characterError) throw characterError;
+
+    const { error: authError } =
+      await supabase.auth.admin.updateUserById(
+        user.id,
+        {
+          user_metadata: {
+            ...(user.user_metadata ?? {}),
+            username
+          }
+        }
+      );
+
+    if (authError) throw authError;
+
+    return NextResponse.json(
+      { username },
+      {
+        headers: {
+          "Cache-Control": "private, no-store"
+        }
+      }
+    );
+  } catch (error) {
+    console.error("My Bond username update failed:", error);
+
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "USERNAME_UPDATE_FAILED"
+      },
+      { status: 500 }
+    );
+  }
+}
+

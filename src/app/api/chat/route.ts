@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getCharacterBySlugFromSupabase } from "@/lib/characters-db";
+import { getCharacterBySlugForUser } from "@/lib/user-characters";
 import { defaultMemory } from "@/lib/memory/defaultMemory";
 import {
   buildChatModePrompt,
@@ -757,7 +757,10 @@ export async function GET(request: Request) {
     );
   }
 
-  const character = await getCharacterBySlugFromSupabase(characterSlug);
+  const character = await getCharacterBySlugForUser(
+    characterSlug,
+    authUser.id
+  );
 
   if (!character) {
     return NextResponse.json(
@@ -838,8 +841,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const character = await getCharacterBySlugFromSupabase(
-    body.data.characterSlug
+  const supabase = getSupabaseServiceClient();
+  const authUser = await getAuthUser(request);
+
+  const character = await getCharacterBySlugForUser(
+    body.data.characterSlug,
+    authUser?.id
   );
 
   if (!character) {
@@ -871,9 +878,6 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-
-  const supabase = getSupabaseServiceClient();
-  const authUser = await getAuthUser(request);
 
   if (!authUser) {
     return NextResponse.json(
