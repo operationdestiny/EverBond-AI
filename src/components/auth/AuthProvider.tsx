@@ -12,11 +12,17 @@ import type { Session, User } from "@supabase/supabase-js";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
+export type AuthModalCharacter = {
+  name: string;
+  image: string;
+};
+
 type AuthContextValue = {
   session: Session | null;
   user: User | null;
   authReady: boolean;
   openAuthModal: () => void;
+  openCharacterAuthModal: (character: AuthModalCharacter) => void;
   closeAuthModal: () => void;
   signOut: () => Promise<void>;
 };
@@ -32,6 +38,8 @@ export function AuthProvider({
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authCharacter, setAuthCharacter] =
+    useState<AuthModalCharacter | null>(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -55,6 +63,7 @@ export function AuthProvider({
 
       if (nextSession) {
         setAuthModalOpen(false);
+        setAuthCharacter(null);
       }
     });
 
@@ -65,11 +74,21 @@ export function AuthProvider({
   }, [supabase]);
 
   const openAuthModal = useCallback(() => {
+    setAuthCharacter(null);
     setAuthModalOpen(true);
   }, []);
 
+  const openCharacterAuthModal = useCallback(
+    (character: AuthModalCharacter) => {
+      setAuthCharacter(character);
+      setAuthModalOpen(true);
+    },
+    []
+  );
+
   const closeAuthModal = useCallback(() => {
     setAuthModalOpen(false);
+    setAuthCharacter(null);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -79,6 +98,7 @@ export function AuthProvider({
 
     setSession(null);
     setAuthModalOpen(false);
+    setAuthCharacter(null);
   }, [supabase]);
 
   const value = useMemo<AuthContextValue>(
@@ -87,6 +107,7 @@ export function AuthProvider({
       user: session?.user ?? null,
       authReady,
       openAuthModal,
+      openCharacterAuthModal,
       closeAuthModal,
       signOut
     }),
@@ -94,6 +115,7 @@ export function AuthProvider({
       authReady,
       closeAuthModal,
       openAuthModal,
+      openCharacterAuthModal,
       session,
       signOut
     ]
@@ -105,6 +127,7 @@ export function AuthProvider({
       <AuthModal
         open={authModalOpen}
         supabase={supabase}
+        character={authCharacter}
         onClose={closeAuthModal}
       />
     </AuthContext.Provider>
