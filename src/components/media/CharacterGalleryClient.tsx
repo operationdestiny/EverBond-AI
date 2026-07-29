@@ -31,6 +31,7 @@ type GalleryData = {
   images: GalleryImage[];
   selectedImageId: string | null;
   limit: number;
+  imageCost: number;
 };
 
 export function CharacterGalleryClient({
@@ -113,6 +114,7 @@ export function CharacterGalleryClient({
   async function generateImage() {
     if (!session?.access_token || !canGenerate) return;
 
+    const requestId = crypto.randomUUID();
     setGenerating(true);
     setPendingCard(true);
     setError("");
@@ -127,6 +129,7 @@ export function CharacterGalleryClient({
             Authorization: `Bearer ${session.access_token}`
           },
           body: JSON.stringify({
+            requestId,
             prompt: prompt.trim()
           })
         }
@@ -136,17 +139,20 @@ export function CharacterGalleryClient({
 
       if (
         response.status === 402 ||
-        payload?.error === "INSUFFICIENT_EVERCOIN"
+        payload?.error === "INSUFFICIENT_EVERCOIN" ||
+        payload?.error === "EVERCOIN_DEBT"
       ) {
         setCoinModal(true);
         return;
       }
 
-      if (
-        response.status === 409 ||
-        payload?.error === "IMAGE_LIMIT_REACHED"
-      ) {
+      if (payload?.error === "IMAGE_LIMIT_REACHED") {
         setError(copy.galleryLimitReached);
+        return;
+      }
+
+      if (payload?.error === "IMAGE_REQUEST_IN_PROGRESS") {
+        setError(copy.generating);
         return;
       }
 
@@ -154,14 +160,18 @@ export function CharacterGalleryClient({
         throw new Error(payload?.message || payload?.error || copy.mediaError);
       }
 
-      setData((current) =>
-        current
-          ? {
-              ...current,
-              images: [payload.image as GalleryImage, ...current.images]
-            }
-          : current
-      );
+      setData((current) => {
+        if (!current) return current;
+        const nextImage = payload.image as GalleryImage;
+        const withoutDuplicate = current.images.filter(
+          (image) => image.id !== nextImage.id
+        );
+
+        return {
+          ...current,
+          images: [nextImage, ...withoutDuplicate]
+        };
+      });
       setPrompt("");
     } catch (generateError) {
       setError(
@@ -358,7 +368,9 @@ export function CharacterGalleryClient({
                       ) : (
                         <ImageIcon size={17} />
                       )}
-                      {generating ? copy.generating : copy.generateImage}
+                      {generating
+                        ? copy.generating
+                        : `${copy.generateImage} · ${data.imageCost} EverCoin`}
                     </button>
 
                     <Link

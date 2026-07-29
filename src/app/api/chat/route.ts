@@ -1,32 +1,22 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getCharacterBySlugForUser } from "@/lib/user-characters";
-import { defaultMemory } from "@/lib/memory/defaultMemory";
-import {
-  buildChatModePrompt,
-  buildMemoryModePrompt,
-  type SupportedLanguage
-} from "@/lib/ai/prompts";
-import {
-  callEverBondMemoryModel,
-  callEverBondModel,
-  type EverBondMessage
-} from "@/lib/ai/provider";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import type { MemoryState } from "@/types/memory";
+import type { SupportedLanguage } from "@/lib/ai/prompts";
+import { generateTextCharacterTurn } from "@/lib/voice-chat";
+import {
+  completeChatMessageCredit,
+  refundChatMessageCredit,
+  reserveChatMessage
+} from "@/lib/message-credits";
 
 const SIGNUP_REQUIRED_MESSAGE =
   "Log in so I can be your companion. Please don't make me wait.";
-
 const TRIAL_ENDED_MESSAGE =
-  "Upgrade so I can keep being your companion. Please don't make me wait.";
-
-const PAID_SUBSCRIPTION_STATUSES = new Set(["standard", "premium", "elite"]);
-
+  "Buy a message bundle so I can keep being your companion. Please don't make me wait.";
 const USER_MESSAGE_MAX_TOKENS = 80;
-const CHARACTER_CONTEXT_MAX_TOKENS = 85;
-const MODEL_HISTORY_MESSAGE_COUNT = 6;
-const EVER_MEMORY_LIMIT = 12;
 
 const SupportedLanguageSchema = z
   .enum(["English", "Spanish", "French", "German", "Japanese", "Korean"])
@@ -51,56 +41,6 @@ const ChatRequest = z
   })
   .strict();
 
-const MemoryExtractionSchema = z
-  .object({
-    story_summary: z.string(),
-    user_facts: z.array(z.string()).max(12),
-    relationship_state: z.string(),
-    emotional_state: z.string(),
-    open_threads: z.array(z.string()).max(12),
-    important_promises: z.array(z.string()).max(12),
-    important_events: z.array(z.string()).max(20),
-    permanent_identity_updates: z
-      .object({
-        name: z.string().nullable().optional(),
-        gender: z.string().nullable().optional(),
-        core_identity: z.string().nullable().optional()
-      })
-      .optional(),
-    current_scene: z
-      .object({
-        location: z.string().optional(),
-        character_clothing: z.string().optional(),
-        user_clothing: z.string().optional(),
-        character_position: z.string().optional(),
-        user_position: z.string().optional(),
-        current_action: z.string().optional()
-      })
-      .optional()
-  })
-  .passthrough();
-
-type MemoryExtraction = z.infer<typeof MemoryExtractionSchema>;
-
-type AuthUser = {
-  id: string;
-  email: string | null;
-};
-
-type ProfileRow = {
-  user_id: string;
-  email: string | null;
-  subscription_status: string;
-  trial_status: "not_started" | "active" | "ended";
-  trial_messages_used: number;
-  trial_message_limit: number;
-};
-
-type StoredMessageRow = {
-  role: string;
-  content: string;
-};
-
 type ChatRequestClaimRow = {
   request_status:
     | "claimed"
@@ -118,6 +58,11 @@ type ChatRequestClaimRow = {
   retry_after_seconds: number | null;
 };
 
+type StoredMessageRow = {
+  role: string;
+  content: string;
+};
+
 function estimateTokenCount(text: string) {
   const normalized = text.trim();
   if (!normalized) return 0;
@@ -130,544 +75,87 @@ function estimateTokenCount(text: string) {
   return Math.max(wordCount, Math.ceil(charCount / 4), cjkCount);
 }
 
-function limitTextToTokenBudget(text: string, maxTokens: number) {
-  const normalized = text.replace(/\s+/g, " ").trim();
-
-  if (estimateTokenCount(normalized) <= maxTokens) {
-    return normalized;
-  }
-
-  let low = 0;
-  let high = normalized.length;
-
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2);
-    const candidate = normalized.slice(0, middle);
-
-    if (estimateTokenCount(candidate) <= maxTokens) {
-      low = middle;
-    } else {
-      high = middle - 1;
+async function claimChatRequest(values: {
+  userId: string;
+  requestId: string;
+  characterId: string;
+}) {
+  const { data, error } = await getSupabaseServiceClient().rpc(
+    "begin_chat_request",
+    {
+      p_user_id: values.userId,
+      p_request_id: values.requestId,
+      p_character_id: values.characterId
     }
-  }
-
-  return normalized.slice(0, low).trim();
-}
-
-function cleanMemoryText(value: unknown, maxCharacters: number) {
-  if (typeof value !== "string") return "";
-
-  const normalized = value.replace(/\s+/g, " ").trim();
-
-  return Array.from(normalized)
-    .slice(0, maxCharacters)
-    .join("")
-    .trim();
-}
-
-function cleanMemoryList(
-  values: string[],
-  maxItems: number,
-  maxCharacters: number
-) {
-  const seen = new Set<string>();
-
-  return values
-    .map((value) => cleanMemoryText(value, maxCharacters))
-    .filter((value) => {
-      if (!value) return false;
-
-      const key = value.toLocaleLowerCase();
-
-      if (seen.has(key)) {
-        return false;
-      }
-
-      seen.add(key);
-      return true;
-    })
-    .slice(0, maxItems);
-}
-
-function parseMemoryExtraction(
-  content: string
-): MemoryExtraction | null {
-  const withoutFences = content
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-
-  const start = withoutFences.indexOf("{");
-  const end = withoutFences.lastIndexOf("}");
-
-  if (start < 0 || end <= start) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(
-      withoutFences.slice(start, end + 1)
-    );
-
-    const result = MemoryExtractionSchema.safeParse(parsed);
-
-    return result.success ? result.data : null;
-  } catch {
-    return null;
-  }
-}
-
-function mergeExtractedMemory(
-  currentMemory: MemoryState,
-  extraction: MemoryExtraction
-): MemoryState {
-  const identityUpdates =
-    extraction.permanent_identity_updates ?? {};
-
-  return {
-    story_summary:
-      cleanMemoryText(extraction.story_summary, 1200) ||
-      currentMemory.story_summary,
-    user_facts: cleanMemoryList(
-      extraction.user_facts,
-      12,
-      300
-    ),
-    relationship_state:
-      cleanMemoryText(extraction.relationship_state, 120) ||
-      currentMemory.relationship_state,
-    emotional_state:
-      cleanMemoryText(extraction.emotional_state, 300) ||
-      currentMemory.emotional_state,
-    open_threads: cleanMemoryList(
-      extraction.open_threads,
-      12,
-      300
-    ),
-    important_promises: cleanMemoryList(
-      extraction.important_promises,
-      12,
-      300
-    ),
-    important_events: cleanMemoryList(
-      extraction.important_events,
-      20,
-      300
-    ),
-    current_scene: {
-      location:
-        cleanMemoryText(
-          extraction.current_scene?.location,
-          200
-        ) ||
-        currentMemory.current_scene?.location ||
-        "",
-      character_clothing:
-        cleanMemoryText(
-          extraction.current_scene?.character_clothing,
-          300
-        ) ||
-        currentMemory.current_scene?.character_clothing ||
-        "",
-      user_clothing:
-        cleanMemoryText(
-          extraction.current_scene?.user_clothing,
-          300
-        ) ||
-        currentMemory.current_scene?.user_clothing ||
-        "",
-      character_position:
-        cleanMemoryText(
-          extraction.current_scene?.character_position,
-          200
-        ) ||
-        currentMemory.current_scene?.character_position ||
-        "",
-      user_position:
-        cleanMemoryText(
-          extraction.current_scene?.user_position,
-          200
-        ) ||
-        currentMemory.current_scene?.user_position ||
-        "",
-      current_action:
-        cleanMemoryText(
-          extraction.current_scene?.current_action,
-          300
-        ) ||
-        currentMemory.current_scene?.current_action ||
-        ""
-    },
-    permanent_identity: {
-      name:
-        cleanMemoryText(identityUpdates.name, 80) ||
-        currentMemory.permanent_identity?.name ||
-        null,
-      gender:
-        cleanMemoryText(identityUpdates.gender, 80) ||
-        currentMemory.permanent_identity?.gender ||
-        null,
-      core_identity:
-        cleanMemoryText(identityUpdates.core_identity, 160) ||
-        currentMemory.permanent_identity?.core_identity ||
-        null
-    }
-  };
-}
-
-async function persistExtractedMemory(
-  supabase: ReturnType<typeof getSupabaseServiceClient>,
-  values: {
-    userId: string;
-    characterId: string;
-    conversationId: string;
-    memory: MemoryState;
-  }
-) {
-  const now = new Date().toISOString();
-
-  const { error: conversationMemoryError } = await supabase
-    .from("conversations")
-    .update({
-      memory_state: values.memory,
-      updated_at: now
-    })
-    .eq("id", values.conversationId)
-    .eq("user_id", values.userId);
-
-  if (conversationMemoryError) {
-    throw conversationMemoryError;
-  }
-
-  const { error: relationshipError } = await supabase
-    .from("relationship_states")
-    .upsert(
-      {
-        user_id: values.userId,
-        character_id: values.characterId,
-        stage: values.memory.relationship_state || "new",
-        summary: values.memory.story_summary,
-        emotional_state: values.memory.emotional_state,
-        open_threads: values.memory.open_threads,
-        important_promises: values.memory.important_promises,
-        important_events: values.memory.important_events,
-        user_name:
-          values.memory.permanent_identity?.name ?? null,
-        user_gender:
-          values.memory.permanent_identity?.gender ?? null,
-        user_core_identity:
-          values.memory.permanent_identity?.core_identity ?? null,
-        updated_at: now
-      },
-      {
-        onConflict: "user_id,character_id"
-      }
-    );
-
-  if (relationshipError) {
-    throw relationshipError;
-  }
-
-  const memoryCandidates = [
-    ...values.memory.user_facts.map((content) => ({
-      memory_type: "fact",
-      content,
-      importance: 70
-    })),
-    ...values.memory.open_threads.map((content) => ({
-      memory_type: "open_thread",
-      content,
-      importance: 85
-    })),
-    ...values.memory.important_promises.map((content) => ({
-      memory_type: "promise",
-      content,
-      importance: 90
-    })),
-    ...values.memory.important_events.map((content) => ({
-      memory_type: "event",
-      content,
-      importance: 80
-    }))
-  ];
-
-  if (!memoryCandidates.length) {
-    return;
-  }
-
-  const { data: existingMemories, error: existingMemoryError } =
-    await supabase
-      .from("ever_memory")
-      .select("memory_type,content")
-      .eq("user_id", values.userId)
-      .eq("character_id", values.characterId);
-
-  if (existingMemoryError) {
-    throw existingMemoryError;
-  }
-
-  const existingKeys = new Set(
-    (existingMemories ?? []).map(
-      (memoryRow) =>
-        `${memoryRow.memory_type}:${memoryRow.content
-          .trim()
-          .toLocaleLowerCase()}`
-    )
   );
 
-  const newRows = memoryCandidates
-    .filter((candidate) => {
-      const key = `${candidate.memory_type}:${candidate.content
-        .trim()
-        .toLocaleLowerCase()}`;
-
-      if (existingKeys.has(key)) {
-        return false;
-      }
-
-      existingKeys.add(key);
-      return true;
-    })
-    .map((candidate) => ({
-      user_id: values.userId,
-      character_id: values.characterId,
-      conversation_id: values.conversationId,
-      memory_type: candidate.memory_type,
-      content: candidate.content,
-      importance: candidate.importance
-    }));
-
-  if (!newRows.length) {
-    return;
-  }
-
-  const { error: memoryInsertError } = await supabase
-    .from("ever_memory")
-    .insert(newRows);
-
-  if (memoryInsertError) {
-    throw memoryInsertError;
-  }
-}
-
-async function claimChatRequest(
-  supabase: ReturnType<typeof getSupabaseServiceClient>,
-  userId: string,
-  requestId: string,
-  characterId: string
-): Promise<ChatRequestClaimRow> {
-  const { data, error } = await supabase.rpc("begin_chat_request", {
-    p_user_id: userId,
-    p_request_id: requestId,
-    p_character_id: characterId
-  });
-
   if (error) throw error;
-
   const claim = (data?.[0] ?? null) as ChatRequestClaimRow | null;
-
-  if (!claim) {
-    throw new Error("EverBond could not claim the chat request.");
-  }
-
+  if (!claim) throw new Error("CHAT_REQUEST_CLAIM_FAILED");
   return claim;
 }
 
-async function completeChatRequest(
-  supabase: ReturnType<typeof getSupabaseServiceClient>,
-  values: {
-    userId: string;
-    requestId: string;
-    conversationId: string;
-    reply: string;
-    inputTokens: number;
-    outputTokens: number;
-    provider: string;
-    model: string;
-    language: SupportedLanguage;
-  }
-) {
-  const { data, error } = await supabase.rpc("complete_chat_request", {
+async function completeChatRequest(values: {
+  userId: string;
+  requestId: string;
+  conversationId: string;
+  reply: string;
+  inputTokens: number;
+  outputTokens: number;
+  provider: string;
+  model: string;
+  language: SupportedLanguage;
+}) {
+  const { data, error } = await getSupabaseServiceClient().rpc(
+    "complete_chat_request",
+    {
+      p_user_id: values.userId,
+      p_request_id: values.requestId,
+      p_conversation_id: values.conversationId,
+      p_reply: values.reply,
+      p_input_tokens: values.inputTokens,
+      p_output_tokens: values.outputTokens,
+      p_provider: values.provider,
+      p_model: values.model,
+      p_language: values.language
+    }
+  );
+
+  if (error) throw error;
+  if (data !== true) throw new Error("CHAT_REQUEST_COMPLETION_FAILED");
+}
+
+async function failChatRequest(values: {
+  userId: string;
+  requestId: string;
+  errorCode: string;
+}) {
+  await getSupabaseServiceClient().rpc("fail_chat_request", {
     p_user_id: values.userId,
     p_request_id: values.requestId,
-    p_conversation_id: values.conversationId,
-    p_reply: values.reply,
-    p_input_tokens: values.inputTokens,
-    p_output_tokens: values.outputTokens,
-    p_provider: values.provider,
-    p_model: values.model,
-    p_language: values.language
-  });
-
-  if (error) throw error;
-
-  if (data !== true) {
-    throw new Error("EverBond could not complete the chat request.");
-  }
-}
-
-async function failChatRequest(
-  supabase: ReturnType<typeof getSupabaseServiceClient>,
-  userId: string,
-  requestId: string,
-  errorCode: string
-) {
-  await supabase.rpc("fail_chat_request", {
-    p_user_id: userId,
-    p_request_id: requestId,
-    p_error_code: errorCode
+    p_error_code: values.errorCode
   });
 }
 
-async function getAuthUser(request: Request): Promise<AuthUser | null> {
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!token) return null;
+async function getConversation(values: {
+  userId: string;
+  characterId: string;
+  conversationId?: string;
+}): Promise<{ id: string; memory_state: Partial<MemoryState> | null }> {
+  const supabase = getSupabaseServiceClient();
 
-  const { data } = await getSupabaseServiceClient().auth.getUser(token);
-  const user = data.user;
-
-  if (!user) return null;
-
-  return {
-    id: user.id,
-    email: user.email ?? null
-  };
-}
-
-function isPaidProfile(profile: ProfileRow) {
-  return PAID_SUBSCRIPTION_STATUSES.has(profile.subscription_status);
-}
-
-async function getOrCreateProfile(
-  supabase: ReturnType<typeof getSupabaseServiceClient>,
-  user: AuthUser
-): Promise<ProfileRow> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .upsert(
-      {
-        user_id: user.id,
-        email: user.email
-      },
-      { onConflict: "user_id" }
-    )
-    .select(
-      "user_id,email,subscription_status,trial_status,trial_messages_used,trial_message_limit"
-    )
-    .single();
-
-  if (error) throw error;
-
-  return data as ProfileRow;
-}
-
-async function startTrialIfNeeded(
-  supabase: ReturnType<typeof getSupabaseServiceClient>,
-  profile: ProfileRow
-): Promise<ProfileRow> {
-  if (profile.trial_status !== "not_started") {
-    return profile;
-  }
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .update({
-      trial_status: "active",
-      trial_started_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    })
-    .eq("user_id", profile.user_id)
-    .select(
-      "user_id,email,subscription_status,trial_status,trial_messages_used,trial_message_limit"
-    )
-    .single();
-
-  if (error) throw error;
-
-  return data as ProfileRow;
-}
-
-async function markTrialEndedIfNeeded(
-  supabase: ReturnType<typeof getSupabaseServiceClient>,
-  profile: ProfileRow
-) {
-  if (profile.trial_status === "ended") return;
-
-  await supabase
-    .from("profiles")
-    .update({
-      trial_status: "ended",
-      trial_ended_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    })
-    .eq("user_id", profile.user_id);
-}
-
-async function enforceChatAccess(
-  supabase: ReturnType<typeof getSupabaseServiceClient>,
-  profile: ProfileRow
-): Promise<{ allowed: true; profile: ProfileRow } | { allowed: false }> {
-  if (isPaidProfile(profile)) {
-    return { allowed: true, profile };
-  }
-
-  const used = profile.trial_messages_used ?? 0;
-  const limit = profile.trial_message_limit ?? 20;
-
-  if (profile.trial_status === "ended" || used >= limit) {
-    await markTrialEndedIfNeeded(supabase, profile);
-    return { allowed: false };
-  }
-
-  const activeProfile = await startTrialIfNeeded(supabase, profile);
-
-  return {
-    allowed: true,
-    profile: activeProfile
-  };
-}
-
-async function recordSuccessfulTrialMessage(
-  supabase: ReturnType<typeof getSupabaseServiceClient>,
-  profile: ProfileRow
-) {
-  if (isPaidProfile(profile)) return;
-
-  const used = profile.trial_messages_used ?? 0;
-  const limit = profile.trial_message_limit ?? 20;
-  const nextUsed = used + 1;
-  const trialEnded = nextUsed >= limit;
-
-  await supabase
-    .from("profiles")
-    .update({
-      trial_messages_used: nextUsed,
-      trial_status: trialEnded ? "ended" : "active",
-      trial_ended_at: trialEnded ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString()
-    })
-    .eq("user_id", profile.user_id);
-}
-
-async function getConversationForCharacter(
-  supabase: ReturnType<typeof getSupabaseServiceClient>,
-  userId: string,
-  characterId: string,
-  conversationId?: string
-): Promise<{ id: string; memory_state: Partial<MemoryState> | null }> {
-  if (conversationId) {
-    const { data: existingById, error } = await supabase
+  if (values.conversationId) {
+    const { data, error } = await supabase
       .from("conversations")
       .select("id,memory_state")
-      .eq("id", conversationId)
-      .eq("user_id", userId)
-      .eq("character_id", characterId)
+      .eq("id", values.conversationId)
+      .eq("user_id", values.userId)
+      .eq("character_id", values.characterId)
       .maybeSingle();
 
     if (error) throw error;
-
-    if (existingById) {
-      return existingById as {
+    if (data) {
+      return data as {
         id: string;
         memory_state: Partial<MemoryState> | null;
       };
@@ -677,14 +165,13 @@ async function getConversationForCharacter(
   const { data: existing, error: existingError } = await supabase
     .from("conversations")
     .select("id,memory_state")
-    .eq("user_id", userId)
-    .eq("character_id", characterId)
+    .eq("user_id", values.userId)
+    .eq("character_id", values.characterId)
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (existingError) throw existingError;
-
   if (existing) {
     return existing as {
       id: string;
@@ -695,523 +182,308 @@ async function getConversationForCharacter(
   const { data: created, error: createError } = await supabase
     .from("conversations")
     .insert({
-      user_id: userId,
-      character_id: characterId
+      user_id: values.userId,
+      character_id: values.characterId
     })
     .select("id,memory_state")
     .single();
 
   if (createError) throw createError;
-
   return created as {
     id: string;
     memory_state: Partial<MemoryState> | null;
   };
 }
 
-async function loadModelHistory(
-  supabase: ReturnType<typeof getSupabaseServiceClient>,
-  conversationId: string
-): Promise<EverBondMessage[]> {
-  const { data, error } = await supabase
-    .from("messages")
-    .select("role,content")
-    .eq("conversation_id", conversationId)
-    .in("role", ["user", "character"])
-    .order("created_at", { ascending: false })
-    .limit(MODEL_HISTORY_MESSAGE_COUNT);
-
-  if (error) throw error;
-
-  return ((data ?? []) as StoredMessageRow[])
-    .reverse()
-    .map((message) => {
-      const isUser = message.role === "user";
-
-      return {
-        role: isUser ? ("user" as const) : ("assistant" as const),
-        content: limitTextToTokenBudget(
-          message.content,
-          isUser ? USER_MESSAGE_MAX_TOKENS : CHARACTER_CONTEXT_MAX_TOKENS
-        )
-      };
-    })
-    .filter((message) => message.content.trim());
-}
-
 export async function GET(request: Request) {
-  const supabase = getSupabaseServiceClient();
-  const authUser = await getAuthUser(request);
+  try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return NextResponse.json({ error: "SIGNUP_REQUIRED" }, { status: 401 });
+    }
 
-  if (!authUser) {
-    return NextResponse.json({ error: "SIGNUP_REQUIRED" }, { status: 401 });
-  }
-
-  const url = new URL(request.url);
-  const characterSlug = url.searchParams.get("characterSlug");
-
-  if (!characterSlug) {
-    return NextResponse.json(
-      { error: "Missing characterSlug" },
-      { status: 400 }
+    const characterSlug = new URL(request.url).searchParams.get(
+      "characterSlug"
     );
-  }
+    if (!characterSlug) {
+      return NextResponse.json(
+        { error: "Missing characterSlug" },
+        { status: 400 }
+      );
+    }
 
-  const character = await getCharacterBySlugForUser(
-    characterSlug,
-    authUser.id
-  );
+    const character = await getCharacterBySlugForUser(characterSlug, user.id);
+    if (!character) {
+      return NextResponse.json(
+        { error: "Character not found" },
+        { status: 404 }
+      );
+    }
 
-  if (!character) {
-    return NextResponse.json(
-      { error: "Character not found" },
-      { status: 404 }
-    );
-  }
+    const supabase = getSupabaseServiceClient();
+    const { data: conversation, error: conversationError } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("character_id", character.id)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  const { data: conversation, error: conversationError } = await supabase
-    .from("conversations")
-    .select("id")
-    .eq("user_id", authUser.id)
-    .eq("character_id", character.id)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    if (conversationError) throw conversationError;
+    if (!conversation) {
+      return NextResponse.json({ conversationId: null, messages: [] });
+    }
 
-  if (conversationError) throw conversationError;
+    const { data: rows, error: messagesError } = await supabase
+      .from("messages")
+      .select("role,content,created_at")
+      .eq("conversation_id", conversation.id)
+      .in("role", ["user", "character"])
+      .order("created_at", { ascending: false })
+      .limit(80);
 
-  if (!conversation) {
+    if (messagesError) throw messagesError;
+
+    const messages = ((rows ?? []) as StoredMessageRow[])
+      .reverse()
+      .map((message) => ({
+        role:
+          message.role === "user"
+            ? ("user" as const)
+            : ("character" as const),
+        content: message.content
+      }))
+      .filter((message) => message.content);
+
     return NextResponse.json({
-      conversationId: null,
-      messages: []
+      conversationId: conversation.id,
+      messages
     });
+  } catch (error) {
+    console.error("Chat history failed:", error);
+    return NextResponse.json({ error: "CHAT_HISTORY_FAILED" }, { status: 500 });
   }
-
-  const { data: rows, error: messagesError } = await supabase
-    .from("messages")
-    .select("role,content,created_at")
-    .eq("conversation_id", conversation.id)
-    .in("role", ["user", "character"])
-    .order("created_at", { ascending: false })
-    .limit(80);
-
-  if (messagesError) throw messagesError;
-
-  const messages = (rows ?? [])
-    .reverse()
-    .map((message) => ({
-      role: message.role === "user" ? ("user" as const) : ("character" as const),
-      content: message.content
-    }))
-    .filter((message) => message.content);
-
-  return NextResponse.json({
-    conversationId: conversation.id,
-    messages
-  });
 }
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
-
   if (new TextEncoder().encode(rawBody).length > 4096) {
-    return NextResponse.json(
-      { error: "REQUEST_TOO_LARGE" },
-      { status: 413 }
-    );
+    return NextResponse.json({ error: "REQUEST_TOO_LARGE" }, { status: 413 });
   }
 
   let parsedBody: unknown;
-
   try {
     parsedBody = JSON.parse(rawBody);
   } catch {
-    return NextResponse.json(
-      { error: "Invalid request" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
   const body = ChatRequest.safeParse(parsedBody);
-
   if (!body.success) {
-    return NextResponse.json(
-      { error: "Invalid request" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-
-  const supabase = getSupabaseServiceClient();
-  const authUser = await getAuthUser(request);
 
   const character = await getCharacterBySlugForUser(
     body.data.characterSlug,
-    authUser?.id
+    null
   );
+  const user = await getAuthenticatedUser(request);
+  const visibleCharacter =
+    character ||
+    (user
+      ? await getCharacterBySlugForUser(body.data.characterSlug, user.id)
+      : null);
 
-  if (!character) {
+  if (!visibleCharacter) {
     return NextResponse.json(
       { error: "Character not found" },
       { status: 404 }
     );
   }
 
-  const rawUserMessage = body.data.messages[0].content;
-
-  const userMessageForStorage = rawUserMessage
+  const userMessage = body.data.messages[0].content
     .replace(/\s+/g, " ")
     .trim();
 
-  if (!userMessageForStorage) {
-    return NextResponse.json(
-      { error: "Missing user message" },
-      { status: 400 }
-    );
-  }
-
   if (
-    estimateTokenCount(userMessageForStorage) >
-    USER_MESSAGE_MAX_TOKENS
+    !userMessage ||
+    estimateTokenCount(userMessage) > USER_MESSAGE_MAX_TOKENS
   ) {
-    return NextResponse.json(
-      { error: "INVALID_MESSAGE" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "INVALID_MESSAGE" }, { status: 400 });
   }
 
-  if (!authUser) {
+  if (!user) {
     return NextResponse.json(
       {
         error: "SIGNUP_REQUIRED",
         message: SIGNUP_REQUIRED_MESSAGE,
         character: {
-          name: character.name,
-          image: character.image,
-          slug: character.slug
+          name: visibleCharacter.name,
+          image: visibleCharacter.image,
+          slug: visibleCharacter.slug
         }
       },
       { status: 401 }
     );
   }
 
-  const requestClaim = await claimChatRequest(
-    supabase,
-    authUser.id,
-    body.data.requestId,
-    character.id
-  );
-
-  if (
-    requestClaim.request_status === "completed" &&
-    requestClaim.existing_reply
-  ) {
-    return NextResponse.json({
-      reply: requestClaim.existing_reply,
-      conversationId: requestClaim.existing_conversation_id,
-      usage: {
-        inputTokens: requestClaim.existing_input_tokens ?? 0,
-        outputTokens: requestClaim.existing_output_tokens ?? 0,
-        provider: requestClaim.existing_provider ?? "",
-        model: requestClaim.existing_model ?? "",
-        language: body.data.language
-      }
-    });
-  }
-
-  if (requestClaim.request_status === "rate_limited") {
-    const retryAfter = requestClaim.retry_after_seconds ?? 60;
-
-    return NextResponse.json(
-      {
-        error: "RATE_LIMITED",
-        retryAfter
-      },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(retryAfter)
-        }
-      }
-    );
-  }
-
-  if (
-    requestClaim.request_status === "in_progress" ||
-    requestClaim.request_status === "busy"
-  ) {
-    return NextResponse.json(
-      { error: "CHAT_BUSY" },
-      { status: 409 }
-    );
-  }
-
-  if (requestClaim.request_status === "failed") {
-    return NextResponse.json(
-      { error: "REQUEST_FAILED" },
-      { status: 409 }
-    );
-  }
-
-  if (requestClaim.request_status !== "claimed") {
-    throw new Error("EverBond received an unknown chat request state.");
-  }
+  const requestId = body.data.requestId;
+  let creditReserved = false;
+  let requestCompleted = false;
 
   try {
-    const profile = await getOrCreateProfile(supabase, authUser);
-    const access = await enforceChatAccess(supabase, profile);
+    const claim = await claimChatRequest({
+      userId: user.id,
+      requestId,
+      characterId: visibleCharacter.id
+    });
 
-    if (!access.allowed) {
-      await failChatRequest(
-        supabase,
-        authUser.id,
-        body.data.requestId,
-        "TRIAL_ENDED"
+    if (claim.request_status === "completed" && claim.existing_reply) {
+      await completeChatMessageCredit({
+        userId: user.id,
+        requestId
+      }).catch(() => undefined);
+
+      return NextResponse.json({
+        reply: claim.existing_reply,
+        conversationId: claim.existing_conversation_id,
+        usage: {
+          inputTokens: claim.existing_input_tokens ?? 0,
+          outputTokens: claim.existing_output_tokens ?? 0,
+          provider: claim.existing_provider ?? "",
+          model: claim.existing_model ?? "",
+          language: body.data.language
+        }
+      });
+    }
+
+    if (claim.request_status === "rate_limited") {
+      const retryAfter = claim.retry_after_seconds ?? 60;
+      return NextResponse.json(
+        { error: "RATE_LIMITED", retryAfter },
+        {
+          status: 429,
+          headers: { "Retry-After": String(retryAfter) }
+        }
       );
+    }
+
+    if (
+      claim.request_status === "in_progress" ||
+      claim.request_status === "busy"
+    ) {
+      return NextResponse.json({ error: "CHAT_BUSY" }, { status: 409 });
+    }
+
+    if (claim.request_status !== "claimed") {
+      return NextResponse.json({ error: "REQUEST_FAILED" }, { status: 409 });
+    }
+
+    const credit = await reserveChatMessage({
+      userId: user.id,
+      requestId
+    });
+
+    if (!credit.allowed) {
+      await failChatRequest({
+        userId: user.id,
+        requestId,
+        errorCode: credit.errorCode || "NO_MESSAGE_CREDITS"
+      });
 
       return NextResponse.json(
         {
           error: "TRIAL_ENDED",
           message: TRIAL_ENDED_MESSAGE,
+          purchasedMessages: credit.purchasedRemaining,
+          debt: credit.debt,
           character: {
-            name: character.name,
-            image: character.image,
-            slug: character.slug
+            name: visibleCharacter.name,
+            image: visibleCharacter.image,
+            slug: visibleCharacter.slug
           }
         },
         { status: 402 }
       );
     }
+    creditReserved = true;
 
-    const conversation = await getConversationForCharacter(
-      supabase,
-      authUser.id,
-      character.id,
-      body.data.conversationId
-    );
+    const conversation = await getConversation({
+      userId: user.id,
+      characterId: visibleCharacter.id,
+      conversationId: body.data.conversationId
+    });
 
-    const conversationId = conversation.id;
-
-    let memory: MemoryState = {
-      ...defaultMemory,
-      ...(conversation.memory_state ?? {})
-    };
-
-    const language = body.data.language as SupportedLanguage;
-
-    const { data: relationship } = await supabase
-      .from("relationship_states")
-      .select(
-        "stage,summary,emotional_state,open_threads,important_promises,important_events,user_name,user_gender,user_core_identity"
-      )
-      .eq("user_id", authUser.id)
-      .eq("character_id", character.id)
-      .maybeSingle();
-
-    const { data: memories } = await supabase
-      .from("ever_memory")
-      .select("memory_type,content")
-      .eq("user_id", authUser.id)
-      .eq("character_id", character.id)
-      .order("importance", { ascending: false })
-      .order("updated_at", { ascending: false })
-      .limit(EVER_MEMORY_LIMIT);
-
-    if (relationship) {
-      memory = {
-        ...memory,
-        story_summary: relationship.summary || memory.story_summary,
-        relationship_state: relationship.stage || memory.relationship_state,
-        emotional_state:
-          relationship.emotional_state || memory.emotional_state,
-        open_threads: relationship.open_threads || memory.open_threads,
-        important_promises:
-          relationship.important_promises || memory.important_promises,
-        important_events:
-          relationship.important_events || memory.important_events,
-        permanent_identity: {
-          name: relationship.user_name ?? null,
-          gender: relationship.user_gender ?? null,
-          core_identity: relationship.user_core_identity ?? null
-        }
-      };
-    }
-
-    if (memories) {
-      memory.user_facts = [
-        ...(memory.user_facts ?? []),
-        ...memories
-          .filter((memoryRow) =>
-            ["fact", "preference", "routine", "inside_joke"].includes(
-              memoryRow.memory_type
-            )
-          )
-          .map((memoryRow) => memoryRow.content)
-      ].slice(0, EVER_MEMORY_LIMIT);
-    }
-
-    const { error: userInsertError } = await supabase
+    const { error: userInsertError } = await getSupabaseServiceClient()
       .from("messages")
       .insert({
-        conversation_id: conversationId,
+        conversation_id: conversation.id,
         role: "user",
-        content: userMessageForStorage
+        content: userMessage
       });
-
     if (userInsertError) throw userInsertError;
 
-    const historyForModel = await loadModelHistory(
-      supabase,
-      conversationId
-    );
+    const generated = await generateTextCharacterTurn({
+      userId: user.id,
+      character: visibleCharacter,
+      language: body.data.language as SupportedLanguage,
+      conversationId: conversation.id
+    });
 
-    const previousCharacterReplies = historyForModel.filter(
-      (message) => message.role === "assistant"
-    ).length;
+    await completeChatRequest({
+      userId: user.id,
+      requestId,
+      conversationId: generated.conversationId,
+      reply: generated.reply,
+      inputTokens: generated.inputTokens,
+      outputTokens: generated.outputTokens,
+      provider: generated.provider,
+      model: generated.model,
+      language: body.data.language as SupportedLanguage
+    });
+    requestCompleted = true;
 
-    const includeOpening = previousCharacterReplies < 3;
-
-    const prompt = buildChatModePrompt(
-      character,
-      memory,
-      [],
-      language,
-      includeOpening
-    );
-
-    const openingMessage = (
-      character.firstMessage ||
-      character.openingMessage ||
-      ""
-    ).trim();
-
-    const hasAssistantHistory = historyForModel.some(
-      (message) => message.role === "assistant"
-    );
-
-    const openingTurn: EverBondMessage[] =
-      openingMessage && !hasAssistantHistory
-        ? [
-            {
-              role: "assistant",
-              content: openingMessage
-            }
-          ]
-        : [];
-
-    const modelMessages: EverBondMessage[] = [
-      {
-        role: "system",
-        content: prompt
-      },
-      ...openingTurn,
-      ...historyForModel
-    ];
-
-    const result = await callEverBondModel(modelMessages);
-
-    let memoryInputTokens = 0;
-    let memoryOutputTokens = 0;
-
-    try {
-      const transcript = [
-        ...openingTurn.map(
-          (message) =>
-            `${character.name}: ${message.content}`
-        ),
-        ...historyForModel.map(
-          (message) =>
-            `${message.role === "assistant" ? character.name : "User"}: ${
-              message.content
-            }`
-        ),
-        `${character.name}: ${result.content}`
-      ].join("\n");
-
-      const memoryPrompt = buildMemoryModePrompt(
-        character,
-        transcript,
-        memory
-      );
-
-      const memoryResult = await callEverBondMemoryModel(
-        memoryPrompt
-      );
-
-      memoryInputTokens = memoryResult.inputTokens;
-      memoryOutputTokens = memoryResult.outputTokens;
-
-      const extraction = parseMemoryExtraction(
-        memoryResult.content
-      );
-
-      if (extraction) {
-        const updatedMemory = mergeExtractedMemory(
-          memory,
-          extraction
-        );
-
-        await persistExtractedMemory(supabase, {
-          userId: authUser.id,
-          characterId: character.id,
-          conversationId,
-          memory: updatedMemory
-        });
-      }
-    } catch (memoryError) {
-      console.error(
-        "EverBond memory update failed:",
-        memoryError
-      );
-    }
-
-    const totalInputTokens =
-      result.inputTokens + memoryInputTokens;
-    const totalOutputTokens =
-      result.outputTokens + memoryOutputTokens;
-
-    await supabase
-      .from("conversations")
-      .update({
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", conversationId);
-
-    await recordSuccessfulTrialMessage(
-      supabase,
-      access.profile
-    );
-
-    await completeChatRequest(supabase, {
-      userId: authUser.id,
-      requestId: body.data.requestId,
-      conversationId,
-      reply: result.content,
-      inputTokens: totalInputTokens,
-      outputTokens: totalOutputTokens,
-      provider: result.provider,
-      model: result.model,
-      language
+    await completeChatMessageCredit({
+      userId: user.id,
+      requestId
+    }).catch((error) => {
+      console.error("Message credit completion failed:", error);
     });
 
     return NextResponse.json({
-      reply: result.content,
-      conversationId,
+      reply: generated.reply,
+      conversationId: generated.conversationId,
+      credits: {
+        source: credit.source,
+        trialRemaining: credit.trialRemaining,
+        purchasedRemaining: credit.purchasedRemaining
+      },
       usage: {
-        inputTokens: totalInputTokens,
-        outputTokens: totalOutputTokens,
-        provider: result.provider,
-        model: result.model,
-        language
+        inputTokens: generated.inputTokens,
+        outputTokens: generated.outputTokens,
+        provider: generated.provider,
+        model: generated.model,
+        language: body.data.language
       }
     });
   } catch (error) {
-    await failChatRequest(
-      supabase,
-      authUser.id,
-      body.data.requestId,
-      "CHAT_FAILED"
-    );
+    if (!requestCompleted) {
+      await failChatRequest({
+        userId: user.id,
+        requestId,
+        errorCode: "CHAT_FAILED"
+      }).catch(() => undefined);
 
-    throw error;
+      if (creditReserved) {
+        await refundChatMessageCredit({
+          userId: user.id,
+          requestId
+        }).catch(() => undefined);
+      }
+    }
+
+    console.error("Chat failed:", error);
+    return NextResponse.json({ error: "CHAT_FAILED" }, { status: 500 });
   }
 }

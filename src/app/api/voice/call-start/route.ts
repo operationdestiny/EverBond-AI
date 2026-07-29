@@ -2,8 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getCharacterVoiceConfig } from "@/lib/character-voice";
-import { chargeVoiceCallMinute } from "@/lib/evercoin";
+import {
+  everCoinCallCostPerMinute,
+  startVoiceCall
+} from "@/lib/evercoin";
 import { getCharacterBySlugForUser } from "@/lib/user-characters";
+import { removeEndedCallAudio, voiceCallLimits } from "@/lib/voice-call";
+
+export const runtime = "nodejs";
 
 const Body = z
   .object({
@@ -11,46 +17,22 @@ const Body = z
   })
   .strict();
 
-function callCostPerMinute() {
-  return Math.max(
-    Math.trunc(
-      Number(
-        process.env.EVERCOIN_CALL_COST_PER_MINUTE ??
-          process.env.EVERCOIN_CALL_START_COST ??
-          0
-      ) || 0
-    ),
-    0
-  );
-}
-
 export async function POST(request: Request) {
   try {
     const user = await getAuthenticatedUser(request);
-
     if (!user) {
-      return NextResponse.json(
-        { error: "SIGNUP_REQUIRED" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "SIGNUP_REQUIRED" }, { status: 401 });
     }
 
-    const parsed = Body.safeParse(
-      await request.json().catch(() => null)
-    );
-
+    const parsed = Body.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_REQUEST" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
     }
 
     const character = await getCharacterBySlugForUser(
       parsed.data.characterSlug,
       user.id
     );
-
     if (!character) {
       return NextResponse.json(
         { error: "CHARACTER_NOT_FOUND" },
@@ -72,49 +54,59 @@ export async function POST(request: Request) {
       );
     }
 
-    const callId = crypto.randomUUID();
-    const cost = callCostPerMinute();
-    const result = await chargeVoiceCallMinute({
+    const limits = voiceCallLimits();
+    const cost = everCoinCallCostPerMinute();
+    const result = await startVoiceCall({
       userId: user.id,
-      callId,
       characterId: character.id,
-      minuteIndex: 1,
-      amount: cost
+      amount: cost,
+      maxMinutes: limits.maxMinutes
     });
 
-    if (!result.charged) {
+    if (!result.started || !result.callId) {
+      const insufficient =
+        result.errorCode === "INSUFFICIENT_EVERCOIN" ||
+        result.errorCode === "EVERCOIN_DEBT";
+
       return NextResponse.json(
         {
-          error: "INSUFFICIENT_EVERCOIN",
+          error: result.errorCode || "VOICE_CALL_START_FAILED",
           balance: result.balance,
+          debt: result.debt,
           required: cost
         },
-        { status: 402 }
+        { status: insufficient ? 402 : 409 }
       );
     }
+
+    await removeEndedCallAudio(user.id).catch((cleanupError) => {
+      console.error("Old voice audio cleanup failed:", cleanupError);
+    });
 
     return NextResponse.json(
       {
         ok: true,
-        callId,
-        minuteIndex: 1,
+        callId: result.callId,
+        startedAt: result.startedAt,
+        paidThrough: result.paidThrough,
+        maxEndsAt: result.maxEndsAt,
         charged: cost,
-        balance: result.balance
-      },
-      {
-        headers: {
-          "Cache-Control": "private, no-store"
+        balance: result.balance,
+        costPerMinute: cost,
+        limits: {
+          maxMinutes: limits.maxMinutes,
+          idleTimeoutSeconds: limits.idleTimeoutSeconds,
+          maxAudioSeconds: limits.maxAudioSeconds,
+          maxTurnsPerMinute: limits.maxTurnsPerMinute,
+          maxTtsCharactersPerMinute: limits.maxTtsCharactersPerMinute
         }
-      }
+      },
+      { headers: { "Cache-Control": "private, no-store" } }
     );
   } catch (error) {
+    console.error("Voice call start failed:", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "VOICE_CALL_START_FAILED"
-      },
+      { error: "VOICE_CALL_START_FAILED" },
       { status: 500 }
     );
   }

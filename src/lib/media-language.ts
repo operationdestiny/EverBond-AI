@@ -30,6 +30,10 @@ export type MediaCopy = {
   microphoneDenied: string;
   voiceNotConfigured: string;
   callBillingFailed: string;
+  minute: string;
+  callLimitReached: string;
+  callIdleEnded: string;
+  callRateLimited: string;
   mediaError: string;
 };
 
@@ -66,6 +70,10 @@ export const MEDIA_COPY: Record<LanguageCode, MediaCopy> = {
     microphoneDenied: "Microphone permission is required for voice calls.",
     voiceNotConfigured: "This companion’s voice has not been assigned yet.",
     callBillingFailed: "The call ended because the next minute could not be charged.",
+    minute: "minute",
+    callLimitReached: "The maximum call length has been reached.",
+    callIdleEnded: "The call ended after being idle.",
+    callRateLimited: "Please wait a moment before speaking again.",
     mediaError: "The request could not be completed."
   },
   ES: {
@@ -100,6 +108,10 @@ export const MEDIA_COPY: Record<LanguageCode, MediaCopy> = {
     microphoneDenied: "Se necesita permiso para usar el micrófono en las llamadas de voz.",
     voiceNotConfigured: "La voz de este compañero todavía no ha sido asignada.",
     callBillingFailed: "La llamada terminó porque no se pudo cobrar el siguiente minuto.",
+    minute: "minuto",
+    callLimitReached: "Se alcanzó la duración máxima de la llamada.",
+    callIdleEnded: "La llamada terminó por inactividad.",
+    callRateLimited: "Espera un momento antes de volver a hablar.",
     mediaError: "No se pudo completar la solicitud."
   },
   FR: {
@@ -134,6 +146,10 @@ export const MEDIA_COPY: Record<LanguageCode, MediaCopy> = {
     microphoneDenied: "L’autorisation du microphone est nécessaire pour les appels vocaux.",
     voiceNotConfigured: "La voix de ce compagnon n’a pas encore été attribuée.",
     callBillingFailed: "L’appel a pris fin, car la minute suivante n’a pas pu être débitée.",
+    minute: "minute",
+    callLimitReached: "La durée maximale de l’appel a été atteinte.",
+    callIdleEnded: "L’appel s’est terminé après une période d’inactivité.",
+    callRateLimited: "Veuillez patienter avant de reparler.",
     mediaError: "La demande n’a pas pu être effectuée."
   },
   DE: {
@@ -168,6 +184,10 @@ export const MEDIA_COPY: Record<LanguageCode, MediaCopy> = {
     microphoneDenied: "Für Sprachanrufe ist die Mikrofonberechtigung erforderlich.",
     voiceNotConfigured: "Diesem Begleiter wurde noch keine Stimme zugewiesen.",
     callBillingFailed: "Der Anruf wurde beendet, weil die nächste Minute nicht abgerechnet werden konnte.",
+    minute: "Minute",
+    callLimitReached: "Die maximale Anrufdauer wurde erreicht.",
+    callIdleEnded: "Der Anruf wurde wegen Inaktivität beendet.",
+    callRateLimited: "Bitte warte einen Moment, bevor du erneut sprichst.",
     mediaError: "Die Anfrage konnte nicht abgeschlossen werden."
   },
   JA: {
@@ -202,6 +222,10 @@ export const MEDIA_COPY: Record<LanguageCode, MediaCopy> = {
     microphoneDenied: "音声通話にはマイクの許可が必要です。",
     voiceNotConfigured: "このコンパニオンにはまだ音声が設定されていません。",
     callBillingFailed: "次の1分を請求できなかったため、通話を終了しました。",
+    minute: "分",
+    callLimitReached: "通話時間の上限に達しました。",
+    callIdleEnded: "一定時間操作がなかったため通話を終了しました。",
+    callRateLimited: "少し待ってからもう一度話してください。",
     mediaError: "リクエストを完了できませんでした。"
   },
   KO: {
@@ -236,6 +260,10 @@ export const MEDIA_COPY: Record<LanguageCode, MediaCopy> = {
     microphoneDenied: "음성 통화에는 마이크 권한이 필요합니다.",
     voiceNotConfigured: "이 컴패니언의 음성이 아직 지정되지 않았습니다.",
     callBillingFailed: "다음 1분을 결제할 수 없어 통화가 종료되었습니다.",
+    minute: "분",
+    callLimitReached: "최대 통화 시간에 도달했습니다.",
+    callIdleEnded: "한동안 활동이 없어 통화가 종료되었습니다.",
+    callRateLimited: "잠시 기다린 후 다시 말해 주세요.",
     mediaError: "요청을 완료하지 못했습니다."
   }
 };
