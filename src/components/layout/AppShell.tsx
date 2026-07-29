@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { ChatLayoutCleanup } from "@/components/chat/ChatLayoutCleanup";
-import { ChatMediaBridge } from "@/components/media/ChatMediaBridge";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { NavBar } from "@/components/layout/NavBar";
 
@@ -18,7 +17,6 @@ export function AppShell({
   return (
     <AuthProvider>
       <ChatLayoutCleanup />
-      <ChatMediaBridge />
       <div
         className={`v18-shell ${
           collapsed

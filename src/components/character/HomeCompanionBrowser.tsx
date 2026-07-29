@@ -82,88 +82,68 @@ export function HomeCompanionBrowser({
       </section>
 
       <section>
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
-          <div className="min-w-0">
-            <div className="flex min-w-0 flex-wrap items-center gap-4">
-              <h2 className="v22-category-title shrink-0 font-display text-3xl font-bold">
-                {activeCategoryLabel.startsWith("EverBond") ? (
-                  <>
-                    <span className="ever">Ever</span>
-                    <span className="bond">Bond</span>
-                    <span className="rest">
-                      {activeCategoryLabel.replace("EverBond", "")}
-                    </span>
-                  </>
-                ) : (
-                  <span className="rest">{activeCategoryLabel}</span>
-                )}{" "}
-                <Sparkles className="inline text-bond-rose" size={22} />
-              </h2>
+        <div className="v18-section-row">
+          <div className="flex min-w-0 flex-wrap items-center gap-4">
+            <h2 className="v22-category-title font-display text-3xl font-bold">
+              {activeCategoryLabel.startsWith("EverBond") ? (
+                <>
+                  <span className="ever">Ever</span>
+                  <span className="bond">Bond</span>
+                  <span className="rest">
+                    {activeCategoryLabel.replace("EverBond", "")}
+                  </span>
+                </>
+              ) : (
+                <span className="rest">{activeCategoryLabel}</span>
+              )}{" "}
+              <Sparkles className="inline text-bond-rose" size={22} />
+            </h2>
 
-              <div className="v18-filter-bar flex min-w-0 flex-wrap">
-                {visibleFilters.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => chooseFilter(item.id)}
-                    className={`v18-filter-btn ${
-                      filter === item.id ? "active" : ""
-                    }`}
-                  >
-                    {t(item.key)}
-                  </button>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={toggleMoreTags}
-                  className={`v18-filter-btn ${showAllTags ? "active" : ""}`}
-                >
-                  {showAllTags ? copy.fewerTags : copy.moreTags}{" "}
-                  <ChevronDown
-                    className={`inline transition-transform ${
-                      showAllTags ? "rotate-180" : ""
-                    }`}
-                    size={13}
-                  />
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
-              {characterCategories.map((item) => (
+            <div className="v18-filter-bar flex flex-wrap">
+              {visibleFilters.map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => browser.setCategory(item.id)}
-                  className={`v20-category-tab ${
-                    browser.category === item.id ? "active" : ""
+                  onClick={() => chooseFilter(item.id)}
+                  className={`v18-filter-btn ${
+                    filter === item.id ? "active" : ""
                   }`}
                 >
-                  {localizedCategories[item.id]}
+                  {t(item.key)}
                 </button>
               ))}
 
-              {showAllTags && (
-                <div className="flex min-w-0 flex-1 flex-wrap gap-1.5 xl:pl-2">
-                  {additionalFilters.map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => chooseFilter(tag)}
-                      className={`v18-filter-btn ${
-                        filter === tag ? "active" : ""
-                      }`}
-                    >
-                      {t(CHARACTER_TAG_KEY_MAP[tag])}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={toggleMoreTags}
+                className={`v18-filter-btn ${showAllTags ? "active" : ""}`}
+              >
+                {showAllTags ? copy.fewerTags : copy.moreTags}{" "}
+                <ChevronDown
+                  className={`inline transition-transform ${
+                    showAllTags ? "rotate-180" : ""
+                  }`}
+                  size={13}
+                />
+              </button>
+
+              {showAllTags &&
+                additionalFilters.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => chooseFilter(tag)}
+                    className={`v18-filter-btn ${
+                      filter === tag ? "active" : ""
+                    }`}
+                  >
+                    {t(CHARACTER_TAG_KEY_MAP[tag])}
+                  </button>
+                ))}
             </div>
           </div>
 
-          <div className="flex gap-3 xl:justify-self-end">
+          <div className="flex gap-3">
             <div className="v18-search">
               <Search size={18} className="text-bond-muted" />
               <input
@@ -180,6 +160,21 @@ export function HomeCompanionBrowser({
               <Filter size={18} />
             </button>
           </div>
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-2">
+          {characterCategories.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => browser.setCategory(item.id)}
+              className={`v20-category-tab ${
+                browser.category === item.id ? "active" : ""
+              }`}
+            >
+              {localizedCategories[item.id]}
+            </button>
+          ))}
         </div>
 
         <CharacterGrid characters={browser.characters} />
