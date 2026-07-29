@@ -82,68 +82,55 @@ export function HomeCompanionBrowser({
       </section>
 
       <section>
-        <div className="v18-section-row">
-          <div className="flex min-w-0 flex-wrap items-center gap-4">
-            <h2 className="v22-category-title font-display text-3xl font-bold">
-              {activeCategoryLabel.startsWith("EverBond") ? (
-                <>
-                  <span className="ever">Ever</span>
-                  <span className="bond">Bond</span>
-                  <span className="rest">
-                    {activeCategoryLabel.replace("EverBond", "")}
-                  </span>
-                </>
-              ) : (
-                <span className="rest">{activeCategoryLabel}</span>
-              )}{" "}
-              <Sparkles className="inline text-bond-rose" size={22} />
-            </h2>
+        <div className="grid min-w-0 gap-x-4 gap-y-3 xl:grid-cols-[auto_minmax(0,1fr)_auto] xl:items-center">
+          <h2 className="v22-category-title shrink-0 font-display text-3xl font-bold">
+            {activeCategoryLabel.startsWith("EverBond") ? (
+              <>
+                <span className="ever">Ever</span>
+                <span className="bond">Bond</span>
+                <span className="rest">
+                  {activeCategoryLabel.replace("EverBond", "")}
+                </span>
+              </>
+            ) : (
+              <span className="rest">{activeCategoryLabel}</span>
+            )}{" "}
+            <Sparkles className="inline text-bond-rose" size={22} />
+          </h2>
 
-            <div className="v18-filter-bar flex flex-wrap">
-              {visibleFilters.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => chooseFilter(item.id)}
-                  className={`v18-filter-btn ${
-                    filter === item.id ? "active" : ""
-                  }`}
-                >
-                  {t(item.key)}
-                </button>
-              ))}
-
+          <div className="v18-filter-bar no-scrollbar flex min-w-0 flex-nowrap overflow-x-auto">
+            {visibleFilters.map((item) => (
               <button
+                key={item.id}
                 type="button"
-                onClick={toggleMoreTags}
-                className={`v18-filter-btn ${showAllTags ? "active" : ""}`}
+                onClick={() => chooseFilter(item.id)}
+                className={`v18-filter-btn shrink-0 ${
+                  filter === item.id ? "active" : ""
+                }`}
               >
-                {showAllTags ? copy.fewerTags : copy.moreTags}{" "}
-                <ChevronDown
-                  className={`inline transition-transform ${
-                    showAllTags ? "rotate-180" : ""
-                  }`}
-                  size={13}
-                />
+                {t(item.key)}
               </button>
+            ))}
 
-              {showAllTags &&
-                additionalFilters.map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => chooseFilter(tag)}
-                    className={`v18-filter-btn ${
-                      filter === tag ? "active" : ""
-                    }`}
-                  >
-                    {t(CHARACTER_TAG_KEY_MAP[tag])}
-                  </button>
-                ))}
-            </div>
+            <button
+              type="button"
+              onClick={toggleMoreTags}
+              className={`v18-filter-btn shrink-0 ${
+                showAllTags ? "active" : ""
+              }`}
+              aria-expanded={showAllTags}
+            >
+              {showAllTags ? copy.fewerTags : copy.moreTags}{" "}
+              <ChevronDown
+                className={`inline transition-transform ${
+                  showAllTags ? "rotate-180" : ""
+                }`}
+                size={13}
+              />
+            </button>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 xl:justify-self-end">
             <div className="v18-search">
               <Search size={18} className="text-bond-muted" />
               <input
@@ -160,21 +147,38 @@ export function HomeCompanionBrowser({
               <Filter size={18} />
             </button>
           </div>
-        </div>
 
-        <div className="mb-4 flex flex-wrap gap-2">
-          {characterCategories.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => browser.setCategory(item.id)}
-              className={`v20-category-tab ${
-                browser.category === item.id ? "active" : ""
-              }`}
-            >
-              {localizedCategories[item.id]}
-            </button>
-          ))}
+          <div className="flex min-w-0 flex-wrap items-start gap-2 xl:col-span-2">
+            {characterCategories.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => browser.setCategory(item.id)}
+                className={`v20-category-tab shrink-0 ${
+                  browser.category === item.id ? "active" : ""
+                }`}
+              >
+                {localizedCategories[item.id]}
+              </button>
+            ))}
+
+            {showAllTags && (
+              <div className="flex min-w-[18rem] flex-1 flex-wrap gap-1.5 xl:pl-2">
+                {additionalFilters.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => chooseFilter(tag)}
+                    className={`v18-filter-btn shrink-0 ${
+                      filter === tag ? "active" : ""
+                    }`}
+                  >
+                    {t(CHARACTER_TAG_KEY_MAP[tag])}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <CharacterGrid characters={browser.characters} />
