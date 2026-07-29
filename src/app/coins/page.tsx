@@ -36,6 +36,14 @@ const packages = [
 ];
 
 export default function CoinsPage() {
+  return (
+    <AppShell>
+      <CoinsPageContent />
+    </AppShell>
+  );
+}
+
+function CoinsPageContent() {
   const { t, language } = useSiteLanguage();
   const copy = MEDIA_COPY[language] ?? MEDIA_COPY.EN;
   const { session, authReady, openAuthModal } = useAuth();
@@ -129,84 +137,82 @@ export default function CoinsPage() {
   }
 
   return (
-    <AppShell>
-      <main className="px-4 py-10 md:px-6">
-        <SectionHeader
-          eyebrow="EverCoin"
-          title={t("onePremiumCurrencyToBuildYourBond")}
-          description={t("everCoinDescription")}
-        />
+    <main className="px-4 py-10 md:px-6">
+      <SectionHeader
+        eyebrow="EverCoin"
+        title={t("onePremiumCurrencyToBuildYourBond")}
+        description={t("everCoinDescription")}
+      />
 
-        <div className="mx-auto mb-10 grid max-w-6xl gap-4 md:grid-cols-3">
-          {packages.map((pack) => {
-            const busy = busyPack === pack.code;
+      <div className="mx-auto mb-10 grid max-w-6xl gap-4 md:grid-cols-3">
+        {packages.map((pack) => {
+          const busy = busyPack === pack.code;
 
-            return (
-              <div
-                key={pack.amount}
-                className="eb-neon-card overflow-hidden rounded-[2rem] bg-white/[0.035] p-4 text-center"
-              >
-                <div className="overflow-hidden rounded-[1.55rem] border border-bond-rose/45 bg-black">
-                  <img
-                    src={pack.image}
-                    alt={`${pack.amount.toLocaleString("en-US")} EverCoin`}
-                    className="h-80 w-full object-cover"
-                  />
-                </div>
-
-                <p className="mt-5 font-display text-5xl font-bold text-bond-rose drop-shadow-[0_0_18px_rgba(255,92,168,0.55)]">
-                  {pack.amount.toLocaleString("en-US")}
-                </p>
-                <p className="mt-2 text-lg text-white">EverCoin</p>
-                <p className="mt-2 text-2xl font-bold text-white">
-                  {pack.price}
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => void buyPack(pack)}
-                  disabled={!authReady || Boolean(busyPack)}
-                  className="bond-pink-button mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-bond-rose/15 px-5 py-3 text-base font-bold text-bond-rose disabled:cursor-not-allowed disabled:opacity-55"
-                >
-                  {busy && <LoaderCircle size={18} className="animate-spin" />}
-                  {t("buyCoins")}
-                </button>
+          return (
+            <div
+              key={pack.amount}
+              className="eb-neon-card overflow-hidden rounded-[2rem] bg-white/[0.035] p-4 text-center"
+            >
+              <div className="overflow-hidden rounded-[1.55rem] border border-bond-rose/45 bg-black">
+                <img
+                  src={pack.image}
+                  alt={`${pack.amount.toLocaleString("en-US")} EverCoin`}
+                  className="h-80 w-full object-cover"
+                />
               </div>
-            );
-          })}
-        </div>
 
-        {error && (
-          <p className="mx-auto mb-8 max-w-3xl rounded-2xl border border-red-400/25 bg-red-500/10 px-5 py-3 text-center text-sm text-red-100">
-            {error}
-          </p>
-        )}
+              <p className="mt-5 font-display text-5xl font-bold text-bond-rose drop-shadow-[0_0_18px_rgba(255,92,168,0.55)]">
+                {pack.amount.toLocaleString("en-US")}
+              </p>
+              <p className="mt-2 text-lg text-white">EverCoin</p>
+              <p className="mt-2 text-2xl font-bold text-white">
+                {pack.price}
+              </p>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {items.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={item.title}
-                className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-6"
+              <button
+                type="button"
+                onClick={() => void buyPack(pack)}
+                disabled={!authReady || Boolean(busyPack)}
+                className="bond-pink-button mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-bond-rose/15 px-5 py-3 text-base font-bold text-bond-rose disabled:cursor-not-allowed disabled:opacity-55"
               >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-bond-rose/15 text-bond-rose">
-                  <Icon size={22} />
-                </div>
-                <h3 className="font-display text-xl font-bold">{item.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-bond-muted">
-                  {item.body}
-                </p>
-                {item.rate && (
-                  <p className="mt-4 inline-flex rounded-full border border-bond-rose/35 bg-bond-rose/10 px-3 py-1.5 text-sm font-bold text-bond-rose">
-                    {item.rate}
-                  </p>
-                )}
+                {busy && <LoaderCircle size={18} className="animate-spin" />}
+                {t("buyCoins")}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {error && (
+        <p className="mx-auto mb-8 max-w-3xl rounded-2xl border border-red-400/25 bg-red-500/10 px-5 py-3 text-center text-sm text-red-100">
+          {error}
+        </p>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {items.map((item) => {
+          const Icon = item.icon;
+          return (
+            <div
+              key={item.title}
+              className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-6"
+            >
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-bond-rose/15 text-bond-rose">
+                <Icon size={22} />
               </div>
-            );
-          })}
-        </div>
-      </main>
-    </AppShell>
+              <h3 className="font-display text-xl font-bold">{item.title}</h3>
+              <p className="mt-3 text-sm leading-6 text-bond-muted">
+                {item.body}
+              </p>
+              {item.rate && (
+                <p className="mt-4 inline-flex rounded-full border border-bond-rose/35 bg-bond-rose/10 px-3 py-1.5 text-sm font-bold text-bond-rose">
+                  {item.rate}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </main>
   );
 }

@@ -28,6 +28,14 @@ const bundles = [
 ];
 
 export default function PricingPage() {
+  return (
+    <AppShell>
+      <PricingPageContent />
+    </AppShell>
+  );
+}
+
+function PricingPageContent() {
   const { session, authReady, openAuthModal } = useAuth();
   const [busyBundle, setBusyBundle] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -70,44 +78,42 @@ export default function PricingPage() {
   }
 
   return (
-    <AppShell>
-      <main className="bg-black">
-        <section className="mx-auto flex h-screen items-center justify-center overflow-hidden px-0 py-0">
-          <div className="relative inline-block">
-            <LocalizedBannerImage
-              banner="pricing"
-              alt="EverBond one-time message bundles"
-              className="block h-auto w-full max-w-[1920px] max-h-screen object-contain"
-            />
+    <main className="bg-black">
+      <section className="mx-auto flex h-screen items-center justify-center overflow-hidden px-0 py-0">
+        <div className="relative inline-block">
+          <LocalizedBannerImage
+            banner="pricing"
+            alt="EverBond one-time message bundles"
+            className="block h-auto w-full max-w-[1920px] max-h-screen object-contain"
+          />
 
-            {bundles.map((bundle) => (
-              <button
-                key={bundle.messages}
-                type="button"
-                onClick={() => void buyBundle(bundle)}
-                disabled={!authReady || Boolean(busyBundle)}
-                aria-label={`Buy ${bundle.messages.toLocaleString("en-US")} messages`}
-                className={`absolute rounded-full focus:outline-none disabled:cursor-wait ${bundle.className}`}
-              >
-                <span className="sr-only">
-                  Buy {bundle.messages.toLocaleString("en-US")} messages
+          {bundles.map((bundle) => (
+            <button
+              key={bundle.messages}
+              type="button"
+              onClick={() => void buyBundle(bundle)}
+              disabled={!authReady || Boolean(busyBundle)}
+              aria-label={`Buy ${bundle.messages.toLocaleString("en-US")} messages`}
+              className={`absolute rounded-full focus:outline-none disabled:cursor-wait ${bundle.className}`}
+            >
+              <span className="sr-only">
+                Buy {bundle.messages.toLocaleString("en-US")} messages
+              </span>
+              {busyBundle === bundle.code && (
+                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/55 text-white">
+                  <LoaderCircle className="animate-spin" size={18} />
                 </span>
-                {busyBundle === bundle.code && (
-                  <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/55 text-white">
-                    <LoaderCircle className="animate-spin" size={18} />
-                  </span>
-                )}
-              </button>
-            ))}
+              )}
+            </button>
+          ))}
 
-            {error && (
-              <p className="absolute bottom-[3%] left-1/2 w-[80%] -translate-x-1/2 rounded-xl border border-red-400/25 bg-black/85 px-4 py-2 text-center text-sm text-red-100">
-                {error}
-              </p>
-            )}
-          </div>
-        </section>
-      </main>
-    </AppShell>
+          {error && (
+            <p className="absolute bottom-[3%] left-1/2 w-[80%] -translate-x-1/2 rounded-xl border border-red-400/25 bg-black/85 px-4 py-2 text-center text-sm text-red-100">
+              {error}
+            </p>
+          )}
+        </div>
+      </section>
+    </main>
   );
 }
