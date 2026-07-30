@@ -27,6 +27,13 @@ const categoryKeyMap: Record<
   "public-creations": "publicCreations"
 };
 
+const hiddenDiscoverTags = new Set<string>([
+  "Sweet",
+  "Mean",
+  "Submissive",
+  "Sarcastic"
+]);
+
 export function CharactersPageClient({
   characters: initial
 }: {
@@ -40,12 +47,13 @@ export function CharactersPageClient({
   const [showAllTags, setShowAllTags] =
     useState(false);
 
-  const displayedTags = showAllTags
+  const displayedTags = (showAllTags
     ? [
         ...VISIBLE_CHARACTER_TAGS,
         ...ADDITIONAL_CHARACTER_TAGS
       ]
-    : [...VISIBLE_CHARACTER_TAGS];
+    : [...VISIBLE_CHARACTER_TAGS]
+  ).filter((tag) => !hiddenDiscoverTags.has(tag));
 
   return (
     <main className="px-4 py-6 md:px-6">

@@ -27,7 +27,7 @@ const ALLOWED_SOURCE_MIME_TYPES = new Set([
 const GenerateBody = z
   .object({
     requestId: z.string().uuid(),
-    prompt: z.string().trim().min(3).max(1500)
+    prompt: z.string().trim().min(3).max(500)
   })
   .strict();
 

@@ -34,6 +34,8 @@ type GalleryData = {
   imageCost: number;
 };
 
+const IMAGE_PROMPT_MAX_CHARACTERS = 500;
+
 export function CharacterGalleryClient({
   slug
 }: {
@@ -342,10 +344,17 @@ export function CharacterGalleryClient({
 
                   <textarea
                     value={prompt}
-                    onChange={(event) => setPrompt(event.target.value)}
+                    onChange={(event) =>
+                      setPrompt(
+                        event.target.value.slice(
+                          0,
+                          IMAGE_PROMPT_MAX_CHARACTERS
+                        )
+                      )
+                    }
                     placeholder={copy.describeImage}
                     rows={4}
-                    maxLength={1500}
+                    maxLength={IMAGE_PROMPT_MAX_CHARACTERS}
                     disabled={atLimit || generating}
                     className="mt-6 w-full resize-none rounded-[1.5rem] border border-white/10 bg-black/25 px-5 py-4 text-white outline-none placeholder:text-bond-muted focus:border-bond-rose/65 disabled:cursor-not-allowed disabled:opacity-55"
                   />

@@ -15,7 +15,6 @@ const visibleFilters = [
   { id: "All", key: "all" },
   { id: "Romance", key: "romance" },
   { id: "Comfort", key: "comfort" },
-  { id: "Sweet", key: "sweet" },
   { id: "Protective", key: "protective" },
   { id: "Flirty", key: "flirty" }
 ] as const;
@@ -26,11 +25,8 @@ const additionalFilters: CharacterTag[] = [
   "Rival",
   "Mystery",
   "Campus",
-  "Mean",
-  "Submissive",
   "Adventure",
-  "Slice of Life",
-  "Sarcastic"
+  "Slice of Life"
 ];
 
 export function HomeCompanionBrowser({
@@ -148,7 +144,7 @@ export function HomeCompanionBrowser({
             </button>
           </div>
 
-          <div className="flex min-w-0 flex-wrap items-start gap-2 xl:col-span-2">
+          <div className="mb-3 flex min-w-0 flex-wrap items-start gap-2 xl:col-span-2">
             {characterCategories.map((item) => (
               <button
                 key={item.id}

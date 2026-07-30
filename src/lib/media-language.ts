@@ -46,9 +46,9 @@ export const MEDIA_COPY: Record<LanguageCode, MediaCopy> = {
     privateGallery: "Private Gallery",
     galleryTitle: (name) => `${name} Image Gallery`,
     gallerySubtitle:
-      "Create private images from this companion’s saved reference image. Only you can see, select, or delete them.",
+      "Create private images of your companion. Only you can see them, select to make them your companion's main image, or delete them and make others.",
     privateOnly: "Private to your account",
-    imageLimit: "images used",
+    imageLimit: "images",
     describeImage:
       "Describe exactly how you want the character, outfit, pose, setting, lighting, and mood to look...",
     generateImage: "Generate Image",

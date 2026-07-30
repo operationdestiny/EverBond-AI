@@ -140,8 +140,16 @@ function CoinsPageContent() {
     <main className="px-4 py-10 md:px-6">
       <SectionHeader
         eyebrow="EverCoin"
-        title={t("onePremiumCurrencyToBuildYourBond")}
-        description={t("everCoinDescription")}
+        title={
+          language === "EN"
+            ? "One premium currency to build your bond."
+            : t("onePremiumCurrencyToBuildYourBond")
+        }
+        description={
+          language === "EN"
+            ? "EverCoin is the premium currency on EverBond for epic gifts, custom unrestricted companion images, and premium voice calls."
+            : t("everCoinDescription")
+        }
       />
 
       <div className="mx-auto mb-10 grid max-w-6xl gap-4 md:grid-cols-3">
