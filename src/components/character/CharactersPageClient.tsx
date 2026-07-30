@@ -16,6 +16,7 @@ import {
   VISIBLE_CHARACTER_TAGS
 } from "@/lib/character-tags";
 import { CHARACTER_TOOLS_COPY } from "@/lib/character-tools-language";
+import { DISCOVER_COPY } from "@/lib/discover-language";
 
 const categoryKeyMap: Record<
   CharacterCategory,
@@ -43,7 +44,8 @@ export function CharactersPageClient({
   const copy =
     CHARACTER_TOOLS_COPY[language] ??
     CHARACTER_TOOLS_COPY.EN;
-  const browser = useCharacterBrowser(initial);
+  const discoverCopy = DISCOVER_COPY[language] ?? DISCOVER_COPY.EN;
+  const browser = useCharacterBrowser(initial, "everbond-girls", language);
   const [showAllTags, setShowAllTags] =
     useState(false);
 
@@ -137,9 +139,13 @@ export function CharactersPageClient({
         </div>
       </div>
 
-      <CharacterGrid
-        characters={browser.characters}
-      />
+      {browser.loading && browser.characters.length === 0 ? (
+        <div className="rounded-[2rem] border border-white/10 bg-white/[0.025] px-6 py-12 text-center text-bond-muted">
+          {discoverCopy.translatingCharacters}
+        </div>
+      ) : (
+        <CharacterGrid characters={browser.characters} />
+      )}
 
       {browser.hasMore && (
         <div className="mt-8 text-center">
@@ -150,7 +156,7 @@ export function CharactersPageClient({
             className="rounded-full border border-bond-rose bg-bond-rose px-6 py-2.5 font-semibold text-white disabled:opacity-50"
           >
             {browser.loading
-              ? "Loading…"
+              ? discoverCopy.loading
               : copy.loadMoreCompanions}
           </button>
         </div>

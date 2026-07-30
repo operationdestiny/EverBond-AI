@@ -1,19 +1,23 @@
 "use client";
 
 import { CharacterCard } from "@/components/character/CharacterCard";
+import { useLocalizedCharacters } from "@/components/character/useLocalizedCharacters";
 import { useSiteLanguage } from "@/lib/site-language";
 import { MY_BOND_COPY } from "@/lib/my-bond-language";
+import { DISCOVER_COPY } from "@/lib/discover-language";
 import type { Character } from "@/types/character";
 
 export function CreatorPublicPage({
   username,
-  characters
+  characters: baseCharacters
 }: {
   username: string;
   characters: Character[];
 }) {
   const { language } = useSiteLanguage();
   const copy = MY_BOND_COPY[language] ?? MY_BOND_COPY.EN;
+  const discoverCopy = DISCOVER_COPY[language] ?? DISCOVER_COPY.EN;
+  const { characters, loading } = useLocalizedCharacters(baseCharacters);
 
   return (
     <main className="min-h-screen px-4 py-12 md:px-6">
@@ -31,7 +35,11 @@ export function CreatorPublicPage({
             </p>
           </div>
 
-          {characters.length ? (
+          {loading && characters.length === 0 ? (
+            <div className="mt-8 rounded-[2rem] border border-white/10 bg-white/[0.025] p-10 text-center text-bond-muted">
+              {discoverCopy.translatingCharacters}
+            </div>
+          ) : characters.length ? (
             <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {characters.map((character, index) => (
                 <CharacterCard

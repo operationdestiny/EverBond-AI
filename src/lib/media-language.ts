@@ -84,9 +84,9 @@ export const MEDIA_COPY: Record<LanguageCode, MediaCopy> = {
     privateGallery: "Galería privada",
     galleryTitle: (name) => `Galería de imágenes de ${name}`,
     gallerySubtitle:
-      "Crea imágenes privadas usando la imagen de referencia guardada de este compañero. Solo tú puedes verlas, elegirlas o eliminarlas.",
+      "Crea imágenes privadas de tu compañero. Solo tú puedes verlas, seleccionarlas para convertirlas en la imagen principal de tu compañero o eliminarlas y crear otras.",
     privateOnly: "Privado para tu cuenta",
-    imageLimit: "imágenes usadas",
+    imageLimit: "imágenes",
     describeImage:
       "Describe exactamente cómo quieres que se vean el personaje, la ropa, la pose, el entorno, la iluminación y el ambiente...",
     generateImage: "Crear imagen",
@@ -122,9 +122,9 @@ export const MEDIA_COPY: Record<LanguageCode, MediaCopy> = {
     privateGallery: "Galerie privée",
     galleryTitle: (name) => `Galerie d’images de ${name}`,
     gallerySubtitle:
-      "Créez des images privées à partir de l’image de référence enregistrée de ce compagnon. Vous seul pouvez les voir, les choisir ou les supprimer.",
-    privateOnly: "Privé pour votre compte",
-    imageLimit: "images utilisées",
+      "Créez des images privées de votre compagnon. Vous seul pouvez les voir, en sélectionner une comme image principale de votre compagnon, ou les supprimer et en créer d’autres.",
+    privateOnly: "Privé sur votre compte",
+    imageLimit: "images",
     describeImage:
       "Décrivez exactement l’apparence souhaitée du personnage, sa tenue, sa pose, le décor, l’éclairage et l’ambiance...",
     generateImage: "Créer l’image",
@@ -160,9 +160,9 @@ export const MEDIA_COPY: Record<LanguageCode, MediaCopy> = {
     privateGallery: "Private Galerie",
     galleryTitle: (name) => `${name} Bildergalerie`,
     gallerySubtitle:
-      "Erstelle private Bilder aus dem gespeicherten Referenzbild dieses Begleiters. Nur du kannst sie sehen, auswählen oder löschen.",
+      "Erstelle private Bilder deines Begleiters. Nur du kannst sie sehen, eines als Hauptbild deines Begleiters auswählen oder sie löschen und neue erstellen.",
     privateOnly: "Privat für dein Konto",
-    imageLimit: "Bilder verwendet",
+    imageLimit: "Bilder",
     describeImage:
       "Beschreibe genau, wie Figur, Kleidung, Pose, Umgebung, Beleuchtung und Stimmung aussehen sollen...",
     generateImage: "Bild erstellen",
@@ -198,9 +198,9 @@ export const MEDIA_COPY: Record<LanguageCode, MediaCopy> = {
     privateGallery: "プライベートギャラリー",
     galleryTitle: (name) => `${name}の画像ギャラリー`,
     gallerySubtitle:
-      "保存された参照画像から非公開画像を作成できます。閲覧・選択・削除できるのはあなただけです。",
+      "コンパニオンのプライベート画像を作成できます。閲覧できるのはあなただけで、コンパニオンのメイン画像として選択したり、削除して新しい画像を作成したりできます。",
     privateOnly: "あなたのアカウントだけに非公開",
-    imageLimit: "枚使用中",
+    imageLimit: "画像",
     describeImage:
       "キャラクターの見た目、衣装、ポーズ、背景、照明、雰囲気を具体的に説明してください...",
     generateImage: "画像を生成",
@@ -236,9 +236,9 @@ export const MEDIA_COPY: Record<LanguageCode, MediaCopy> = {
     privateGallery: "비공개 갤러리",
     galleryTitle: (name) => `${name} 이미지 갤러리`,
     gallerySubtitle:
-      "저장된 참조 이미지로 비공개 이미지를 만드세요. 본인만 보고 선택하거나 삭제할 수 있습니다.",
-    privateOnly: "내 계정에만 비공개",
-    imageLimit: "장 사용 중",
+      "컴패니언의 비공개 이미지를 만들어 보세요. 본인만 볼 수 있으며, 컴패니언의 대표 이미지로 선택하거나 삭제한 뒤 새 이미지를 만들 수 있습니다.",
+    privateOnly: "내 계정 전용",
+    imageLimit: "이미지",
     describeImage:
       "캐릭터의 모습, 의상, 포즈, 배경, 조명, 분위기를 원하는 대로 자세히 설명하세요...",
     generateImage: "이미지 생성",

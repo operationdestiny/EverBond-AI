@@ -33,14 +33,21 @@ export function PrivateChatLoader({
     }
 
     const controller = new AbortController();
+    setCharacter(null);
+    setUnavailable(false);
 
-    void fetch(`/api/characters/${encodeURIComponent(slug)}`, {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`
-      },
-      cache: "no-store",
-      signal: controller.signal
-    })
+    void fetch(
+      `/api/characters/${encodeURIComponent(
+        slug
+      )}?language=${encodeURIComponent(language)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        },
+        cache: "no-store",
+        signal: controller.signal
+      }
+    )
       .then(async (response) => {
         const payload = await response.json().catch(() => ({}));
 
@@ -61,10 +68,15 @@ export function PrivateChatLoader({
       });
 
     return () => controller.abort();
-  }, [authReady, session, slug]);
+  }, [authReady, language, session, slug]);
 
   if (character) {
-    return <ChatShell character={character} />;
+    return (
+      <ChatShell
+        key={`${character.id}:${language}`}
+        character={character}
+      />
+    );
   }
 
   if (!authReady || (session && !unavailable)) {

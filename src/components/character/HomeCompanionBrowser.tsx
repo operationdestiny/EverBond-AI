@@ -10,6 +10,7 @@ import { useSiteLanguage } from "@/lib/site-language";
 import { LocalizedBannerImage } from "@/components/ui/LocalizedBannerImage";
 import { CHARACTER_TAG_KEY_MAP, type CharacterTag } from "@/lib/character-tags";
 import { CHARACTER_TOOLS_COPY } from "@/lib/character-tools-language";
+import { DISCOVER_COPY } from "@/lib/discover-language";
 
 const visibleFilters = [
   { id: "All", key: "all" },
@@ -37,7 +38,8 @@ export function HomeCompanionBrowser({
   const { t, language } = useSiteLanguage();
   const copy =
     CHARACTER_TOOLS_COPY[language] ?? CHARACTER_TOOLS_COPY.EN;
-  const browser = useCharacterBrowser(initial);
+  const discoverCopy = DISCOVER_COPY[language] ?? DISCOVER_COPY.EN;
+  const browser = useCharacterBrowser(initial, "everbond-girls", language);
   const [filter, setFilter] = useState("All");
   const [showAllTags, setShowAllTags] = useState(false);
 
@@ -68,11 +70,11 @@ export function HomeCompanionBrowser({
     <main className="v18-page">
       <section
         className="v19-hero-image"
-        aria-label="EverBond EverCoin banner"
+        aria-label={discoverCopy.bannerLabel}
       >
         <LocalizedBannerImage
           banner="discover"
-          alt="EverBond EverCoin banner"
+          alt={discoverCopy.bannerLabel}
           className="v19-hero-image__img"
         />
       </section>
@@ -177,7 +179,13 @@ export function HomeCompanionBrowser({
           </div>
         </div>
 
-        <CharacterGrid characters={browser.characters} />
+        {browser.loading && browser.characters.length === 0 ? (
+          <div className="rounded-[2rem] border border-white/10 bg-white/[0.025] px-6 py-12 text-center text-bond-muted">
+            {discoverCopy.translatingCharacters}
+          </div>
+        ) : (
+          <CharacterGrid characters={browser.characters} />
+        )}
 
         {browser.hasMore && (
           <div className="mt-8 text-center">
@@ -187,7 +195,7 @@ export function HomeCompanionBrowser({
               onClick={browser.loadMore}
               className="rounded-full border border-bond-rose bg-bond-rose px-6 py-2.5 font-semibold text-white disabled:opacity-50"
             >
-              {browser.loading ? "Loading…" : copy.loadMoreCompanions}
+              {browser.loading ? discoverCopy.loading : copy.loadMoreCompanions}
             </button>
           </div>
         )}

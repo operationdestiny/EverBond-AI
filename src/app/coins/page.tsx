@@ -13,6 +13,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useSiteLanguage } from "@/lib/site-language";
 import { MEDIA_COPY } from "@/lib/media-language";
+import { EVERCOIN_PAGE_COPY } from "@/lib/evercoin-page-language";
 
 const packages = [
   {
@@ -46,6 +47,7 @@ export default function CoinsPage() {
 function CoinsPageContent() {
   const { t, language } = useSiteLanguage();
   const copy = MEDIA_COPY[language] ?? MEDIA_COPY.EN;
+  const pageCopy = EVERCOIN_PAGE_COPY[language] ?? EVERCOIN_PAGE_COPY.EN;
   const { session, authReady, openAuthModal } = useAuth();
   const [busyPack, setBusyPack] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -83,7 +85,7 @@ function CoinsPageContent() {
       icon: ImageIcon,
       title: t("images"),
       body: t("imagesBody"),
-      rate: `${imageCost} EverCoin / image`
+      rate: `${imageCost} EverCoin / ${pageCopy.imageUnit}`
     },
     {
       icon: Phone,
@@ -122,7 +124,7 @@ function CoinsPageContent() {
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok || typeof payload?.url !== "string") {
-        throw new Error(payload?.message || payload?.error || "Checkout failed");
+        throw new Error(payload?.message || payload?.error || pageCopy.checkoutFailed);
       }
 
       window.location.assign(payload.url);
@@ -130,7 +132,7 @@ function CoinsPageContent() {
       setError(
         checkoutError instanceof Error
           ? checkoutError.message
-          : "Checkout failed"
+          : pageCopy.checkoutFailed
       );
       setBusyPack(null);
     }
@@ -140,16 +142,8 @@ function CoinsPageContent() {
     <main className="px-4 py-10 md:px-6">
       <SectionHeader
         eyebrow="EverCoin"
-        title={
-          language === "EN"
-            ? "One premium currency to build your bond."
-            : t("onePremiumCurrencyToBuildYourBond")
-        }
-        description={
-          language === "EN"
-            ? "EverCoin is the premium currency on EverBond for epic gifts, custom unrestricted companion images, and premium voice calls."
-            : t("everCoinDescription")
-        }
+        title={pageCopy.title}
+        description={pageCopy.description}
       />
 
       <div className="mx-auto mb-10 grid max-w-6xl gap-4 md:grid-cols-3">
