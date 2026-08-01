@@ -138,7 +138,7 @@ export function rowToCharacter(row: CharacterRow): Character {
     visibility: visibilityFromRow(row),
     official: Boolean(row.official),
     viewCount: compactViewCount(row.view_count),
-    creatorUsername: row.creator_username ?? undefined,
+    creatorUsername: row.official ? undefined : row.creator_username ?? undefined,
     createdAt:
       row.created_at &&
       Date.now() - new Date(row.created_at).getTime() < 86_400_000
@@ -218,7 +218,7 @@ export async function queryCharacters(input: CharacterQuery = {}) {
   if (!canUseSupabase()) {
     const filtered = fallbackCharacters.filter((item) => {
       if (isMoreForYou) {
-        return item.official !== false && item.category !== "public-creations";
+        return item.official !== false && item.category === "public-creations";
       }
 
       return !input.category || item.category === input.category;
@@ -242,7 +242,7 @@ export async function queryCharacters(input: CharacterQuery = {}) {
   if (isMoreForYou) {
     query = query
       .eq("official", true)
-      .neq("category", "public-creations");
+      .eq("category", "public-creations");
   } else if (input.category) {
     query = query.eq("category", input.category);
   }

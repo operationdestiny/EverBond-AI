@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { CreatorLink } from "@/components/character/CreatorLink";
 import { FavoriteButton } from "@/components/character/FavoriteButton";
 import { Character } from "@/types/character";
 
@@ -11,8 +10,6 @@ export function CharacterCard({
   priority?: boolean;
   compact?: boolean;
 }) {
-  const isPublicCreation = character.category === "public-creations";
-
   return (
     <article className="v18-card group flex h-full flex-col">
       <div className="relative h-[310px] overflow-hidden bg-[#0b0b0e] sm:h-[282px] lg:h-[272px] xl:h-[278px] 2xl:h-[288px]">
@@ -51,12 +48,6 @@ export function CharacterCard({
           </p>
         </Link>
 
-        {isPublicCreation && character.creatorUsername && (
-          <CreatorLink
-            username={character.creatorUsername}
-            className="mt-2 inline-flex text-xs"
-          />
-        )}
       </div>
     </article>
   );

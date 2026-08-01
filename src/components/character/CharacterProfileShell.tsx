@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Flag, RefreshCcw, Share2, X } from "lucide-react";
-import { CreatorLink } from "@/components/character/CreatorLink";
 import { FavoriteButton } from "@/components/character/FavoriteButton";
 import { Character } from "@/types/character";
 import { useSiteLanguage } from "@/lib/site-language";
@@ -49,10 +48,6 @@ export function CharacterProfileShell({ character }: { character: Character }) {
   const similarTag =
     character.tags.find((item) => item !== "Ever Memory™") ?? "Romance";
   const similarHref = `/characters?tag=${encodeURIComponent(similarTag)}`;
-  const showCreator =
-    character.category === "public-creations" &&
-    character.visibility !== "private" &&
-    Boolean(character.creatorUsername);
 
   const reportOptions: Array<{ value: ReportReason; label: string }> = [
     { value: "bug", label: copy.bugGlitch },
@@ -129,13 +124,6 @@ export function CharacterProfileShell({ character }: { character: Character }) {
                   </button>
                 </div>
               </div>
-
-              {showCreator && character.creatorUsername && (
-                <CreatorLink
-                  username={character.creatorUsername}
-                  className="mt-5 inline-flex text-sm"
-                />
-              )}
 
               <p className="mt-6 text-base leading-8 text-bond-muted">
                 {character.description}

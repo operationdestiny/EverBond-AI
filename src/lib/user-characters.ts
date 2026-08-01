@@ -131,7 +131,7 @@ function rowToCharacter(row: CharacterRow): Character {
     visibility: visibilityFromRow(row),
     official: Boolean(row.official),
     viewCount: compactViewCount(row.view_count),
-    creatorUsername: row.creator_username ?? undefined,
+    creatorUsername: row.official ? undefined : row.creator_username ?? undefined,
     createdAt:
       row.created_at &&
       Date.now() - new Date(row.created_at).getTime() < 86_400_000

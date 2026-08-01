@@ -137,8 +137,6 @@ export function ChatShell({ character }: { character: Character }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const sendInFlightRef = useRef(false);
 
-  const isPublicCreation = character.category === "public-creations";
-
   const supabase = useMemo(() => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -642,13 +640,6 @@ export function ChatShell({ character }: { character: Character }) {
             {t("similarCompanions")}
           </Link>
 
-          {isPublicCreation && (
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-bond-muted">
-              <p>
-                {t("createdBy")} @{character.creatorUsername ?? "creator"}
-              </p>
-            </div>
-          )}
         </div>
       </aside>
 
