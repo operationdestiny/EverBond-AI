@@ -99,6 +99,65 @@ function estimateTokenCount(text: string) {
   return Math.max(wordCount, Math.ceil(charCount / 4), cjkCount);
 }
 
+function errorDetails(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (!error || typeof error !== "object") return String(error ?? "");
+
+  const record = error as Record<string, unknown>;
+  return [record.code, record.message, record.details, record.hint]
+    .filter((value) => typeof value === "string" && value)
+    .join(" ");
+}
+
+function isMissingMessageMetadataColumn(error: unknown) {
+  const details = errorDetails(error).toLowerCase();
+  return (
+    details.includes("metadata") &&
+    (details.includes("column") ||
+      details.includes("schema cache") ||
+      details.includes("pgrst204") ||
+      details.includes("42703"))
+  );
+}
+
+function isRetryableCharacterTurnError(error: unknown) {
+  const details = errorDetails(error);
+  return (
+    /provider request failed:\s*(408|409|425|429|500|502|503|504)\b/i.test(
+      details
+    ) ||
+    /fetch failed|econnreset|etimedout|enotfound|socket hang up|und_err/i.test(
+      details
+    )
+  );
+}
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function generateCharacterTurnWithRetry(
+  values: Parameters<typeof generateTextCharacterTurn>[0]
+) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await generateTextCharacterTurn(values);
+    } catch (error) {
+      lastError = error;
+
+      if (attempt === 3 || !isRetryableCharacterTurnError(error)) {
+        throw error;
+      }
+
+      await wait(attempt === 1 ? 700 : 1600);
+    }
+  }
+
+  throw lastError;
+}
+
 function parseGiftMetadata(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 
@@ -322,7 +381,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ conversationId: null, messages: [] });
     }
 
-    const { data: rows, error: messagesError } = await supabase
+    const messageResult = await supabase
       .from("messages")
       .select("role,content,metadata,created_at")
       .eq("conversation_id", conversation.id)
@@ -330,9 +389,25 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
       .limit(80);
 
+    let rows = messageResult.data as StoredMessageRow[] | null;
+    let messagesError = messageResult.error;
+
+    if (messagesError && isMissingMessageMetadataColumn(messagesError)) {
+      const fallbackResult = await supabase
+        .from("messages")
+        .select("role,content,created_at")
+        .eq("conversation_id", conversation.id)
+        .in("role", ["user", "character"])
+        .order("created_at", { ascending: false })
+        .limit(80);
+
+      rows = (fallbackResult.data ?? []) as StoredMessageRow[];
+      messagesError = fallbackResult.error;
+    }
+
     if (messagesError) throw messagesError;
 
-    const messages = ((rows ?? []) as StoredMessageRow[])
+    const messages = (rows ?? [])
       .reverse()
       .map((message) => {
         const isUser = message.role === "user";
@@ -606,31 +681,35 @@ export async function POST(request: Request) {
     });
 
     const storedContent = userText || (gift ? "I give you a gift." : "");
-    const metadata = gift
+    const messageInsert = gift
       ? {
-          gift: {
-            id: gift.id,
-            title: gift.title,
-            image: gift.image
-          },
-          giftEvent: {
-            requestId,
-            giftId: gift.id,
-            excludeFromEverMemory: true
-          },
-          userText
+          conversation_id: conversation.id,
+          role: "user",
+          content: storedContent,
+          metadata: {
+            gift: {
+              id: gift.id,
+              title: gift.title,
+              image: gift.image
+            },
+            giftEvent: {
+              requestId,
+              giftId: gift.id,
+              excludeFromEverMemory: true
+            },
+            userText
+          }
         }
-      : {};
+      : {
+          conversation_id: conversation.id,
+          role: "user",
+          content: storedContent
+        };
 
     const { data: insertedMessage, error: userInsertError } =
       await getSupabaseServiceClient()
         .from("messages")
-        .insert({
-          conversation_id: conversation.id,
-          role: "user",
-          content: storedContent,
-          metadata
-        })
+        .insert(messageInsert)
         .select("id")
         .single();
 
@@ -650,7 +729,7 @@ export async function POST(request: Request) {
         }
       : undefined;
 
-    const generated = await generateTextCharacterTurn({
+    const generated = await generateCharacterTurnWithRetry({
       userId: user.id,
       character: visibleCharacter,
       language: body.data.language as SupportedLanguage,

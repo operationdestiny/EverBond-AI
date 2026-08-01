@@ -72,6 +72,27 @@ type StoredGiftMetadata = {
   userText?: unknown;
 };
 
+function messageQueryErrorDetails(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (!error || typeof error !== "object") return String(error ?? "");
+
+  const record = error as Record<string, unknown>;
+  return [record.code, record.message, record.details, record.hint]
+    .filter((value) => typeof value === "string" && value)
+    .join(" ");
+}
+
+function isMissingMessageMetadataColumn(error: unknown) {
+  const details = messageQueryErrorDetails(error).toLowerCase();
+  return (
+    details.includes("metadata") &&
+    (details.includes("column") ||
+      details.includes("schema cache") ||
+      details.includes("pgrst204") ||
+      details.includes("42703"))
+  );
+}
+
 function storedGiftMetadata(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -424,7 +445,8 @@ async function getConversation(values: {
 }
 
 async function loadHistory(conversationId: string): Promise<HistoryMessage[]> {
-  const { data, error } = await getSupabaseServiceClient()
+  const supabase = getSupabaseServiceClient();
+  const messageResult = await supabase
     .from("messages")
     .select("role,content,metadata")
     .eq("conversation_id", conversationId)
@@ -432,9 +454,25 @@ async function loadHistory(conversationId: string): Promise<HistoryMessage[]> {
     .order("created_at", { ascending: false })
     .limit(MODEL_HISTORY_MESSAGE_COUNT);
 
+  let data = messageResult.data as StoredMessageRow[] | null;
+  let error = messageResult.error;
+
+  if (error && isMissingMessageMetadataColumn(error)) {
+    const fallbackResult = await supabase
+      .from("messages")
+      .select("role,content")
+      .eq("conversation_id", conversationId)
+      .in("role", ["user", "character"])
+      .order("created_at", { ascending: false })
+      .limit(MODEL_HISTORY_MESSAGE_COUNT);
+
+    data = (fallbackResult.data ?? []) as StoredMessageRow[];
+    error = fallbackResult.error;
+  }
+
   if (error) throw error;
 
-  const rows = ((data ?? []) as StoredMessageRow[]).reverse();
+  const rows = (data ?? []).reverse();
   let previousWasGift = false;
 
   return rows

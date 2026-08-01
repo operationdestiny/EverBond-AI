@@ -15,7 +15,6 @@ import {
   RefreshCcw,
   Send,
   Share2,
-  ShoppingBag,
   Star,
   UserRound,
   X
@@ -545,21 +544,14 @@ export function ChatShell({ character }: { character: Character }) {
         ...current,
         { role: "character", content: data.reply }
       ]);
-    } catch {
+    } catch (error) {
+      console.error("Chat request failed:", error);
       setMessages(previousMessages);
       setInput(trimmed);
 
       if (gift) {
         setGiftError(shopCopy.noGiftsToSend);
         setGiftPickerOpen(true);
-      } else {
-        setMessages((current) => [
-          ...current,
-          {
-            role: "character",
-            content: `${character.name} looks at you for a second, trying to keep the moment from slipping away. "Say that again. I want to get it right."`
-          }
-        ]);
       }
     } finally {
       sendInFlightRef.current = false;
@@ -747,18 +739,11 @@ export function ChatShell({ character }: { character: Character }) {
           </div>
 
           <div className="shrink-0 border-t border-white/5 bg-bond-bg/88 p-3 backdrop-blur-xl">
-            <div className="mx-auto mb-2 flex max-w-4xl items-center justify-between gap-3">
-              <Link
-                href={`/shop?for=${encodeURIComponent(character.name)}`}
-                className="inline-flex items-center gap-2 rounded-full border border-bond-rose/45 bg-black/25 px-4 py-2 text-xs font-bold text-white transition hover:bg-bond-rose/10"
-              >
-                <ShoppingBag size={14} />
-                {shopCopy.shopFor} {character.name}
-              </Link>
-              {giftError && (
+            {giftError && (
+              <div className="mx-auto mb-2 flex max-w-4xl justify-end">
                 <p className="line-clamp-1 text-xs text-red-200">{giftError}</p>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="mx-auto flex max-w-4xl items-center gap-2 rounded-full bg-white/[0.04] p-1.5 bond-chat-input">
               <input

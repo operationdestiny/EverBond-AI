@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ImageIcon, Phone } from "lucide-react";
+import { ImageIcon, Phone, ShoppingBag } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -11,6 +11,7 @@ import { InsufficientEverCoinModal } from "@/components/media/InsufficientEverCo
 import { VoiceCallModal } from "@/components/media/VoiceCallModal";
 import { useSiteLanguage } from "@/lib/site-language";
 import { MEDIA_COPY } from "@/lib/media-language";
+import { EVERSHOP_COPY } from "@/lib/evershop-language";
 
 function chatSlug(pathname: string) {
   const match = pathname.match(/^\/chat\/([^/?#]+)\/?$/);
@@ -27,6 +28,7 @@ export function ChatMediaBridge() {
   const slug = chatSlug(pathname);
   const { language } = useSiteLanguage();
   const copy = MEDIA_COPY[language] ?? MEDIA_COPY.EN;
+  const shopCopy = EVERSHOP_COPY[language] ?? EVERSHOP_COPY.EN;
   const {
     session,
     authReady,
@@ -240,7 +242,7 @@ export function ChatMediaBridge() {
       <button
         type="button"
         onClick={() => requireSession(() => setCallOpen(true))}
-        className="bond-pink-button inline-flex shrink-0 items-center gap-2 rounded-full bg-bond-rose px-5 py-2.5 text-sm font-bold text-white shadow-[0_0_20px_rgba(255,92,168,0.18)]"
+        className="bond-pink-button inline-flex shrink-0 items-center gap-2 rounded-full border border-bond-rose/60 bg-bond-rose/10 px-5 py-2.5 text-sm font-bold text-white"
       >
         <Phone size={16} />
         {copy.callCharacter(character.name)}
@@ -258,6 +260,14 @@ export function ChatMediaBridge() {
       >
         <ImageIcon size={16} />
         {copy.imageGallery(character.name)}
+      </Link>
+
+      <Link
+        href={`/shop?for=${encodeURIComponent(character.name)}`}
+        className="bond-pink-button inline-flex shrink-0 items-center gap-2 rounded-full border border-bond-rose/60 bg-bond-rose/10 px-5 py-2.5 text-sm font-bold text-white"
+      >
+        <ShoppingBag size={16} />
+        {shopCopy.shopFor} {character.name}
       </Link>
     </>
   );
