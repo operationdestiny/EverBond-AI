@@ -77,7 +77,7 @@ export async function POST(request: Request) {
     const localized = await localizeCharacters(
       characters,
       parsed.data.language as CharacterContentLanguage,
-      { translateTags: true }
+      { translateTags: true, allowProvider: false }
     );
     const localizedBySlug = new Map(
       localized.map((character) => [character.slug, character])

@@ -10,9 +10,7 @@ export function useCharacterBrowser(
   initialCategory: CharacterCategory = "everbond-girls",
   language: LanguageCode = "EN"
 ) {
-  const [characters, setCharacters] = useState(
-    language === "EN" ? initial : []
-  );
+  const [characters, setCharacters] = useState(initial);
   const [category, setCategory] =
     useState<CharacterCategory>(initialCategory);
   const [query, setQuery] = useState("");
@@ -66,14 +64,12 @@ export function useCharacterBrowser(
         : [...sourceCharactersRef.current, ...sourcePage];
       setHasMore(Boolean(data.hasMore));
 
-      if (language === "EN") {
-        setCharacters(sourceCharactersRef.current);
-        return;
-      }
+      if (reset) localizedByIdRef.current.clear();
 
-      if (reset) {
-        localizedByIdRef.current.clear();
-        setCharacters([]);
+      setCharacters(sourceCharactersRef.current);
+
+      if (language === "EN") {
+        return;
       }
 
       const localizedPage = await localizeCharactersProgressively({
@@ -87,11 +83,10 @@ export function useCharacterBrowser(
             localizedByIdRef.current.set(character.id, character);
           });
           setCharacters(
-            sourceCharactersRef.current
-              .map((character) => localizedByIdRef.current.get(character.id))
-              .filter(
-                (character): character is Character => Boolean(character)
-              )
+            sourceCharactersRef.current.map(
+              (character) =>
+                localizedByIdRef.current.get(character.id) ?? character
+            )
           );
         }
       });
@@ -128,11 +123,6 @@ export function useCharacterBrowser(
 
       if (language === "EN") return;
     }
-
-    sourceCharactersRef.current = [];
-    localizedByIdRef.current.clear();
-    setCharacters([]);
-    setHasMore(false);
 
     const timer = window.setTimeout(() => {
       void load(true);

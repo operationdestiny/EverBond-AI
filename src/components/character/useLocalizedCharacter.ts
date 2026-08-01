@@ -1,19 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useSiteLanguage } from "@/lib/site-language";
 import type { Character } from "@/types/character";
 
+const CHARACTER_LOCALIZATION_TIMEOUT_MS = 15_000;
+
 export function useLocalizedCharacter(baseCharacter: Character) {
   const { language } = useSiteLanguage();
   const { session, authReady } = useAuth();
+  const baseCharacterRef = useRef(baseCharacter);
+  baseCharacterRef.current = baseCharacter;
+
   const [character, setCharacter] = useState(baseCharacter);
   const [loading, setLoading] = useState(language !== "EN");
+  const characterKey = useMemo(
+    () => `${baseCharacter.id}:${baseCharacter.slug}`,
+    [baseCharacter.id, baseCharacter.slug]
+  );
 
   useEffect(() => {
+    const currentBaseCharacter = baseCharacterRef.current;
+    setCharacter(currentBaseCharacter);
+
     if (language === "EN") {
-      setCharacter(baseCharacter);
       setLoading(false);
       return;
     }
@@ -24,7 +35,13 @@ export function useLocalizedCharacter(baseCharacter: Character) {
     }
 
     const controller = new AbortController();
+    let cancelled = false;
     setLoading(true);
+
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      CHARACTER_LOCALIZATION_TIMEOUT_MS
+    );
 
     const headers: Record<string, string> = {};
     if (session?.access_token) {
@@ -33,7 +50,7 @@ export function useLocalizedCharacter(baseCharacter: Character) {
 
     void fetch(
       `/api/characters/${encodeURIComponent(
-        baseCharacter.slug
+        currentBaseCharacter.slug
       )}?language=${encodeURIComponent(language)}`,
       {
         headers,
@@ -50,26 +67,30 @@ export function useLocalizedCharacter(baseCharacter: Character) {
           );
         }
 
-        setCharacter(payload.character as Character);
+        if (!cancelled) setCharacter(payload.character as Character);
       })
       .catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") {
+        if (
+          error instanceof DOMException &&
+          error.name === "AbortError" &&
+          cancelled
+        ) {
           return;
         }
 
-        setCharacter(baseCharacter);
+        if (!cancelled) setCharacter(currentBaseCharacter);
       })
       .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+        window.clearTimeout(timeout);
+        if (!cancelled) setLoading(false);
       });
 
-    return () => controller.abort();
-  }, [
-    authReady,
-    baseCharacter,
-    language,
-    session?.access_token
-  ]);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [authReady, characterKey, language, session?.access_token]);
 
   return {
     character,

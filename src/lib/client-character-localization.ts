@@ -3,6 +3,7 @@ import type { Character } from "@/types/character";
 
 const CLIENT_BATCH_SIZE = 8;
 const CLIENT_CONCURRENCY = 2;
+const CLIENT_REQUEST_TIMEOUT_MS = 15_000;
 
 function chunksOf<T>(items: T[], size: number) {
   const chunks: T[][] = [];
@@ -22,6 +23,10 @@ async function fetchBatch(
     signal?: AbortSignal;
   }
 ) {
+  if (options.signal?.aborted) {
+    throw new DOMException("Aborted", "AbortError");
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json"
   };
@@ -30,25 +35,47 @@ async function fetchBatch(
     headers.Authorization = `Bearer ${options.accessToken}`;
   }
 
-  const response = await fetch("/api/character-localizations", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      slugs: characters.map((character) => character.slug),
-      language
-    }),
-    cache: "no-store",
-    signal: options.signal
-  });
-  const payload = await response.json().catch(() => ({}));
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromParent = () => controller.abort();
 
-  if (!response.ok || !Array.isArray(payload?.characters)) {
-    throw new Error(
-      payload?.message || payload?.error || "CHARACTER_LOCALIZATION_FAILED"
-    );
+  options.signal?.addEventListener("abort", abortFromParent, { once: true });
+
+  const timeout = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, CLIENT_REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch("/api/character-localizations", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        slugs: characters.map((character) => character.slug),
+        language
+      }),
+      cache: "no-store",
+      signal: controller.signal
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok || !Array.isArray(payload?.characters)) {
+      throw new Error(
+        payload?.message || payload?.error || "CHARACTER_LOCALIZATION_FAILED"
+      );
+    }
+
+    return payload.characters as Character[];
+  } catch (error) {
+    if (timedOut && !options.signal?.aborted) {
+      throw new Error("CHARACTER_LOCALIZATION_TIMEOUT");
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+    options.signal?.removeEventListener("abort", abortFromParent);
   }
-
-  return payload.characters as Character[];
 }
 
 export async function localizeCharactersProgressively(options: {
@@ -76,18 +103,15 @@ export async function localizeCharactersProgressively(options: {
       )
     );
 
+    if (options.signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
     results.forEach((result, groupIndex) => {
       if (result.status === "fulfilled") {
         result.value.forEach((character) => {
           localizedById.set(character.id, character);
         });
-        return;
-      }
-
-      if (
-        result.reason instanceof DOMException &&
-        result.reason.name === "AbortError"
-      ) {
         return;
       }
 
@@ -97,9 +121,9 @@ export async function localizeCharactersProgressively(options: {
     });
 
     options.onProgress(
-      options.characters
-        .map((character) => localizedById.get(character.id))
-        .filter((character): character is Character => Boolean(character))
+      options.characters.map(
+        (character) => localizedById.get(character.id) ?? character
+      )
     );
   }
 

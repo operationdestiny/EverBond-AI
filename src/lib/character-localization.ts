@@ -339,11 +339,13 @@ export async function localizeCharacters(
   language: CharacterContentLanguage,
   options?: {
     translateTags?: boolean;
+    allowProvider?: boolean;
   }
 ): Promise<Character[]> {
   if (language === "EN" || !characters.length) return characters;
 
   const translateTags = options?.translateTags !== false;
+  const allowProvider = options?.allowProvider !== false;
   const supabase = getSupabaseServiceClient();
   const sourceEntries = characters.map((character) => {
     const source = sourceForCharacter(character);
@@ -391,7 +393,7 @@ export async function localizeCharacters(
     return true;
   });
 
-  if (missing.length && process.env.VENICE_API_KEY) {
+  if (allowProvider && missing.length && process.env.VENICE_API_KEY) {
     const claimItems = missing.map((entry) => ({
       character_id: entry.character.id,
       source_hash: entry.hash
@@ -554,6 +556,7 @@ export async function localizeCharacter(
   language: CharacterContentLanguage,
   options?: {
     translateTags?: boolean;
+    allowProvider?: boolean;
   }
 ) {
   const [localized] = await localizeCharacters([character], language, options);

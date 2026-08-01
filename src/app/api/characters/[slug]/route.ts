@@ -61,7 +61,7 @@ export async function GET(
     const localized = await localizeCharacter(
       character,
       languageResult.data as CharacterContentLanguage,
-      { translateTags: true }
+      { translateTags: true, allowProvider: false }
     );
 
     return NextResponse.json(

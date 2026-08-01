@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { localizeCharactersProgressively } from "@/lib/client-character-localization";
 import { useSiteLanguage } from "@/lib/site-language";
@@ -9,9 +9,10 @@ import type { Character } from "@/types/character";
 export function useLocalizedCharacters(baseCharacters: Character[]) {
   const { language } = useSiteLanguage();
   const { session, authReady } = useAuth();
-  const [characters, setCharacters] = useState(
-    language === "EN" ? baseCharacters : []
-  );
+  const baseCharactersRef = useRef(baseCharacters);
+  baseCharactersRef.current = baseCharacters;
+
+  const [characters, setCharacters] = useState(baseCharacters);
   const [loading, setLoading] = useState(language !== "EN");
   const slugsKey = useMemo(
     () => baseCharacters.map((character) => character.slug).join("\u0001"),
@@ -19,28 +20,32 @@ export function useLocalizedCharacters(baseCharacters: Character[]) {
   );
 
   useEffect(() => {
-    if (language === "EN" || !baseCharacters.length) {
-      setCharacters(baseCharacters);
+    const currentBaseCharacters = baseCharactersRef.current;
+
+    if (language === "EN" || !currentBaseCharacters.length) {
+      setCharacters(currentBaseCharacters);
       setLoading(false);
       return;
     }
 
+    setCharacters(currentBaseCharacters);
+
     if (!authReady) {
-      setCharacters([]);
       setLoading(true);
       return;
     }
 
     const controller = new AbortController();
-    setCharacters([]);
     setLoading(true);
 
     void localizeCharactersProgressively({
-      characters: baseCharacters,
+      characters: currentBaseCharacters,
       language,
       accessToken: session?.access_token,
       signal: controller.signal,
-      onProgress: setCharacters
+      onProgress: (localized) => {
+        if (!controller.signal.aborted) setCharacters(localized);
+      }
     })
       .then((localized) => {
         if (!controller.signal.aborted) setCharacters(localized);
@@ -50,20 +55,16 @@ export function useLocalizedCharacters(baseCharacters: Character[]) {
           return;
         }
 
-        setCharacters(baseCharacters);
+        if (!controller.signal.aborted) {
+          setCharacters(currentBaseCharacters);
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
 
     return () => controller.abort();
-  }, [
-    authReady,
-    baseCharacters,
-    language,
-    session?.access_token,
-    slugsKey
-  ]);
+  }, [authReady, language, session?.access_token, slugsKey]);
 
   return {
     characters,

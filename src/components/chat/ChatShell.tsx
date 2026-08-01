@@ -647,9 +647,6 @@ export function ChatShell({ character }: { character: Character }) {
               <p>
                 {t("createdBy")} @{character.creatorUsername ?? "creator"}
               </p>
-              <p className="mt-1">
-                {character.viewCount ?? "1.2k"} {t("views")}
-              </p>
             </div>
           )}
         </div>
