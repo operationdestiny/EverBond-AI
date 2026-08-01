@@ -85,7 +85,12 @@ function slugify(value: string) {
 
 export function toDatabaseCharacter(character: PremiumCharacterInput) {
   const category = normalizeCharacterCategory(character.section, character.category);
-  const official = category !== "public-creations";
+
+  // Every record imported from the bundled premium character library is an
+  // official EverBond seed character, including the historical
+  // public-creations collection now displayed as More for You. User-created
+  // companions use /api/characters and never pass through this importer.
+  const official = true;
   const imageStoragePath =
     character.image_storage_path || imageStoragePathForCharacter(character);
 
@@ -119,7 +124,7 @@ export function toDatabaseCharacter(character: PremiumCharacterInput) {
     visibility: "public",
     is_public: true,
     official,
-    creator_username: official ? "everbond" : null,
+    creator_username: null,
     is_active: true
   };
 }
