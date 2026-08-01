@@ -4,7 +4,8 @@ import { LocalizedBannerImage } from "@/components/ui/LocalizedBannerImage";
 
 export const metadata = {
   title: "Create a Companion — EverBond",
-  description: "Create public or private AI companions for Public Creations."
+  description:
+    "Create a private AI companion and optionally share it with others by link."
 };
 
 export default function CreatePage() {

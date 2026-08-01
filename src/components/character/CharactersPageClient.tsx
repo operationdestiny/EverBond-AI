@@ -2,10 +2,7 @@
 
 import { useState } from "react";
 import { Search } from "lucide-react";
-import {
-  Character,
-  CharacterCategory
-} from "@/types/character";
+import { Character, CharacterCategory } from "@/types/character";
 import { CharacterGrid } from "@/components/character/CharacterGrid";
 import { characterCategories } from "@/lib/characters";
 import { useSiteLanguage } from "@/lib/site-language";
@@ -17,16 +14,7 @@ import {
 } from "@/lib/character-tags";
 import { CHARACTER_TOOLS_COPY } from "@/lib/character-tools-language";
 import { DISCOVER_COPY } from "@/lib/discover-language";
-
-const categoryKeyMap: Record<
-  CharacterCategory,
-  string
-> = {
-  "everbond-girls": "everbondGirls",
-  "anime-fantasy": "animeFantasy",
-  "everbond-guys": "everbondGuys",
-  "public-creations": "publicCreations"
-};
+import { CHARACTER_SHARING_COPY } from "@/lib/character-sharing-language";
 
 const hiddenDiscoverTags = new Set<string>([
   "Sweet",
@@ -42,18 +30,22 @@ export function CharactersPageClient({
 }) {
   const { t, language } = useSiteLanguage();
   const copy =
-    CHARACTER_TOOLS_COPY[language] ??
-    CHARACTER_TOOLS_COPY.EN;
+    CHARACTER_TOOLS_COPY[language] ?? CHARACTER_TOOLS_COPY.EN;
   const discoverCopy = DISCOVER_COPY[language] ?? DISCOVER_COPY.EN;
+  const sharing =
+    CHARACTER_SHARING_COPY[language] ?? CHARACTER_SHARING_COPY.EN;
   const browser = useCharacterBrowser(initial, "everbond-girls", language);
-  const [showAllTags, setShowAllTags] =
-    useState(false);
+  const [showAllTags, setShowAllTags] = useState(false);
+
+  const categoryLabels: Record<CharacterCategory, string> = {
+    "everbond-girls": t("everbondGirls"),
+    "anime-fantasy": t("animeFantasy"),
+    "everbond-guys": t("everbondGuys"),
+    "public-creations": sharing.moreForYou
+  };
 
   const displayedTags = (showAllTags
-    ? [
-        ...VISIBLE_CHARACTER_TAGS,
-        ...ADDITIONAL_CHARACTER_TAGS
-      ]
+    ? [...VISIBLE_CHARACTER_TAGS, ...ADDITIONAL_CHARACTER_TAGS]
     : [...VISIBLE_CHARACTER_TAGS]
   ).filter((tag) => !hiddenDiscoverTags.has(tag));
 
@@ -64,31 +56,24 @@ export function CharactersPageClient({
           <button
             key={item.id}
             type="button"
-            onClick={() =>
-              browser.setCategory(item.id)
-            }
+            onClick={() => browser.setCategory(item.id)}
             className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
               browser.category === item.id
                 ? "border-bond-rose bg-bond-rose text-white"
                 : "border-bond-rose/45 bg-white/[0.03] text-bond-muted hover:border-bond-rose/70 hover:text-white"
             }`}
           >
-            {t(categoryKeyMap[item.id])}
+            {categoryLabels[item.id]}
           </button>
         ))}
       </div>
 
       <div className="mx-auto mb-6 max-w-4xl">
         <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.04] px-5 py-3">
-          <Search
-            size={18}
-            className="text-bond-muted"
-          />
+          <Search size={18} className="text-bond-muted" />
           <input
             value={browser.query}
-            onChange={(event) =>
-              browser.setQuery(event.target.value)
-            }
+            onChange={(event) => browser.setQuery(event.target.value)}
             placeholder={t("searchCompanions")}
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-bond-muted"
           />
@@ -100,9 +85,7 @@ export function CharactersPageClient({
               key={tag}
               type="button"
               onClick={() =>
-                browser.setTag(
-                  browser.tag === tag ? "" : tag
-                )
+                browser.setTag(browser.tag === tag ? "" : tag)
               }
               className={`rounded-full border px-3.5 py-1.5 text-sm transition ${
                 browser.tag === tag
@@ -126,15 +109,11 @@ export function CharactersPageClient({
                 browser.setTag("");
               }
 
-              setShowAllTags(
-                (current) => !current
-              );
+              setShowAllTags((current) => !current);
             }}
             className="rounded-full border border-bond-rose/70 bg-bond-rose/10 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-bond-rose/20"
           >
-            {showAllTags
-              ? copy.fewerTags
-              : copy.moreTags}
+            {showAllTags ? copy.fewerTags : copy.moreTags}
           </button>
         </div>
       </div>

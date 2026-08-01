@@ -10,7 +10,7 @@ export type CharacterCardData = {
   exampleDialogue: string[];
 };
 
-export type CharacterVisibility = "public" | "private";
+export type CharacterVisibility = "public" | "private" | "unlisted";
 export type CharacterCategory =
   | "everbond-girls"
   | "anime-fantasy"

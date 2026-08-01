@@ -40,7 +40,12 @@ function toCompanion(character: CharacterRow) {
         ? `/character-assets/${character.category}/${character.image_file}`
         : ""),
     title: character.title || "",
-    creatorUsername: character.creator_username || undefined,
+    creatorUsername:
+      character.visibility === "unlisted"
+        ? undefined
+        : character.creator_username || undefined,
+    // Existing My Bond UI uses `public` as its second filter value. It now
+    // represents unlisted / Share by link, never a public Discover listing.
     visibility:
       character.visibility === "private"
         ? ("private" as const)
@@ -79,7 +84,11 @@ function defaultUsernameForUser(userId: string) {
 
 async function ensureUsername(
   supabase: ReturnType<typeof getSupabaseServiceClient>,
-  user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> },
+  user: {
+    id: string;
+    email?: string | null;
+    user_metadata?: Record<string, unknown>;
+  },
   currentUsername: unknown
 ) {
   const storedUsername = normalizeUsername(currentUsername);
@@ -178,7 +187,7 @@ export async function GET(request: Request) {
           { count: "exact" }
         )
         .eq("creator_id", user.id)
-        .in("visibility", ["public", "private"])
+        .in("visibility", ["public", "private", "unlisted"])
         .order("updated_at", { ascending: false })
         .limit(100),
       supabase
@@ -299,12 +308,7 @@ export async function GET(request: Request) {
       )
       .map(toCompanion);
 
-    const email =
-      profile.email ||
-      user.email ||
-      "";
-
-
+    const email = profile.email || user.email || "";
     const trialLimit = Number(
       profile.trial_message_limit ?? 20
     );
@@ -379,7 +383,6 @@ export async function PATCH(request: Request) {
     }
 
     const supabase = getSupabaseServiceClient();
-
     const { data: existing, error: existingError } =
       await supabase
         .from("profiles")
@@ -399,7 +402,6 @@ export async function PATCH(request: Request) {
     }
 
     const now = new Date().toISOString();
-
     const { error: profileError } = await supabase
       .from("profiles")
       .upsert(
@@ -475,4 +477,3 @@ export async function PATCH(request: Request) {
     );
   }
 }
-

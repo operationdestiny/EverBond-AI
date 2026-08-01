@@ -76,16 +76,22 @@ function arrayFrom(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
+function visibilityFromRow(row: CharacterRow): Character["visibility"] {
+  if (row.visibility === "private") return "private";
+  if (row.visibility === "unlisted") return "unlisted";
+  return "public";
+}
+
 function characterImageFromRow(row: CharacterRow) {
   if (row.image_url && row.image_url.trim()) return row.image_url;
 
-  const category = normalizeCategory(row.category);
+  const storedCategory = normalizeCategory(row.category);
 
   if (row.image_storage_path && row.image_storage_path.trim()) {
     return `/character-assets/${row.image_storage_path}`;
   }
 
-  return `/character-assets/${category}/${row.image_file}`;
+  return `/character-assets/${storedCategory}/${row.image_file}`;
 }
 
 export function rowToCharacter(row: CharacterRow): Character {
@@ -96,7 +102,10 @@ export function rowToCharacter(row: CharacterRow): Character {
   const speech = (ai.speech_style ?? {}) as JsonObject;
 
   const pace = row.relationship_pace ?? "Natural";
-  const category = normalizeCategory(row.category);
+  const storedCategory = normalizeCategory(row.category);
+  const isListedPublic =
+    row.is_public === true && row.visibility === "public";
+  const publicCategory = isListedPublic ? storedCategory : undefined;
 
   const traits = arrayFrom(core.traits);
   const flaws = arrayFrom(core.flaws);
@@ -107,21 +116,32 @@ export function rowToCharacter(row: CharacterRow): Character {
     name: row.name,
     slug: row.slug,
     archetype: row.role,
-    category,
-    gender: category === "everbond-guys" ? "male" : "female",
-    voiceGender: category === "everbond-guys" ? "male" : "female",
+    category: publicCategory,
+    gender:
+      publicCategory === "everbond-guys"
+        ? "male"
+        : publicCategory
+          ? "female"
+          : "neutral",
+    voiceGender:
+      publicCategory === "everbond-guys"
+        ? "male"
+        : publicCategory
+          ? "female"
+          : "neutral",
     image: characterImageFromRow(row),
     imageFile: row.image_file,
     tagline: row.title,
     description: row.opening_scenario,
     openingMessage: row.first_message,
     tags: row.tags ?? [],
-    visibility: row.visibility === "private" ? "private" : "public",
+    visibility: visibilityFromRow(row),
     official: Boolean(row.official),
     viewCount: compactViewCount(row.view_count),
     creatorUsername: row.creator_username ?? undefined,
     createdAt:
-      row.created_at && Date.now() - new Date(row.created_at).getTime() < 86_400_000
+      row.created_at &&
+      Date.now() - new Date(row.created_at).getTime() < 86_400_000
         ? "today"
         : "older",
 
@@ -168,28 +188,41 @@ export function rowToCharacter(row: CharacterRow): Character {
       relationshipStyle: [pace, stringFrom(dynamic.conflict_style)]
         .filter(Boolean)
         .join(" · "),
-      worldContext: [row.section, stringFrom(visual.setting), stringFrom(visual.mood)]
+      worldContext: [
+        row.section,
+        stringFrom(visual.setting),
+        stringFrom(visual.mood)
+      ]
         .filter(Boolean)
         .join(" · "),
-      exampleDialogue: [row.first_message, ...arrayFrom(ai.sample_dialogue)].filter(Boolean)
+      exampleDialogue: [
+        row.first_message,
+        ...arrayFrom(ai.sample_dialogue)
+      ].filter(Boolean)
     }
   };
 }
 
 function canUseSupabase() {
   return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 }
 
 export async function queryCharacters(input: CharacterQuery = {}) {
   const limit = Math.min(Math.max(input.limit ?? 100, 1), 100);
   const offset = Math.max(input.offset ?? 0, 0);
+  const isMoreForYou = input.category === "public-creations";
 
   if (!canUseSupabase()) {
-    const filtered = fallbackCharacters.filter(
-      (item) => !input.category || item.category === input.category
-    );
+    const filtered = fallbackCharacters.filter((item) => {
+      if (isMoreForYou) {
+        return item.official !== false && item.category !== "public-creations";
+      }
+
+      return !input.category || item.category === input.category;
+    });
 
     return {
       characters: filtered.slice(offset, offset + limit),
@@ -206,7 +239,14 @@ export async function queryCharacters(input: CharacterQuery = {}) {
     .eq("is_active", true)
     .eq("visibility", "public");
 
-  if (input.category) query = query.eq("category", input.category);
+  if (isMoreForYou) {
+    query = query
+      .eq("official", true)
+      .neq("category", "public-creations");
+  } else if (input.category) {
+    query = query.eq("category", input.category);
+  }
+
   if (input.tag) query = query.contains("tags", [input.tag]);
 
   if (input.query?.trim()) {
@@ -224,9 +264,11 @@ export async function queryCharacters(input: CharacterQuery = {}) {
   if (error) throw error;
 
   return {
-    characters: (data as CharacterRow[]).map(rowToCharacter),
+    characters: ((data ?? []) as CharacterRow[]).map(rowToCharacter),
     hasMore:
-      typeof count === "number" ? offset + limit < count : (data?.length ?? 0) === limit
+      typeof count === "number"
+        ? offset + limit < count
+        : (data?.length ?? 0) === limit
   };
 }
 
@@ -259,4 +301,30 @@ export async function getCharacterBySlugFromSupabase(
   if (error) throw error;
 
   return data ? rowToCharacter(data as CharacterRow) : undefined;
+}
+
+export async function getLinkAccessibleCharacterBySlugFromSupabase(
+  slug: string
+): Promise<Character | undefined> {
+  if (!canUseSupabase()) {
+    return fallbackCharacters.find((character) => character.slug === slug);
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("characters")
+    .select(selectFields)
+    .eq("slug", slug)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return undefined;
+
+  const row = data as CharacterRow;
+  const isPublic =
+    row.is_public === true && row.visibility === "public";
+  const isShareByLink = row.visibility === "unlisted";
+
+  return isPublic || isShareByLink ? rowToCharacter(row) : undefined;
 }

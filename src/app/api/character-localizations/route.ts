@@ -28,7 +28,8 @@ async function optionalUserId(request: Request) {
 
   if (!token) return null;
 
-  const { data, error } = await getSupabaseServiceClient().auth.getUser(token);
+  const { data, error } =
+    await getSupabaseServiceClient().auth.getUser(token);
   return error ? null : data.user?.id ?? null;
 }
 
@@ -54,16 +55,21 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    const allowedRows = (data ?? []).filter((row: Record<string, unknown>) => {
-      const isPublic =
-        row.is_public === true && row.visibility === "public";
-      const isOwner =
-        Boolean(userId) &&
-        row.creator_id === userId &&
-        ["private", "unlisted", "public"].includes(String(row.visibility));
+    const allowedRows = (data ?? []).filter(
+      (row: Record<string, unknown>) => {
+        const isPublic =
+          row.is_public === true && row.visibility === "public";
+        const isShareByLink = row.visibility === "unlisted";
+        const isOwner =
+          Boolean(userId) &&
+          row.creator_id === userId &&
+          ["private", "unlisted", "public"].includes(
+            String(row.visibility)
+          );
 
-      return isPublic || isOwner;
-    });
+        return isPublic || isShareByLink || isOwner;
+      }
+    );
 
     const bySlug = new Map(
       allowedRows.map((row: Record<string, unknown>) => [

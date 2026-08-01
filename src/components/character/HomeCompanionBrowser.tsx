@@ -8,9 +8,13 @@ import { useCharacterBrowser } from "@/components/character/useCharacterBrowser"
 import { characterCategories } from "@/lib/characters";
 import { useSiteLanguage } from "@/lib/site-language";
 import { LocalizedBannerImage } from "@/components/ui/LocalizedBannerImage";
-import { CHARACTER_TAG_KEY_MAP, type CharacterTag } from "@/lib/character-tags";
+import {
+  CHARACTER_TAG_KEY_MAP,
+  type CharacterTag
+} from "@/lib/character-tags";
 import { CHARACTER_TOOLS_COPY } from "@/lib/character-tools-language";
 import { DISCOVER_COPY } from "@/lib/discover-language";
+import { CHARACTER_SHARING_COPY } from "@/lib/character-sharing-language";
 
 const visibleFilters = [
   { id: "All", key: "all" },
@@ -39,6 +43,8 @@ export function HomeCompanionBrowser({
   const copy =
     CHARACTER_TOOLS_COPY[language] ?? CHARACTER_TOOLS_COPY.EN;
   const discoverCopy = DISCOVER_COPY[language] ?? DISCOVER_COPY.EN;
+  const sharing =
+    CHARACTER_SHARING_COPY[language] ?? CHARACTER_SHARING_COPY.EN;
   const browser = useCharacterBrowser(initial, "everbond-girls", language);
   const [filter, setFilter] = useState("All");
   const [showAllTags, setShowAllTags] = useState(false);
@@ -47,7 +53,7 @@ export function HomeCompanionBrowser({
     "everbond-girls": t("everbondGirls"),
     "anime-fantasy": t("animeFantasy"),
     "everbond-guys": t("everbondGuys"),
-    "public-creations": t("publicCreations")
+    "public-creations": sharing.moreForYou
   };
 
   const activeCategoryLabel = localizedCategories[browser.category];
@@ -141,6 +147,7 @@ export function HomeCompanionBrowser({
             <button
               type="button"
               className="v18-control flex h-10 w-10 items-center justify-center text-white"
+              aria-label={t("more")}
             >
               <Filter size={18} />
             </button>
@@ -195,7 +202,9 @@ export function HomeCompanionBrowser({
               onClick={browser.loadMore}
               className="rounded-full border border-bond-rose bg-bond-rose px-6 py-2.5 font-semibold text-white disabled:opacity-50"
             >
-              {browser.loading ? discoverCopy.loading : copy.loadMoreCompanions}
+              {browser.loading
+                ? discoverCopy.loading
+                : copy.loadMoreCompanions}
             </button>
           </div>
         )}

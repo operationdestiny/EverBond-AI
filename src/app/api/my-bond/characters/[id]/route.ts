@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
-import { ALL_CHARACTER_TAGS } from "@/lib/character-tags";
 
 export const runtime = "nodejs";
 
+// `public` is retained only as the existing My Bond client value. The server
+// always converts it to database visibility `unlisted` (Share by link).
 const UpdateCharacter = z
   .object({
     name: z.string().trim().min(1).max(30),
@@ -13,8 +14,7 @@ const UpdateCharacter = z
     temperament: z.string().trim().min(1).max(50),
     openingScenario: z.string().trim().min(1).max(200),
     firstMessage: z.string().trim().min(1).max(100),
-    visibility: z.enum(["public", "private"]),
-    tags: z.array(z.enum(ALL_CHARACTER_TAGS)).min(1).max(4)
+    visibility: z.enum(["public", "private"])
   })
   .strict();
 
@@ -80,11 +80,19 @@ function summaryFromRow(row: {
     name: row.name,
     image: imageFromRow(row),
     title: row.title ?? "",
+    // My Bond's old `public` value now means Share by link / unlisted.
     visibility:
       row.visibility === "private"
         ? ("private" as const)
         : ("public" as const),
-    creatorUsername: row.creator_username ?? undefined
+    creatorUsername:
+      row.visibility === "unlisted"
+        ? undefined
+        : row.creator_username ?? undefined,
+    shareUrl:
+      row.visibility === "unlisted" || row.visibility === "public"
+        ? `/chat/${row.slug}`
+        : undefined
   };
 }
 
@@ -93,7 +101,7 @@ async function getOwnedCharacter(userId: string, characterId: string) {
   const { data, error } = await supabase
     .from("characters")
     .select(
-      "id,slug,name,section,category,role,tags,title,opening_scenario,first_message,relationship_context,ai_profile,image_file,image_storage_bucket,image_storage_path,image_url,visibility,is_public,official,creator_id,creator_username,is_active"
+      "id,slug,name,section,category,role,title,opening_scenario,first_message,relationship_context,ai_profile,generated_seo,quality_control,image_file,image_storage_bucket,image_storage_path,image_url,visibility,is_public,official,creator_id,creator_username,is_active"
     )
     .eq("id", characterId)
     .eq("creator_id", userId)
@@ -134,7 +142,6 @@ export async function GET(
           visualDescription: character.title ?? "",
           description: character.relationship_context ?? "",
           temperament: character.role ?? "",
-          tags: Array.isArray(character.tags) ? character.tags : [],
           openingScenario: character.opening_scenario ?? "",
           firstMessage: character.first_message ?? ""
         }
@@ -185,14 +192,6 @@ export async function PATCH(
     }
 
     const formData = await request.formData();
-    let tags: unknown = [];
-
-    try {
-      tags = JSON.parse(String(formData.get("tags") ?? "[]"));
-    } catch {
-      tags = [];
-    }
-
     const parsed = UpdateCharacter.safeParse({
       name: formData.get("name"),
       visualDescription: formData.get("visualDescription"),
@@ -200,8 +199,7 @@ export async function PATCH(
       temperament: formData.get("temperament"),
       openingScenario: formData.get("openingScenario"),
       firstMessage: formData.get("firstMessage"),
-      visibility: formData.get("visibility"),
-      tags
+      visibility: formData.get("visibility")
     });
 
     if (!parsed.success) {
@@ -234,11 +232,15 @@ export async function PATCH(
       newImagePath = `${user.id}/${crypto.randomUUID()}.${extension}`;
       const upload = await supabase.storage
         .from(CHARACTER_IMAGE_BUCKET)
-        .upload(newImagePath, Buffer.from(await image.arrayBuffer()), {
-          contentType: image.type,
-          upsert: false,
-          cacheControl: "31536000"
-        });
+        .upload(
+          newImagePath,
+          Buffer.from(await image.arrayBuffer()),
+          {
+            contentType: image.type,
+            upsert: false,
+            cacheControl: "31536000"
+          }
+        );
 
       if (upload.error) throw upload.error;
 
@@ -251,7 +253,8 @@ export async function PATCH(
       imageUpdate = {
         image_storage_bucket: CHARACTER_IMAGE_BUCKET,
         image_storage_path: newImagePath,
-        image_file: newImagePath.split("/").pop() ?? "character.jpg",
+        image_file:
+          newImagePath.split("/").pop() ?? "character.jpg",
         image_url: publicUrl
       };
     }
@@ -261,27 +264,40 @@ export async function PATCH(
         ? existing.ai_profile
         : {};
     const visual =
-      currentAi.visual_identity && typeof currentAi.visual_identity === "object"
+      currentAi.visual_identity &&
+      typeof currentAi.visual_identity === "object"
         ? currentAi.visual_identity
         : {};
     const personality =
-      currentAi.personality_core && typeof currentAi.personality_core === "object"
+      currentAi.personality_core &&
+      typeof currentAi.personality_core === "object"
         ? currentAi.personality_core
         : {};
     const dynamic =
-      currentAi.romantic_dynamic && typeof currentAi.romantic_dynamic === "object"
+      currentAi.romantic_dynamic &&
+      typeof currentAi.romantic_dynamic === "object"
         ? currentAi.romantic_dynamic
         : {};
 
-    const isPublic = parsed.data.visibility === "public";
+    const databaseVisibility =
+      parsed.data.visibility === "public" ? "unlisted" : "private";
     const now = new Date().toISOString();
+
+    const existingGeneratedSeo =
+      existing.generated_seo && typeof existing.generated_seo === "object"
+        ? existing.generated_seo
+        : {};
+    const existingQualityControl =
+      existing.quality_control &&
+      typeof existing.quality_control === "object"
+        ? existing.quality_control
+        : {};
 
     const { data: updated, error } = await supabase
       .from("characters")
       .update({
         name: parsed.data.name,
         role: parsed.data.temperament,
-        tags: parsed.data.tags,
         title: parsed.data.visualDescription,
         opening_scenario: parsed.data.openingScenario,
         first_message: parsed.data.firstMessage,
@@ -303,8 +319,17 @@ export async function PATCH(
           },
           sample_dialogue: [parsed.data.firstMessage]
         },
-        visibility: parsed.data.visibility,
-        is_public: isPublic,
+        section: "My Companions",
+        visibility: databaseVisibility,
+        is_public: false,
+        generated_seo: {
+          ...existingGeneratedSeo,
+          indexable: false
+        },
+        quality_control: {
+          ...existingQualityControl,
+          public_listing_disabled: true
+        },
         updated_at: now,
         ...imageUpdate
       })
@@ -323,7 +348,9 @@ export async function PATCH(
       existing.image_storage_path !== newImagePath
     ) {
       await supabase.storage
-        .from(existing.image_storage_bucket || CHARACTER_IMAGE_BUCKET)
+        .from(
+          existing.image_storage_bucket || CHARACTER_IMAGE_BUCKET
+        )
         .remove([existing.image_storage_path]);
     }
 
@@ -337,8 +364,8 @@ export async function PATCH(
     );
   } catch (error) {
     if (newImagePath) {
-      await getSupabaseServiceClient().storage
-        .from(CHARACTER_IMAGE_BUCKET)
+      await getSupabaseServiceClient()
+        .storage.from(CHARACTER_IMAGE_BUCKET)
         .remove([newImagePath]);
     }
 
@@ -390,7 +417,9 @@ export async function DELETE(
 
     if (existing.image_storage_path) {
       await supabase.storage
-        .from(existing.image_storage_bucket || CHARACTER_IMAGE_BUCKET)
+        .from(
+          existing.image_storage_bucket || CHARACTER_IMAGE_BUCKET
+        )
         .remove([existing.image_storage_path]);
     }
 

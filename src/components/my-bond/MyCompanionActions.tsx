@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Pencil, Trash2, X } from "lucide-react";
+import { Check, Copy, Pencil, Trash2, X } from "lucide-react";
 import { useSiteLanguage } from "@/lib/site-language";
 import { MY_BOND_COPY } from "@/lib/my-bond-language";
-import {
-  ALL_CHARACTER_TAGS,
-  CHARACTER_TAG_KEY_MAP,
-  type CharacterTag
-} from "@/lib/character-tags";
 import { CHARACTER_TOOLS_COPY } from "@/lib/character-tools-language";
+import {
+  CHARACTER_SHARING_COPY,
+  applyMyBondShareLinkLabels
+} from "@/lib/character-sharing-language";
+
+// My Bond already uses the old `public` UI key throughout its large dashboard.
+// User-created companions are never public now; that key is only a UI alias for
+// database visibility `unlisted` (Share by link).
+applyMyBondShareLinkLabels(MY_BOND_COPY);
 
 export type UpdatedCompanion = {
   id: string;
@@ -26,7 +30,6 @@ type EditableCompanion = UpdatedCompanion & {
   visualDescription: string;
   description: string;
   temperament: string;
-  tags: CharacterTag[];
   openingScenario: string;
   firstMessage: string;
 };
@@ -48,6 +51,8 @@ export function MyCompanionActions({
   const copy = MY_BOND_COPY[language] ?? MY_BOND_COPY.EN;
   const tools =
     CHARACTER_TOOLS_COPY[language] ?? CHARACTER_TOOLS_COPY.EN;
+  const sharing =
+    CHARACTER_SHARING_COPY[language] ?? CHARACTER_SHARING_COPY.EN;
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -59,14 +64,7 @@ export function MyCompanionActions({
   const [form, setForm] = useState<EditableCompanion | null>(null);
   const [replacementImage, setReplacementImage] = useState<File | null>(null);
   const [replacementPreview, setReplacementPreview] = useState("");
-
-  const selectedTagText = useMemo(
-    () =>
-      (form?.tags ?? [])
-        .map((tag) => t(CHARACTER_TAG_KEY_MAP[tag]))
-        .join(", "),
-    [form?.tags, t]
-  );
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -85,11 +83,27 @@ export function MyCompanionActions({
     );
   }
 
+  function shareUrl() {
+    if (typeof window === "undefined") return `/chat/${companion.slug}`;
+    return `${window.location.origin}/chat/${companion.slug}`;
+  }
+
+  async function copyShareLink() {
+    try {
+      await navigator.clipboard.writeText(shareUrl());
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 2200);
+    } catch {
+      setError(sharing.copyFailed);
+    }
+  }
+
   async function openEditor() {
     setEditOpen(true);
     setLoadingEdit(true);
     setError("");
     setNotice("");
+    setLinkCopied(false);
     setReplacementImage(null);
     setReplacementPreview("");
 
@@ -121,24 +135,6 @@ export function MyCompanionActions({
     }
   }
 
-  function toggleTag(tag: CharacterTag) {
-    if (!form) return;
-
-    const current = form.tags;
-
-    if (current.includes(tag)) {
-      if (current.length === 1) return;
-      setField(
-        "tags",
-        current.filter((item) => item !== tag)
-      );
-      return;
-    }
-
-    if (current.length >= 4) return;
-    setField("tags", [...current, tag]);
-  }
-
   async function saveCompanion() {
     if (!form || saving) return;
 
@@ -155,7 +151,6 @@ export function MyCompanionActions({
       body.set("openingScenario", form.openingScenario.trim());
       body.set("firstMessage", form.firstMessage.trim());
       body.set("visibility", form.visibility);
-      body.set("tags", JSON.stringify(form.tags));
 
       if (replacementImage) {
         body.set("image", replacementImage);
@@ -191,7 +186,6 @@ export function MyCompanionActions({
               visualDescription: form.visualDescription,
               description: form.description,
               temperament: form.temperament,
-              tags: form.tags,
               openingScenario: form.openingScenario,
               firstMessage: form.firstMessage
             }
@@ -321,7 +315,9 @@ export function MyCompanionActions({
                       onChange={(event) => {
                         const file = event.target.files?.[0] ?? null;
                         setReplacementImage(file);
-                        setReplacementPreview(file ? URL.createObjectURL(file) : "");
+                        setReplacementPreview(
+                          file ? URL.createObjectURL(file) : ""
+                        );
                       }}
                       className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-bond-muted file:mr-3 file:rounded-full file:border-0 file:bg-bond-rose file:px-4 file:py-2 file:text-sm file:font-bold file:text-white"
                     />
@@ -330,7 +326,9 @@ export function MyCompanionActions({
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-sm font-semibold text-bond-muted">{t("name")}</span>
+                  <span className="text-sm font-semibold text-bond-muted">
+                    {t("name")}
+                  </span>
                   <input
                     value={form.name}
                     maxLength={30}
@@ -340,7 +338,9 @@ export function MyCompanionActions({
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-sm font-semibold text-bond-muted">{t("visualDescription")}</span>
+                  <span className="text-sm font-semibold text-bond-muted">
+                    {t("visualDescription")}
+                  </span>
                   <input
                     value={form.visualDescription}
                     maxLength={80}
@@ -352,53 +352,38 @@ export function MyCompanionActions({
                 </label>
 
                 <label className="space-y-2 md:col-span-2">
-                  <span className="text-sm font-semibold text-bond-muted">{t("describeYourCompanion")}</span>
+                  <span className="text-sm font-semibold text-bond-muted">
+                    {t("describeYourCompanion")}
+                  </span>
                   <textarea
                     value={form.description}
                     maxLength={100}
                     rows={3}
-                    onChange={(event) => setField("description", event.target.value)}
+                    onChange={(event) =>
+                      setField("description", event.target.value)
+                    }
                     className={`${inputClass} resize-none`}
                   />
                 </label>
 
                 <label className="space-y-2 md:col-span-2">
-                  <span className="text-sm font-semibold text-bond-muted">{t("temperament")}</span>
+                  <span className="text-sm font-semibold text-bond-muted">
+                    {t("temperament")}
+                  </span>
                   <input
                     value={form.temperament}
                     maxLength={50}
-                    onChange={(event) => setField("temperament", event.target.value)}
+                    onChange={(event) =>
+                      setField("temperament", event.target.value)
+                    }
                     className={inputClass}
                   />
                 </label>
 
-                <div className="space-y-3 md:col-span-2">
-                  <span className="text-sm font-semibold text-bond-muted">{t("tags")}</span>
-                  <div className="flex flex-wrap gap-2">
-                    {ALL_CHARACTER_TAGS.map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => toggleTag(tag)}
-                        className={`rounded-full border px-3.5 py-2 text-sm font-semibold transition ${
-                          form.tags.includes(tag)
-                            ? "border-bond-rose bg-bond-rose text-white"
-                            : "border-white/10 bg-white/[0.03] text-bond-muted hover:border-bond-rose/45 hover:text-white"
-                        }`}
-                      >
-                        {t(CHARACTER_TAG_KEY_MAP[tag])}
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    readOnly
-                    value={selectedTagText}
-                    className={inputClass}
-                  />
-                </div>
-
                 <label className="space-y-2 md:col-span-2">
-                  <span className="text-sm font-semibold text-bond-muted">{t("openingScenario")}</span>
+                  <span className="text-sm font-semibold text-bond-muted">
+                    {t("openingScenario")}
+                  </span>
                   <textarea
                     value={form.openingScenario}
                     maxLength={200}
@@ -411,7 +396,9 @@ export function MyCompanionActions({
                 </label>
 
                 <label className="space-y-2 md:col-span-2">
-                  <span className="text-sm font-semibold text-bond-muted">{t("firstMessage")}</span>
+                  <span className="text-sm font-semibold text-bond-muted">
+                    {t("firstMessage")}
+                  </span>
                   <textarea
                     value={form.firstMessage}
                     maxLength={100}
@@ -424,28 +411,73 @@ export function MyCompanionActions({
                 </label>
 
                 <div className="space-y-3 md:col-span-2">
-                  <span className="text-sm font-semibold text-bond-muted">{t("visibility")}</span>
+                  <span className="text-sm font-semibold text-bond-muted">
+                    {t("visibility")}
+                  </span>
                   <div className="grid gap-3 md:grid-cols-2">
-                    {(["public", "private"] as const).map((visibility) => (
+                    {(
+                      [
+                        {
+                          value: "private",
+                          label: sharing.private,
+                          description: sharing.privateDescription
+                        },
+                        {
+                          value: "public",
+                          label: sharing.shareByLink,
+                          description: sharing.shareByLinkDescription
+                        }
+                      ] as const
+                    ).map((option) => (
                       <button
-                        key={visibility}
+                        key={option.value}
                         type="button"
-                        onClick={() => setField("visibility", visibility)}
-                        className={`rounded-2xl border p-4 text-left font-bold transition ${
-                          form.visibility === visibility
+                        onClick={() => setField("visibility", option.value)}
+                        className={`rounded-2xl border p-4 text-left transition ${
+                          form.visibility === option.value
                             ? "border-bond-rose bg-bond-rose/15 text-white"
                             : "border-white/10 bg-white/[0.03] text-bond-muted hover:border-bond-rose/40"
                         }`}
                       >
-                        {visibility === "public" ? copy.public : copy.private}
+                        <p className="font-display text-lg font-bold">
+                          {option.label}
+                        </p>
+                        <p className="mt-2 text-sm font-normal leading-6 text-bond-muted">
+                          {option.description}
+                        </p>
                       </button>
                     ))}
                   </div>
+
+                  {form.visibility === "public" && (
+                    <div className="rounded-2xl border border-bond-rose/35 bg-black/25 p-4">
+                      <p className="text-sm leading-6 text-bond-muted">
+                        {sharing.shareLinkHelp}
+                      </p>
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                        <input
+                          readOnly
+                          value={shareUrl()}
+                          className={`${inputClass} min-w-0 flex-1`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void copyShareLink()}
+                          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-bond-rose/55 bg-bond-rose/10 px-4 py-3 text-sm font-bold text-white transition hover:bg-bond-rose/20"
+                        >
+                          {linkCopied ? <Check size={16} /> : <Copy size={16} />}
+                          {linkCopied ? sharing.linkCopied : sharing.copyLink}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {notice && <p className="mt-5 text-sm text-emerald-300">{notice}</p>}
+            {notice && (
+              <p className="mt-5 text-sm text-emerald-300">{notice}</p>
+            )}
             {error && <p className="mt-5 text-sm text-red-200">{error}</p>}
 
             {form && !loadingEdit && (

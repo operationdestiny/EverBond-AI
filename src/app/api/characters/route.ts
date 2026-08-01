@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { queryCharacters } from "@/lib/characters-db";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
-import { ALL_CHARACTER_TAGS } from "@/lib/character-tags";
 
 export const runtime = "nodejs";
 
@@ -16,36 +15,12 @@ const Category = z.enum([
 const CreateCharacter = z
   .object({
     name: z.string().trim().min(1).max(30),
-    visualDescription: z
-      .string()
-      .trim()
-      .min(1)
-      .max(80),
-    description: z
-      .string()
-      .trim()
-      .min(1)
-      .max(100),
-    temperament: z
-      .string()
-      .trim()
-      .min(1)
-      .max(50),
-    openingScenario: z
-      .string()
-      .trim()
-      .min(1)
-      .max(200),
-    firstMessage: z
-      .string()
-      .trim()
-      .min(1)
-      .max(100),
-    visibility: z.enum(["public", "private"]),
-    tags: z
-      .array(z.enum(ALL_CHARACTER_TAGS))
-      .min(1)
-      .max(4)
+    visualDescription: z.string().trim().min(1).max(80),
+    description: z.string().trim().min(1).max(100),
+    temperament: z.string().trim().min(1).max(50),
+    openingScenario: z.string().trim().min(1).max(200),
+    firstMessage: z.string().trim().min(1).max(100),
+    visibility: z.enum(["private", "unlisted"])
   })
   .strict();
 
@@ -57,8 +32,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const USER_CHARACTER_LIMIT = 100;
-const CHARACTER_IMAGE_BUCKET =
-  "character-images";
+const CHARACTER_IMAGE_BUCKET = "character-images";
 
 async function getUser(request: Request) {
   const token = request.headers
@@ -68,8 +42,7 @@ async function getUser(request: Request) {
   if (!token) return null;
 
   const supabase = getSupabaseServiceClient();
-  const { data, error } =
-    await supabase.auth.getUser(token);
+  const { data, error } = await supabase.auth.getUser(token);
 
   if (error || !data.user) return null;
   return data.user;
@@ -94,9 +67,7 @@ function imageExtension(file: File) {
 }
 
 function defaultUsername(userId: string) {
-  return `member_${userId
-    .replaceAll("-", "")
-    .slice(0, 8)}`;
+  return `member_${userId.replaceAll("-", "").slice(0, 8)}`;
 }
 
 async function ensureUsername(
@@ -108,20 +79,19 @@ async function ensureUsername(
 ) {
   const supabase = getSupabaseServiceClient();
 
-  const { data: profile, error } =
-    await supabase
-      .from("profiles")
-      .upsert(
-        {
-          user_id: user.id,
-          email: user.email ?? null
-        },
-        {
-          onConflict: "user_id"
-        }
-      )
-      .select("username")
-      .single();
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .upsert(
+      {
+        user_id: user.id,
+        email: user.email ?? null
+      },
+      {
+        onConflict: "user_id"
+      }
+    )
+    .select("username")
+    .single();
 
   if (error) throw error;
 
@@ -135,26 +105,21 @@ async function ensureUsername(
   }
 
   const metadata =
-    typeof user.user_metadata?.username ===
-    "string"
-      ? user.user_metadata.username
-          .trim()
-          .toLowerCase()
+    typeof user.user_metadata?.username === "string"
+      ? user.user_metadata.username.trim().toLowerCase()
       : "";
 
-  const username =
-    /^[a-z0-9_]{3,30}$/.test(metadata)
-      ? metadata
-      : defaultUsername(user.id);
+  const username = /^[a-z0-9_]{3,30}$/.test(metadata)
+    ? metadata
+    : defaultUsername(user.id);
 
-  const { error: updateError } =
-    await supabase
-      .from("profiles")
-      .update({
-        username,
-        updated_at: new Date().toISOString()
-      })
-      .eq("user_id", user.id);
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({
+      username,
+      updated_at: new Date().toISOString()
+    })
+    .eq("user_id", user.id);
 
   if (updateError) throw updateError;
 
@@ -165,26 +130,13 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const parsed = z
     .object({
-      limit: z.coerce
-        .number()
-        .int()
-        .min(1)
-        .max(100)
-        .default(100),
-      offset: z.coerce
-        .number()
-        .int()
-        .min(0)
-        .default(0),
-      category: Category.default(
-        "everbond-girls"
-      ),
+      limit: z.coerce.number().int().min(1).max(100).default(100),
+      offset: z.coerce.number().int().min(0).default(0),
+      category: Category.default("everbond-girls"),
       q: z.string().max(100).optional(),
       tag: z.string().max(50).optional()
     })
-    .safeParse(
-      Object.fromEntries(url.searchParams)
-    );
+    .safeParse(Object.fromEntries(url.searchParams));
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -202,15 +154,10 @@ export async function GET(request: Request) {
       tag: parsed.data.tag
     });
 
-    const cacheControl =
-      parsed.data.category ===
-      "public-creations"
-        ? "public, max-age=0, s-maxage=0, must-revalidate"
-        : "public, s-maxage=60, stale-while-revalidate=300";
-
     return NextResponse.json(result, {
       headers: {
-        "Cache-Control": cacheControl
+        "Cache-Control":
+          "public, s-maxage=60, stale-while-revalidate=300"
       }
     });
   } catch (error) {
@@ -260,37 +207,14 @@ export async function POST(request: Request) {
       );
     }
 
-    let tags: unknown = [];
-
-    try {
-      tags = JSON.parse(
-        String(formData.get("tags") ?? "[]")
-      );
-    } catch {
-      tags = [];
-    }
-
     const parsed = CreateCharacter.safeParse({
       name: formData.get("name"),
-      visualDescription: formData.get(
-        "visualDescription"
-      ),
-      description: formData.get(
-        "description"
-      ),
-      temperament: formData.get(
-        "temperament"
-      ),
-      openingScenario: formData.get(
-        "openingScenario"
-      ),
-      firstMessage: formData.get(
-        "firstMessage"
-      ),
-      visibility: formData.get(
-        "visibility"
-      ),
-      tags
+      visualDescription: formData.get("visualDescription"),
+      description: formData.get("description"),
+      temperament: formData.get("temperament"),
+      openingScenario: formData.get("openingScenario"),
+      firstMessage: formData.get("firstMessage"),
+      visibility: formData.get("visibility")
     });
 
     if (!parsed.success) {
@@ -298,24 +222,21 @@ export async function POST(request: Request) {
         {
           error: "INVALID_CHARACTER",
           message:
-            parsed.error.issues[0]?.message ??
-            "Invalid character"
+            parsed.error.issues[0]?.message ?? "Invalid character"
         },
         { status: 400 }
       );
     }
 
-    const supabase =
-      getSupabaseServiceClient();
+    const supabase = getSupabaseServiceClient();
 
-    const { count, error: countError } =
-      await supabase
-        .from("characters")
-        .select("*", {
-          count: "exact",
-          head: true
-        })
-        .eq("creator_id", user.id);
+    const { count, error: countError } = await supabase
+      .from("characters")
+      .select("*", {
+        count: "exact",
+        head: true
+      })
+      .eq("creator_id", user.id);
 
     if (countError) throw countError;
 
@@ -326,33 +247,23 @@ export async function POST(request: Request) {
       );
     }
 
-    const username =
-      await ensureUsername(user);
+    const username = await ensureUsername(user);
     const randomId = crypto.randomUUID();
-    const slug = `${slugify(
-      parsed.data.name
-    )}-${randomId.slice(0, 8)}`;
+    const shareToken = randomId.replaceAll("-", "");
+    const slug = `${slugify(parsed.data.name)}-${shareToken}`;
     const characterId = `user-${randomId}`;
     const extension = imageExtension(image);
     uploadedPath = `${user.id}/${randomId}.${extension}`;
 
     const upload = await supabase.storage
       .from(CHARACTER_IMAGE_BUCKET)
-      .upload(
-        uploadedPath,
-        Buffer.from(
-          await image.arrayBuffer()
-        ),
-        {
-          contentType: image.type,
-          upsert: false,
-          cacheControl: "31536000"
-        }
-      );
+      .upload(uploadedPath, Buffer.from(await image.arrayBuffer()), {
+        contentType: image.type,
+        upsert: false,
+        cacheControl: "31536000"
+      });
 
-    if (upload.error) {
-      throw upload.error;
-    }
+    if (upload.error) throw upload.error;
 
     const {
       data: { publicUrl }
@@ -361,88 +272,74 @@ export async function POST(request: Request) {
       .getPublicUrl(uploadedPath);
 
     const now = new Date();
-    const isPublic =
-      parsed.data.visibility === "public";
-
     const aiProfile = {
       visual_identity: {
-        description:
-          parsed.data.visualDescription
+        description: parsed.data.visualDescription
       },
       personality_core: {
         traits: [parsed.data.temperament],
-        description:
-          parsed.data.description
+        description: parsed.data.description
       },
       romantic_dynamic: {
         starting_bond: "New bond",
-        affection_style:
-          parsed.data.temperament
+        affection_style: parsed.data.temperament
       },
       speech_style: {
-        voice:
-          "Natural, emotional, in-character dialogue.",
+        voice: "Natural, emotional, in-character dialogue.",
         sentence_style: "Descriptive"
       },
-      sample_dialogue: [
-        parsed.data.firstMessage
-      ]
+      sample_dialogue: [parsed.data.firstMessage]
     };
 
-    const { error: insertError } =
-      await supabase
-        .from("characters")
-        .insert({
-          id: characterId,
-          slug,
-          name: parsed.data.name,
-          section: "Public Creations",
-          category: "public-creations",
-          role: parsed.data.temperament,
-          relationship_pace: "Natural",
-          tags: parsed.data.tags,
-          title:
-            parsed.data.visualDescription,
-          opening_scenario:
-            parsed.data.openingScenario,
-          first_message:
-            parsed.data.firstMessage,
-          relationship_context:
-            parsed.data.description,
-          ai_profile: aiProfile,
-          feature_flags: {
-            voice_enabled: false,
-            image_generation_enabled: false,
-            gifts_enabled: true
-          },
-          generated_seo: {
-            title: `${parsed.data.name} — EverBond`,
-            description:
-              parsed.data.description
-          },
-          quality_control: {
-            source: "user-created",
-            reviewed: false
-          },
-          image_file: `${randomId}.${extension}`,
-          image_storage_bucket:
-            CHARACTER_IMAGE_BUCKET,
-          image_storage_path: uploadedPath,
-          image_url: publicUrl,
-          display_order:
-            -Math.floor(now.getTime() / 1000),
-          visibility:
-            parsed.data.visibility,
-          is_public: isPublic,
-          official: false,
-          creator_id: user.id,
-          creator_username: username,
-          view_count: 0,
-          favorite_count: 0,
-          is_active: true,
-          created_at: now.toISOString(),
-          updated_at: now.toISOString()
-        });
+    const { error: insertError } = await supabase
+      .from("characters")
+      .insert({
+        id: characterId,
+        slug,
+        name: parsed.data.name,
+        section: "My Companions",
+        // This internal category keeps legacy image and data compatibility.
+        // User-created characters are never selected by the public query.
+        category: "public-creations",
+        role: parsed.data.temperament,
+        relationship_pace: "Natural",
+        tags: [],
+        title: parsed.data.visualDescription,
+        opening_scenario: parsed.data.openingScenario,
+        first_message: parsed.data.firstMessage,
+        relationship_context: parsed.data.description,
+        ai_profile: aiProfile,
+        feature_flags: {
+          voice_enabled: false,
+          image_generation_enabled: false,
+          gifts_enabled: true
+        },
+        generated_seo: {
+          title: `${parsed.data.name} — EverBond`,
+          description: parsed.data.description,
+          indexable: false
+        },
+        quality_control: {
+          source: "user-created",
+          public_listing_disabled: true,
+          reviewed: false
+        },
+        image_file: `${randomId}.${extension}`,
+        image_storage_bucket: CHARACTER_IMAGE_BUCKET,
+        image_storage_path: uploadedPath,
+        image_url: publicUrl,
+        display_order: -Math.floor(now.getTime() / 1000),
+        visibility: parsed.data.visibility,
+        is_public: false,
+        official: false,
+        creator_id: user.id,
+        creator_username: username,
+        view_count: 0,
+        favorite_count: 0,
+        is_active: true,
+        created_at: now.toISOString(),
+        updated_at: now.toISOString()
+      });
 
     if (insertError) {
       await supabase.storage
@@ -456,8 +353,11 @@ export async function POST(request: Request) {
       {
         id: characterId,
         slug,
-        visibility:
-          parsed.data.visibility
+        visibility: parsed.data.visibility,
+        shareUrl:
+          parsed.data.visibility === "unlisted"
+            ? `/chat/${encodeURIComponent(slug)}`
+            : null
       },
       { status: 201 }
     );
