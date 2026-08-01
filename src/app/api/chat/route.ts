@@ -681,37 +681,45 @@ export async function POST(request: Request) {
     });
 
     const storedContent = userText || (gift ? "I give you a gift." : "");
-    const messageInsert = gift
-      ? {
-          conversation_id: conversation.id,
-          role: "user",
-          content: storedContent,
-          metadata: {
-            gift: {
-              id: gift.id,
-              title: gift.title,
-              image: gift.image
-            },
-            giftEvent: {
-              requestId,
-              giftId: gift.id,
-              excludeFromEverMemory: true
-            },
-            userText
-          }
-        }
-      : {
-          conversation_id: conversation.id,
-          role: "user",
-          content: storedContent
-        };
+    const supabase = getSupabaseServiceClient();
 
-    const { data: insertedMessage, error: userInsertError } =
-      await getSupabaseServiceClient()
-        .from("messages")
-        .insert(messageInsert)
-        .select("id")
-        .single();
+    const messageInsertResult = gift
+      ? await supabase
+          .from("messages")
+          .insert({
+            conversation_id: conversation.id,
+            role: "user",
+            content: storedContent,
+            metadata: {
+              gift: {
+                id: gift.id,
+                title: gift.title,
+                image: gift.image
+              },
+              giftEvent: {
+                requestId,
+                giftId: gift.id,
+                excludeFromEverMemory: true
+              },
+              userText
+            }
+          })
+          .select("id")
+          .single()
+      : await supabase
+          .from("messages")
+          .insert({
+            conversation_id: conversation.id,
+            role: "user",
+            content: storedContent
+          })
+          .select("id")
+          .single();
+
+    const {
+      data: insertedMessage,
+      error: userInsertError
+    } = messageInsertResult;
 
     if (userInsertError) throw userInsertError;
     if (gift) insertedGiftMessageId = insertedMessage?.id ?? null;
