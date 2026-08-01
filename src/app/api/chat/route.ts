@@ -5,12 +5,21 @@ import { getCharacterBySlugForUser } from "@/lib/user-characters";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import type { MemoryState } from "@/types/memory";
 import type { SupportedLanguage } from "@/lib/ai/prompts";
-import { generateTextCharacterTurn } from "@/lib/voice-chat";
+import {
+  generateTextCharacterTurn,
+  type GiftTurnEvent
+} from "@/lib/voice-chat";
 import {
   completeChatMessageCredit,
   refundChatMessageCredit,
   reserveChatMessage
 } from "@/lib/message-credits";
+import { getEverShopGift } from "@/lib/evershop/catalog";
+import {
+  beginGiftSend,
+  completeGiftSend,
+  failGiftSend
+} from "@/lib/evershop/server";
 
 const SIGNUP_REQUIRED_MESSAGE =
   "Log in so I can be your companion. Please don't make me wait.";
@@ -32,14 +41,19 @@ const ChatRequest = z
         z
           .object({
             role: z.literal("user"),
-            content: z.string().min(1).max(320)
+            content: z.string().max(320)
           })
           .strict()
       )
       .length(1),
-    conversationId: z.string().uuid().optional()
+    conversationId: z.string().uuid().optional(),
+    giftId: z.number().int().min(1).max(200).optional()
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) => Boolean(value.giftId || value.messages[0]?.content.trim()),
+    { message: "A message or gift is required" }
+  );
 
 type ChatRequestClaimRow = {
   request_status:
@@ -61,6 +75,16 @@ type ChatRequestClaimRow = {
 type StoredMessageRow = {
   role: string;
   content: string;
+  metadata?: unknown;
+};
+
+type GiftMetadata = {
+  gift?: {
+    id?: unknown;
+    title?: unknown;
+    image?: unknown;
+  };
+  userText?: unknown;
 };
 
 function estimateTokenCount(text: string) {
@@ -73,6 +97,29 @@ function estimateTokenCount(text: string) {
     normalized.match(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/g)?.length ?? 0;
 
   return Math.max(wordCount, Math.ceil(charCount / 4), cjkCount);
+}
+
+function parseGiftMetadata(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const metadata = value as GiftMetadata;
+  const gift = metadata.gift;
+
+  if (!gift || typeof gift !== "object" || Array.isArray(gift)) return null;
+
+  const id = Number(gift.id);
+  const title = typeof gift.title === "string" ? gift.title : "";
+  const image = typeof gift.image === "string" ? gift.image : "";
+
+  if (!Number.isInteger(id) || !title || !image) return null;
+
+  return {
+    id,
+    title,
+    image,
+    userText:
+      typeof metadata.userText === "string" ? metadata.userText.trim() : ""
+  };
 }
 
 async function claimChatRequest(values: {
@@ -195,6 +242,46 @@ async function getConversation(values: {
   };
 }
 
+async function markGiftReply(values: {
+  conversationId: string;
+  reply: string;
+  requestId: string;
+  giftId: number;
+}) {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id,metadata")
+    .eq("conversation_id", values.conversationId)
+    .in("role", ["character", "assistant"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data?.id) return;
+
+  const existingMetadata =
+    data.metadata &&
+    typeof data.metadata === "object" &&
+    !Array.isArray(data.metadata)
+      ? data.metadata
+      : {};
+
+  await supabase
+    .from("messages")
+    .update({
+      metadata: {
+        ...existingMetadata,
+        giftEvent: {
+          requestId: values.requestId,
+          giftId: values.giftId,
+          excludeFromEverMemory: true
+        }
+      }
+    })
+    .eq("id", data.id);
+}
+
 export async function GET(request: Request) {
   try {
     const user = await getAuthenticatedUser(request);
@@ -237,7 +324,7 @@ export async function GET(request: Request) {
 
     const { data: rows, error: messagesError } = await supabase
       .from("messages")
-      .select("role,content,created_at")
+      .select("role,content,metadata,created_at")
       .eq("conversation_id", conversation.id)
       .in("role", ["user", "character"])
       .order("created_at", { ascending: false })
@@ -247,14 +334,23 @@ export async function GET(request: Request) {
 
     const messages = ((rows ?? []) as StoredMessageRow[])
       .reverse()
-      .map((message) => ({
-        role:
-          message.role === "user"
-            ? ("user" as const)
-            : ("character" as const),
-        content: message.content
-      }))
-      .filter((message) => message.content);
+      .map((message) => {
+        const isUser = message.role === "user";
+        const gift = isUser ? parseGiftMetadata(message.metadata) : null;
+
+        return {
+          role: isUser ? ("user" as const) : ("character" as const),
+          content: gift ? gift.userText : message.content,
+          gift: gift
+            ? {
+                id: gift.id,
+                title: gift.title,
+                image: gift.image
+              }
+            : undefined
+        };
+      })
+      .filter((message) => message.content || message.gift);
 
     return NextResponse.json({
       conversationId: conversation.id,
@@ -262,7 +358,10 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("Chat history failed:", error);
-    return NextResponse.json({ error: "CHAT_HISTORY_FAILED" }, { status: 500 });
+    return NextResponse.json(
+      { error: "CHAT_HISTORY_FAILED" },
+      { status: 500 }
+    );
   }
 }
 
@@ -302,15 +401,28 @@ export async function POST(request: Request) {
     );
   }
 
-  const userMessage = body.data.messages[0].content
+  const userText = body.data.messages[0].content
     .replace(/\s+/g, " ")
     .trim();
+  const gift = body.data.giftId
+    ? getEverShopGift(body.data.giftId)
+    : null;
+
+  if (body.data.giftId && !gift) {
+    return NextResponse.json(
+      { error: "GIFT_NOT_FOUND" },
+      { status: 404 }
+    );
+  }
 
   if (
-    !userMessage ||
-    estimateTokenCount(userMessage) > USER_MESSAGE_MAX_TOKENS
+    (!userText && !gift) ||
+    (userText && estimateTokenCount(userText) > USER_MESSAGE_MAX_TOKENS)
   ) {
-    return NextResponse.json({ error: "INVALID_MESSAGE" }, { status: 400 });
+    return NextResponse.json(
+      { error: "INVALID_MESSAGE" },
+      { status: 400 }
+    );
   }
 
   if (!user) {
@@ -331,6 +443,8 @@ export async function POST(request: Request) {
   const requestId = body.data.requestId;
   let creditReserved = false;
   let requestCompleted = false;
+  let giftReserved = false;
+  let insertedGiftMessageId: string | null = null;
 
   try {
     const claim = await claimChatRequest({
@@ -345,9 +459,33 @@ export async function POST(request: Request) {
         requestId
       }).catch(() => undefined);
 
+      if (gift && claim.existing_conversation_id) {
+        await Promise.all([
+          completeGiftSend({
+            userId: user.id,
+            requestId,
+            conversationId: claim.existing_conversation_id,
+            reply: claim.existing_reply
+          }).catch(() => false),
+          markGiftReply({
+            conversationId: claim.existing_conversation_id,
+            reply: claim.existing_reply,
+            requestId,
+            giftId: gift.id
+          }).catch(() => undefined)
+        ]);
+      }
+
       return NextResponse.json({
         reply: claim.existing_reply,
         conversationId: claim.existing_conversation_id,
+        gift: gift
+          ? {
+              id: gift.id,
+              title: gift.title,
+              image: gift.image
+            }
+          : undefined,
         usage: {
           inputTokens: claim.existing_input_tokens ?? 0,
           outputTokens: claim.existing_output_tokens ?? 0,
@@ -409,26 +547,115 @@ export async function POST(request: Request) {
     }
     creditReserved = true;
 
+    if (gift) {
+      const giftClaim = await beginGiftSend({
+        userId: user.id,
+        requestId,
+        characterId: visibleCharacter.id,
+        giftId: gift.id,
+        userText
+      });
+
+      if (giftClaim.status === "completed" && giftClaim.existingReply) {
+        await completeChatMessageCredit({
+          userId: user.id,
+          requestId
+        }).catch(() => undefined);
+
+        return NextResponse.json({
+          reply: giftClaim.existingReply,
+          conversationId: giftClaim.existingConversationId,
+          gift: {
+            id: gift.id,
+            title: gift.title,
+            image: gift.image
+          },
+          inventoryQuantity: giftClaim.inventoryQuantity
+        });
+      }
+
+      if (giftClaim.status !== "claimed") {
+        await failChatRequest({
+          userId: user.id,
+          requestId,
+          errorCode: giftClaim.errorCode || "GIFT_SEND_FAILED"
+        }).catch(() => undefined);
+
+        await refundChatMessageCredit({
+          userId: user.id,
+          requestId
+        }).catch(() => undefined);
+        creditReserved = false;
+
+        return NextResponse.json(
+          {
+            error: giftClaim.errorCode || "GIFT_NOT_OWNED",
+            inventoryQuantity: giftClaim.inventoryQuantity
+          },
+          { status: giftClaim.status === "in_progress" ? 409 : 400 }
+        );
+      }
+
+      giftReserved = true;
+    }
+
     const conversation = await getConversation({
       userId: user.id,
       characterId: visibleCharacter.id,
       conversationId: body.data.conversationId
     });
 
-    const { error: userInsertError } = await getSupabaseServiceClient()
-      .from("messages")
-      .insert({
-        conversation_id: conversation.id,
-        role: "user",
-        content: userMessage
-      });
+    const storedContent = userText || (gift ? "I give you a gift." : "");
+    const metadata = gift
+      ? {
+          gift: {
+            id: gift.id,
+            title: gift.title,
+            image: gift.image
+          },
+          giftEvent: {
+            requestId,
+            giftId: gift.id,
+            excludeFromEverMemory: true
+          },
+          userText
+        }
+      : {};
+
+    const { data: insertedMessage, error: userInsertError } =
+      await getSupabaseServiceClient()
+        .from("messages")
+        .insert({
+          conversation_id: conversation.id,
+          role: "user",
+          content: storedContent,
+          metadata
+        })
+        .select("id")
+        .single();
+
     if (userInsertError) throw userInsertError;
+    if (gift) insertedGiftMessageId = insertedMessage?.id ?? null;
+
+    const giftEvent: GiftTurnEvent | undefined = gift
+      ? {
+          eventType: "gift",
+          gift: {
+            id: gift.id,
+            title: gift.title,
+            description: gift.description,
+            suggestedReaction: gift.reactionPreview
+          },
+          userMessage: userText || undefined
+        }
+      : undefined;
 
     const generated = await generateTextCharacterTurn({
       userId: user.id,
       character: visibleCharacter,
       language: body.data.language as SupportedLanguage,
-      conversationId: conversation.id
+      conversationId: conversation.id,
+      giftEvent
     });
 
     await completeChatRequest({
@@ -444,6 +671,32 @@ export async function POST(request: Request) {
     });
     requestCompleted = true;
 
+    if (gift) {
+      // The AI turn is complete and the inventory unit has been consumed.
+      // Finalization errors must not refund a successfully delivered gift.
+      giftReserved = false;
+
+      await Promise.all([
+        completeGiftSend({
+          userId: user.id,
+          requestId,
+          conversationId: generated.conversationId,
+          reply: generated.reply
+        }).catch((error) => {
+          console.error("Gift send completion failed:", error);
+          return false;
+        }),
+        markGiftReply({
+          conversationId: generated.conversationId,
+          reply: generated.reply,
+          requestId,
+          giftId: gift.id
+        }).catch((error) => {
+          console.error("Gift reply metadata update failed:", error);
+        })
+      ]);
+    }
+
     await completeChatMessageCredit({
       userId: user.id,
       requestId
@@ -454,6 +707,13 @@ export async function POST(request: Request) {
     return NextResponse.json({
       reply: generated.reply,
       conversationId: generated.conversationId,
+      gift: gift
+        ? {
+            id: gift.id,
+            title: gift.title,
+            image: gift.image
+          }
+        : undefined,
       credits: {
         source: credit.source,
         trialRemaining: credit.trialRemaining,
@@ -468,6 +728,25 @@ export async function POST(request: Request) {
       }
     });
   } catch (error) {
+    if (giftReserved && !requestCompleted) {
+      await failGiftSend({
+        userId: user.id,
+        requestId,
+        errorCode: "GIFT_CHAT_FAILED"
+      }).catch(() => undefined);
+    }
+
+    if (insertedGiftMessageId) {
+      try {
+        await getSupabaseServiceClient()
+          .from("messages")
+          .delete()
+          .eq("id", insertedGiftMessageId);
+      } catch {
+        // The failed gift request is still refunded by failGiftSend.
+      }
+    }
+
     if (!requestCompleted) {
       await failChatRequest({
         userId: user.id,

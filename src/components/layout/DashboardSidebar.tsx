@@ -6,17 +6,20 @@ import {
   HelpCircle,
   Menu,
   Scale,
+  ShoppingBag,
   Sparkles,
   UserRound,
   WalletCards,
   UserCircle
 } from "lucide-react";
 import { useSiteLanguage } from "@/lib/site-language";
+import { EVERSHOP_COPY } from "@/lib/evershop-language";
 
 const topLinks = [
   { href: "/", labelKey: "discover", icon: Sparkles, active: true },
   { href: "/create", labelKey: "createCharacter", icon: UserRound },
   { href: "/coins", labelKey: "buyEverCoin", icon: WalletCards },
+  { href: "/shop", customLabel: "evershop", icon: ShoppingBag },
   { href: "/my-bond", labelKey: "myBond", icon: UserCircle }
 ] as const;
 
@@ -52,7 +55,8 @@ function LinkRow({ href, label, icon: Icon, active }: {
 }
 
 export function DashboardSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const { t } = useSiteLanguage();
+  const { t, language } = useSiteLanguage();
+  const shopCopy = EVERSHOP_COPY[language] ?? EVERSHOP_COPY.EN;
 
   return (
     <aside className="v18-sidebar">
@@ -72,7 +76,21 @@ export function DashboardSidebar({ collapsed, onToggle }: { collapsed: boolean; 
         </button>
       </div>
 
-      <nav className="space-y-1">{topLinks.map((item) => <LinkRow key={item.href} href={item.href} icon={item.icon} active={"active" in item ? item.active : undefined} label={t(item.labelKey)} />)}</nav>
+      <nav className="space-y-1">
+        {topLinks.map((item) => (
+          <LinkRow
+            key={item.href}
+            href={item.href}
+            icon={item.icon}
+            active={"active" in item ? item.active : undefined}
+            label={
+              "customLabel" in item
+                ? shopCopy.sidebarLabel
+                : t(item.labelKey)
+            }
+          />
+        ))}
+      </nav>
 
       <div className="my-6 h-px bg-white/10" />
 

@@ -3,6 +3,7 @@
 import { LockKeyhole } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { GiftInventorySection } from "@/components/evershop/GiftInventorySection";
 import { MyBondDashboard } from "@/components/my-bond/MyBondDashboard";
 import { useSiteLanguage } from "@/lib/site-language";
 import { MY_BOND_COPY } from "@/lib/my-bond-language";
@@ -62,7 +63,12 @@ function MyBondContent() {
     );
   }
 
-  return <MyBondDashboard session={session} />;
+  return (
+    <>
+      <MyBondDashboard session={session} />
+      <GiftInventorySection session={session} />
+    </>
+  );
 }
 
 export default function MyBondPage() {

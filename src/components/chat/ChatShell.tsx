@@ -1,14 +1,46 @@
 "use client";
 
 import Link from "next/link";
-import { type ClipboardEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ClipboardEvent,
+  type FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { createClient, type Session } from "@supabase/supabase-js";
-import { RefreshCcw, Send, Share2, Star, UserRound, X } from "lucide-react";
+import {
+  Gift,
+  RefreshCcw,
+  Send,
+  Share2,
+  ShoppingBag,
+  Star,
+  UserRound,
+  X
+} from "lucide-react";
 import { Character } from "@/types/character";
 import { LanguageSelector } from "@/components/layout/LanguageSelector";
+import {
+  ChatGiftPicker,
+  type OwnedGift
+} from "@/components/evershop/ChatGiftPicker";
+import { EVERSHOP_COPY } from "@/lib/evershop-language";
 import { useSiteLanguage } from "@/lib/site-language";
 
-type Message = { role: "user" | "character"; content: string };
+type MessageGift = {
+  id: number;
+  title: string;
+  image: string;
+};
+
+type Message = {
+  role: "user" | "character";
+  content: string;
+  gift?: MessageGift;
+};
+
 type GateMode = "signup" | "upgrade" | null;
 
 type ApiLanguage =
@@ -77,6 +109,7 @@ function limitTextToTokenBudget(text: string, maxTokens: number) {
 
 export function ChatShell({ character }: { character: Character }) {
   const { t, language } = useSiteLanguage();
+  const shopCopy = EVERSHOP_COPY[language] ?? EVERSHOP_COPY.EN;
   const initialCharacterMessage = `${character.description}\n\n${character.openingMessage}`;
 
   const [messages, setMessages] = useState<Message[]>([
@@ -97,6 +130,9 @@ export function ChatShell({ character }: { character: Character }) {
   const [pendingMessage, setPendingMessage] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [giftPickerOpen, setGiftPickerOpen] = useState(false);
+  const [sendingGiftId, setSendingGiftId] = useState<number | null>(null);
+  const [giftError, setGiftError] = useState("");
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -123,6 +159,7 @@ export function ChatShell({ character }: { character: Character }) {
       if (event.key === "Escape") {
         setShowPortrait(false);
         setGateMode(null);
+        setGiftPickerOpen(false);
       }
     };
 
@@ -155,7 +192,7 @@ export function ChatShell({ character }: { character: Character }) {
       if (data.session && savedPendingMessage) {
         window.sessionStorage.removeItem(pendingMessageStorageKey);
         setPendingMessage("");
-        sendMessage(savedPendingMessage, data.session);
+        void sendMessage(savedPendingMessage, data.session);
       }
     });
 
@@ -177,7 +214,6 @@ export function ChatShell({ character }: { character: Character }) {
     if (typeof window === "undefined") return;
 
     const accessToken = session.access_token;
-
     const savedPendingMessage = window.sessionStorage.getItem(
       pendingMessageStorageKey
     );
@@ -219,7 +255,7 @@ export function ChatShell({ character }: { character: Character }) {
       }
     }
 
-    loadHistory();
+    void loadHistory();
 
     return () => {
       cancelled = true;
@@ -233,7 +269,8 @@ export function ChatShell({ character }: { character: Character }) {
   ]);
 
   const similarHref = useMemo(() => {
-    const tag = character.tags.find((item) => item !== "Ever Memory™") ?? "Romance";
+    const tag =
+      character.tags.find((item) => item !== "Ever Memory™") ?? "Romance";
     return `/characters?tag=${encodeURIComponent(tag)}`;
   }, [character.tags]);
 
@@ -248,7 +285,10 @@ export function ChatShell({ character }: { character: Character }) {
   }
 
   function wouldExceedInputLimit(nextValue: string) {
-    return estimateTokenCount(nextValue.replace(/\s+/g, " ").trimStart()) > USER_INPUT_MAX_TOKENS;
+    return (
+      estimateTokenCount(nextValue.replace(/\s+/g, " ").trimStart()) >
+      USER_INPUT_MAX_TOKENS
+    );
   }
 
   function handleBeforeInput(event: FormEvent<HTMLInputElement>) {
@@ -291,6 +331,7 @@ export function ChatShell({ character }: { character: Character }) {
     setMessages([{ role: "character", content: initialCharacterMessage }]);
     setInput("");
     setIsTyping(false);
+    setGiftError("");
     focusChatInput();
   }
 
@@ -308,20 +349,33 @@ export function ChatShell({ character }: { character: Character }) {
         })
         .catch(() => undefined);
     } else {
-      navigator.clipboard?.writeText(url);
+      void navigator.clipboard?.writeText(url);
     }
   }
 
   function openSignupGate(messageToHold: string) {
-    setPendingMessage(messageToHold);
+    const cleanMessage = messageToHold.trim();
+    setPendingMessage(cleanMessage);
 
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem(pendingMessageStorageKey, messageToHold);
+    if (typeof window !== "undefined" && cleanMessage) {
+      window.sessionStorage.setItem(pendingMessageStorageKey, cleanMessage);
     }
 
     setAuthError("");
     setAuthNotice("");
     setGateMode("signup");
+  }
+
+  function openGiftPicker() {
+    setGiftError("");
+
+    if (!authReady) return;
+    if (!session?.access_token) {
+      openSignupGate(input);
+      return;
+    }
+
+    setGiftPickerOpen(true);
   }
 
   async function handleEmailContinue() {
@@ -390,12 +444,16 @@ export function ChatShell({ character }: { character: Character }) {
     }
   }
 
-  async function sendMessage(messageOverride?: string, sessionOverride?: Session | null) {
+  async function sendMessage(
+    messageOverride?: string,
+    sessionOverride?: Session | null,
+    gift?: OwnedGift
+  ) {
     const trimmed = (messageOverride ?? input)
       .replace(/\s+/g, " ")
       .trim();
 
-    if (!trimmed || sendInFlightRef.current) {
+    if ((!trimmed && !gift) || sendInFlightRef.current) {
       focusChatInput();
       return;
     }
@@ -410,16 +468,25 @@ export function ChatShell({ character }: { character: Character }) {
     }
 
     sendInFlightRef.current = true;
+    setGiftError("");
+    if (gift) setSendingGiftId(gift.id);
 
     const requestId = crypto.randomUUID();
     const previousMessages = messages;
-    const nextMessages: Message[] = [
-      ...messages,
-      { role: "user", content: trimmed }
-    ];
+    const optimisticMessage: Message = {
+      role: "user",
+      content: trimmed,
+      gift: gift
+        ? {
+            id: gift.id,
+            title: gift.title,
+            image: gift.image
+          }
+        : undefined
+    };
 
     setInput("");
-    setMessages(nextMessages);
+    setMessages([...messages, optimisticMessage]);
     setIsTyping(true);
     focusChatInput();
 
@@ -435,6 +502,7 @@ export function ChatShell({ character }: { character: Character }) {
           characterSlug: character.slug,
           language: getApiLanguage(language),
           conversationId: conversationId ?? undefined,
+          giftId: gift?.id,
           messages: [
             {
               role: "user",
@@ -460,25 +528,42 @@ export function ChatShell({ character }: { character: Character }) {
           return;
         }
 
+        if (data?.error === "GIFT_NOT_OWNED") {
+          setInput(trimmed);
+          setGiftError(shopCopy.noGiftsToSend);
+          setGiftPickerOpen(true);
+          return;
+        }
+
         throw new Error(data?.message || data?.error || "Chat failed");
       }
 
       setConversationId(data.conversationId ?? conversationId);
+      setGiftPickerOpen(false);
 
       setMessages((current) => [
         ...current,
         { role: "character", content: data.reply }
       ]);
     } catch {
-      setMessages((current) => [
-        ...current,
-        {
-          role: "character",
-          content: `${character.name} looks at you for a second, trying to keep the moment from slipping away. "Say that again. I want to get it right."`
-        }
-      ]);
+      setMessages(previousMessages);
+      setInput(trimmed);
+
+      if (gift) {
+        setGiftError(shopCopy.noGiftsToSend);
+        setGiftPickerOpen(true);
+      } else {
+        setMessages((current) => [
+          ...current,
+          {
+            role: "character",
+            content: `${character.name} looks at you for a second, trying to keep the moment from slipping away. "Say that again. I want to get it right."`
+          }
+        ]);
+      }
     } finally {
       sendInFlightRef.current = false;
+      setSendingGiftId(null);
       setIsTyping(false);
       focusChatInput();
     }
@@ -627,7 +712,24 @@ export function ChatShell({ character }: { character: Character }) {
                         : "border border-bond-rose/55 bg-white/[0.04] text-bond-text"
                     }`}
                   >
-                    <p>{message.content}</p>
+                    {message.gift && (
+                      <div className="mb-2 flex items-center gap-3 rounded-xl border border-white/20 bg-black/20 p-2.5">
+                        <img
+                          src={message.gift.image}
+                          alt={message.gift.title}
+                          className="h-14 w-14 rounded-lg object-cover"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/75">
+                            {shopCopy.giftPickerTitle}
+                          </p>
+                          <p className="line-clamp-2 text-sm font-bold text-white">
+                            {message.gift.title}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {message.content && <p>{message.content}</p>}
                   </div>
                 </div>
               ))}
@@ -645,6 +747,19 @@ export function ChatShell({ character }: { character: Character }) {
           </div>
 
           <div className="shrink-0 border-t border-white/5 bg-bond-bg/88 p-3 backdrop-blur-xl">
+            <div className="mx-auto mb-2 flex max-w-4xl items-center justify-between gap-3">
+              <Link
+                href={`/shop?for=${encodeURIComponent(character.name)}`}
+                className="inline-flex items-center gap-2 rounded-full border border-bond-rose/45 bg-black/25 px-4 py-2 text-xs font-bold text-white transition hover:bg-bond-rose/10"
+              >
+                <ShoppingBag size={14} />
+                {shopCopy.shopFor} {character.name}
+              </Link>
+              {giftError && (
+                <p className="line-clamp-1 text-xs text-red-200">{giftError}</p>
+              )}
+            </div>
+
             <div className="mx-auto flex max-w-4xl items-center gap-2 rounded-full bg-white/[0.04] p-1.5 bond-chat-input">
               <input
                 ref={inputRef}
@@ -660,14 +775,23 @@ export function ChatShell({ character }: { character: Character }) {
                     !event.nativeEvent.isComposing
                   ) {
                     event.preventDefault();
-                    sendMessage();
+                    void sendMessage();
                   }
                 }}
                 placeholder={`${t("messageCharacter")} ${character.name}...`}
                 className="min-w-0 flex-1 bg-transparent px-4 py-2 text-sm outline-none placeholder:text-bond-muted"
               />
               <button
-                onClick={() => sendMessage()}
+                type="button"
+                onClick={openGiftPicker}
+                disabled={isTyping}
+                className="bond-pink-button flex h-9 w-9 items-center justify-center rounded-lg border border-bond-rose/60 bg-bond-rose/15 text-bond-rose disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label={shopCopy.giftButton}
+              >
+                <Gift size={16} />
+              </button>
+              <button
+                onClick={() => void sendMessage()}
                 disabled={isTyping}
                 className="bond-pink-button flex h-9 w-9 items-center justify-center rounded-lg bg-bond-rose disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label={t("sendMessage")}
@@ -678,6 +802,15 @@ export function ChatShell({ character }: { character: Character }) {
           </div>
         </div>
       </section>
+
+      <ChatGiftPicker
+        open={giftPickerOpen}
+        session={session}
+        characterName={character.name}
+        sendingGiftId={sendingGiftId}
+        onClose={() => setGiftPickerOpen(false)}
+        onSend={(gift) => void sendMessage(undefined, undefined, gift)}
+      />
 
       {showPortrait && (
         <div

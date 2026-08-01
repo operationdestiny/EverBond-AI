@@ -54,7 +54,78 @@ type MemoryExtraction = z.infer<typeof MemoryExtractionSchema>;
 type StoredMessageRow = {
   role: string;
   content: string;
+  metadata?: unknown;
 };
+
+type HistoryMessage = EverBondMessage & {
+  excludeFromEverMemory?: boolean;
+  memoryContent?: string;
+};
+
+type StoredGiftMetadata = {
+  gift?: {
+    title?: unknown;
+  };
+  giftEvent?: {
+    excludeFromEverMemory?: unknown;
+  };
+  userText?: unknown;
+};
+
+function storedGiftMetadata(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const metadata = value as StoredGiftMetadata;
+  const event = metadata.giftEvent;
+  const gift = metadata.gift;
+
+  if (!event || typeof event !== "object" || Array.isArray(event)) {
+    return null;
+  }
+
+  if (!gift || typeof gift !== "object" || Array.isArray(gift)) {
+    return null;
+  }
+
+  if (event.excludeFromEverMemory !== true) return null;
+
+  const title =
+    typeof gift.title === "string"
+      ? gift.title.replace(/\s+/g, " ").trim()
+      : "";
+
+  if (!title) return null;
+
+  return {
+    title,
+    userText:
+      typeof metadata.userText === "string"
+        ? metadata.userText.replace(/\s+/g, " ").trim()
+        : ""
+  };
+}
+
+function modelHistory(history: HistoryMessage[]): EverBondMessage[] {
+  return history.map(({ role, content }) => ({ role, content }));
+}
+
+function memoryHistoryLines(
+  history: HistoryMessage[],
+  characterName: string
+) {
+  return history
+    .map((message) => {
+      if (message.excludeFromEverMemory) return "";
+
+      const content = (message.memoryContent ?? message.content).trim();
+      if (!content) return "";
+
+      return `${message.role === "assistant" ? characterName : "User"}: ${content}`;
+    })
+    .filter(Boolean);
+}
 
 function estimateTokenCount(text: string) {
   const normalized = text.trim();
@@ -352,10 +423,10 @@ async function getConversation(values: {
   return created as { id: string; memory_state: Partial<MemoryState> | null };
 }
 
-async function loadHistory(conversationId: string): Promise<EverBondMessage[]> {
+async function loadHistory(conversationId: string): Promise<HistoryMessage[]> {
   const { data, error } = await getSupabaseServiceClient()
     .from("messages")
-    .select("role,content")
+    .select("role,content,metadata")
     .eq("conversation_id", conversationId)
     .in("role", ["user", "character"])
     .order("created_at", { ascending: false })
@@ -363,17 +434,47 @@ async function loadHistory(conversationId: string): Promise<EverBondMessage[]> {
 
   if (error) throw error;
 
-  return ((data ?? []) as StoredMessageRow[])
-    .reverse()
+  const rows = ((data ?? []) as StoredMessageRow[]).reverse();
+  let previousWasGift = false;
+
+  return rows
     .map((message) => {
       const isUser = message.role === "user";
-      return {
+      const giftMetadata = storedGiftMetadata(message.metadata);
+      const excludeFromEverMemory =
+        (!isUser && previousWasGift) ||
+        Boolean(giftMetadata && !isUser);
+
+      const modelContent =
+        giftMetadata && isUser
+          ? [
+              `GIFT_EVENT: The user gave ${giftMetadata.title}.`,
+              giftMetadata.userText
+                ? `USER_MESSAGE: ${giftMetadata.userText}`
+                : ""
+            ]
+              .filter(Boolean)
+              .join("\n")
+          : message.content;
+
+      const historyMessage: HistoryMessage = {
         role: isUser ? ("user" as const) : ("assistant" as const),
         content: limitTextToTokenBudget(
-          message.content,
+          modelContent,
           isUser ? USER_MESSAGE_MAX_TOKENS : CHARACTER_CONTEXT_MAX_TOKENS
-        )
+        ),
+        excludeFromEverMemory,
+        memoryContent:
+          giftMetadata && isUser
+            ? limitTextToTokenBudget(
+                giftMetadata.userText,
+                USER_MESSAGE_MAX_TOKENS
+              )
+            : undefined
       };
+
+      previousWasGift = isUser && Boolean(giftMetadata);
+      return historyMessage;
     })
     .filter((message) => message.content.trim());
 }
@@ -505,7 +606,7 @@ export async function generateVoiceCharacterDraft(values: {
   const modelMessages: EverBondMessage[] = [
     { role: "system", content: prompt },
     ...openingTurn,
-    ...history,
+    ...modelHistory(history),
     { role: "user", content: values.transcript }
   ];
 
@@ -537,11 +638,9 @@ export async function updateVoiceMemoryAfterCommit(values: {
       ...values.draft.openingTurn.map(
         (message) => `${values.character.name}: ${message.content}`
       ),
-      ...values.draft.history.map(
-        (message) =>
-          `${message.role === "assistant" ? values.character.name : "User"}: ${
-            message.content
-          }`
+      ...memoryHistoryLines(
+        values.draft.history,
+        values.character.name
       ),
       `User: ${values.draft.transcript}`,
       `${values.character.name}: ${values.draft.reply}`
@@ -571,11 +670,23 @@ export async function updateVoiceMemoryAfterCommit(values: {
   }
 }
 
+export type GiftTurnEvent = {
+  eventType: "gift";
+  gift: {
+    id: number;
+    title: string;
+    description: string;
+    suggestedReaction: string;
+  };
+  userMessage?: string;
+};
+
 export async function generateTextCharacterTurn(values: {
   userId: string;
   character: Character;
   language: SupportedLanguage;
   conversationId: string;
+  giftEvent?: GiftTurnEvent;
 }) {
   const conversation = await getConversation({
     userId: values.userId,
@@ -610,10 +721,40 @@ export async function generateTextCharacterTurn(values: {
     values.language,
     includeOpening
   );
+
+  const giftEventContext = values.giftEvent
+    ? JSON.stringify({
+        event_type: values.giftEvent.eventType,
+        recipient: values.character.name,
+        gift: {
+          id: values.giftEvent.gift.id,
+          title: values.giftEvent.gift.title,
+          description: values.giftEvent.gift.description
+        },
+        suggested_reaction: values.giftEvent.gift.suggestedReaction,
+        user_message: values.giftEvent.userMessage?.trim() || null
+      })
+    : "";
+
   const result = await callEverBondModel([
     { role: "system", content: prompt },
+    ...(giftEventContext
+      ? [
+          {
+            role: "system" as const,
+            content: [
+              "CURRENT_GIFT_EVENT",
+              giftEventContext,
+              "React to this gift now while staying fully in character.",
+              "Use the character personality, relationship, previous replies, current scene, and optional user message.",
+              "The suggested_reaction is guidance only, never a script to copy.",
+              "Do not mention the event schema or save the gift itself to Ever Memory."
+            ].join("\n")
+          }
+        ]
+      : []),
     ...openingTurn,
-    ...history
+    ...modelHistory(history)
   ]);
 
   let memoryInputTokens = 0;
@@ -624,13 +765,10 @@ export async function generateTextCharacterTurn(values: {
       ...openingTurn.map(
         (message) => `${values.character.name}: ${message.content}`
       ),
-      ...history.map(
-        (message) =>
-          `${message.role === "assistant" ? values.character.name : "User"}: ${
-            message.content
-          }`
-      ),
-      `${values.character.name}: ${result.content}`
+      ...memoryHistoryLines(history, values.character.name),
+      ...(values.giftEvent
+        ? []
+        : [`${values.character.name}: ${result.content}`])
     ].join("\n");
     const memoryResult = await callEverBondMemoryModel(
       buildMemoryModePrompt(values.character, transcript, memory)
