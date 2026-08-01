@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import type { EverShopGift } from "@/lib/evershop/catalog";
 import { EVERSHOP_COPY } from "@/lib/evershop-language";
+import { localizeEverShopGift } from "@/lib/evershop/localization";
 import { useSiteLanguage } from "@/lib/site-language";
 
 type OwnedGift = EverShopGift & { quantity: number };
@@ -71,29 +72,36 @@ export function GiftInventorySection({ session }: { session: Session }) {
             </div>
           ) : items.length ? (
             <div className="mt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {items.map((gift) => (
+              {items.map((gift) => {
+                const localizedGift = localizeEverShopGift(
+                  gift,
+                  language
+                );
+
+                return (
                 <article
-                  key={gift.id}
+                  key={localizedGift.id}
                   className="flex items-center gap-3 rounded-[1.25rem] border border-white/10 bg-black/25 p-3"
                 >
                   <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-black">
                     <img
-                      src={gift.image}
-                      alt={gift.title}
+                      src={localizedGift.image}
+                      alt={localizedGift.title}
                       className="h-full w-full object-cover"
                       loading="lazy"
                     />
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="line-clamp-2 text-sm font-bold leading-5 text-white">
-                      {gift.title}
+                      {localizedGift.title}
                     </h3>
                     <p className="mt-1 text-xs font-semibold text-bond-rose">
-                      {copy.quantity}: {gift.quantity}
+                      {copy.quantity}: {localizedGift.quantity}
                     </p>
                   </div>
                 </article>
-              ))}
+              );
+              })}
             </div>
           ) : (
             <div className="mt-6 rounded-[1.5rem] border border-dashed border-white/10 p-8 text-center">
