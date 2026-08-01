@@ -94,10 +94,10 @@ function localizedDescription(
   return gift.description;
 }
 
-export function localizeEverShopGift(
-  gift: EverShopGift,
+export function localizeEverShopGift<T extends EverShopGift>(
+  gift: T,
   language: LanguageCode
-): EverShopGift {
+): T {
   if (language === "EN") return gift;
 
   const translatedTitle =
@@ -111,5 +111,5 @@ export function localizeEverShopGift(
       translatedTitle,
       language
     )
-  };
+  } as T;
 }
