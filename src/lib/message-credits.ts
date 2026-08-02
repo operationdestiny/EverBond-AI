@@ -37,11 +37,15 @@ export async function reserveChatMessage(values: {
     error_code: string | null;
   }> | null);
 
+  const everCoinRemaining = Number(row?.purchased_remaining ?? 0);
+
   return {
     allowed: Boolean(row?.allowed),
     source: row?.credit_source ?? null,
     trialRemaining: Number(row?.trial_remaining ?? 0),
-    purchasedRemaining: Number(row?.purchased_remaining ?? 0),
+    everCoinRemaining,
+    // Temporary compatibility alias for older server callers during deployment.
+    purchasedRemaining: everCoinRemaining,
     debt: Number(row?.debt ?? 0),
     alreadyReserved: Boolean(row?.already_reserved),
     errorCode: row?.error_code ?? null

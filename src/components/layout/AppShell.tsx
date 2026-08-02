@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import "@/lib/evercoin-copy-overrides";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { ChatLayoutCleanup } from "@/components/chat/ChatLayoutCleanup";
 import { ChatMediaBridge } from "@/components/media/ChatMediaBridge";

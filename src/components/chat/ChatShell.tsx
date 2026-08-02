@@ -53,8 +53,8 @@ type ApiLanguage =
 const SIGNUP_REQUIRED_MESSAGE =
   "Log in so I can be your companion. Please don't make me wait.";
 
-const TRIAL_ENDED_MESSAGE =
-  "Upgrade so I can keep being your companion. Please don't make me wait.";
+const EVERCOIN_REQUIRED_MESSAGE =
+  "Buy EverCoin so I can keep being your companion. One EverCoin keeps one message going.";
 
 const USER_INPUT_MAX_TOKENS = 80;
 
@@ -519,9 +519,13 @@ export function ChatShell({ character }: { character: Character }) {
           return;
         }
 
-        if (data?.error === "TRIAL_ENDED") {
+        if (
+          data?.error === "TRIAL_ENDED" ||
+          data?.error === "INSUFFICIENT_EVERCOIN" ||
+          data?.error === "EVERCOIN_DEBT"
+        ) {
           setInput(trimmed);
-          setGateMode("upgrade");
+          window.location.assign("/coins?reason=chat");
           return;
         }
 
@@ -832,7 +836,7 @@ export function ChatShell({ character }: { character: Character }) {
                 <p className="max-w-[88%] text-center text-[14px] font-semibold leading-5 text-bond-rose drop-shadow-[0_0_12px_rgba(255,92,168,0.65)]">
                   {gateMode === "signup"
                     ? SIGNUP_REQUIRED_MESSAGE
-                    : TRIAL_ENDED_MESSAGE}
+                    : EVERCOIN_REQUIRED_MESSAGE}
                 </p>
               </div>
             </div>
@@ -901,10 +905,10 @@ export function ChatShell({ character }: { character: Character }) {
 
                 <div className="mt-8">
                   <Link
-                    href="/pricing"
+                    href="/coins"
                     className="bond-pink-button block rounded-xl bg-bond-rose px-6 py-4 text-center text-base font-extrabold text-white shadow-[0_0_26px_rgba(255,92,168,0.30)] transition hover:scale-[1.01] hover:bg-bond-rose/90"
                   >
-                    See Plans
+                    Buy EverCoin
                   </Link>
                 </div>
               </div>

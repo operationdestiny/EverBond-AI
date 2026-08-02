@@ -25,7 +25,6 @@ const topLinks = [
 
 const infoLinks = [
   { href: "/why-everbond", labelKey: "whyEverBond", icon: Heart },
-  { href: "/pricing", labelKey: "pricing", icon: WalletCards },
   { href: "/legal", labelKey: "legal", icon: Scale },
   { href: "/contact", labelKey: "helpCenter", icon: HelpCircle }
 ] as const;

@@ -2,7 +2,6 @@ import Link from "next/link";
 
 const links = [
   { href: "/characters", label: "Companions" },
-  { href: "/pricing", label: "Pricing" },
   { href: "/why-everbond", label: "Why EverBond?" },
   { href: "/coins", label: "EverCoin" },
   { href: "/safety", label: "Safety" },

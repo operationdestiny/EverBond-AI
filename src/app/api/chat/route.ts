@@ -23,8 +23,8 @@ import {
 
 const SIGNUP_REQUIRED_MESSAGE =
   "Log in so I can be your companion. Please don't make me wait.";
-const TRIAL_ENDED_MESSAGE =
-  "Buy a message bundle so I can keep being your companion. Please don't make me wait.";
+const EVERCOIN_REQUIRED_MESSAGE =
+  "You need EverCoin to continue chatting. Each message costs 1 EverCoin.";
 const USER_MESSAGE_MAX_TOKENS = 80;
 
 const SupportedLanguageSchema = z
@@ -605,11 +605,16 @@ export async function POST(request: Request) {
         errorCode: credit.errorCode || "NO_MESSAGE_CREDITS"
       });
 
+      const paymentError =
+        credit.errorCode === "EVERCOIN_DEBT"
+          ? "EVERCOIN_DEBT"
+          : "INSUFFICIENT_EVERCOIN";
+
       return NextResponse.json(
         {
-          error: "TRIAL_ENDED",
-          message: TRIAL_ENDED_MESSAGE,
-          purchasedMessages: credit.purchasedRemaining,
+          error: paymentError,
+          message: EVERCOIN_REQUIRED_MESSAGE,
+          everCoinBalance: credit.everCoinRemaining,
           debt: credit.debt,
           character: {
             name: visibleCharacter.name,
@@ -804,7 +809,7 @@ export async function POST(request: Request) {
       credits: {
         source: credit.source,
         trialRemaining: credit.trialRemaining,
-        purchasedRemaining: credit.purchasedRemaining
+        everCoinRemaining: credit.everCoinRemaining
       },
       usage: {
         inputTokens: generated.inputTokens,

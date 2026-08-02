@@ -5,6 +5,7 @@ import {
   Gift,
   ImageIcon,
   LoaderCircle,
+  MessageCircleMore,
   Phone,
   Sparkles
 } from "lucide-react";
@@ -80,6 +81,12 @@ function CoinsPageContent() {
   }, []);
 
   const items = [
+    {
+      icon: MessageCircleMore,
+      title: pageCopy.messagesTitle,
+      body: pageCopy.messagesBody,
+      rate: `1 EverCoin / ${pageCopy.messageUnit}`
+    },
     { icon: Gift, title: t("gifts"), body: t("giftsBody"), rate: null },
     {
       icon: ImageIcon,
@@ -191,7 +198,7 @@ function CoinsPageContent() {
         </p>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {items.map((item) => {
           const Icon = item.icon;
           return (

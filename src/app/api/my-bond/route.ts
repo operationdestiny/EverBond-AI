@@ -169,6 +169,20 @@ export async function GET(request: Request) {
       profile.username
     );
 
+    const { data: everCoinWallet, error: everCoinWalletError } =
+      await supabase
+        .from("evercoin_wallets")
+        .select("balance,debt")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+    if (everCoinWalletError) throw everCoinWalletError;
+
+    const everCoinBalance = Math.max(
+      Number(everCoinWallet?.balance ?? 0),
+      0
+    );
+
     const [
       conversationsResult,
       createdResult,
@@ -309,12 +323,6 @@ export async function GET(request: Request) {
       .map(toCompanion);
 
     const email = profile.email || user.email || "";
-    const trialLimit = Number(
-      profile.trial_message_limit ?? 20
-    );
-    const trialUsed = Number(
-      profile.trial_messages_used ?? 0
-    );
 
     return NextResponse.json(
       {
@@ -322,10 +330,8 @@ export async function GET(request: Request) {
           email,
           username,
           memberSince: user.created_at,
-          messagesLeft: Math.max(
-            trialLimit - trialUsed,
-            0
-          )
+          messagesLeft: everCoinBalance,
+          everCoinBalance
         },
         counts: {
           recentChats:
