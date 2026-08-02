@@ -9,27 +9,27 @@ type DiscoverBannerPair = readonly [string, string];
 const discoverBannerSources: Record<LanguageCode, DiscoverBannerPair> = {
   EN: [
     "/assets/banners/discover/en.png?v=discover-rotation-20260801",
-    "/assets/banners/discover/en-2.png?v=discover-rotation-20260801"
+    "/assets/banners/discover/en-2.png?v=discover-second-updated-20260801"
   ],
   ES: [
     "/assets/banners/discover/es.png?v=discover-rotation-20260801",
-    "/assets/banners/discover/es-2.png?v=discover-rotation-20260801"
+    "/assets/banners/discover/es-2.png?v=discover-second-updated-20260801"
   ],
   FR: [
     "/assets/banners/discover/fr.png?v=discover-rotation-20260801",
-    "/assets/banners/discover/fr-2.png?v=discover-rotation-20260801"
+    "/assets/banners/discover/fr-2.png?v=discover-second-updated-20260801"
   ],
   DE: [
     "/assets/banners/discover/de.png?v=discover-rotation-20260801",
-    "/assets/banners/discover/de-2.png?v=discover-rotation-20260801"
+    "/assets/banners/discover/de-2.png?v=discover-second-updated-20260801"
   ],
   JA: [
     "/assets/banners/discover/ja.png?v=discover-rotation-20260801",
-    "/assets/banners/discover/ja-2.png?v=discover-rotation-20260801"
+    "/assets/banners/discover/ja-2.png?v=discover-second-updated-20260801"
   ],
   KO: [
     "/assets/banners/discover/ko.png?v=discover-rotation-20260801",
-    "/assets/banners/discover/ko-2.png?v=discover-rotation-20260801"
+    "/assets/banners/discover/ko-2.png?v=discover-second-updated-20260801"
   ]
 };
 
