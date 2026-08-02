@@ -33,12 +33,12 @@ const categoryCopyKey: Record<
 };
 
 const bannerByLanguage: Record<LanguageCode, string> = {
-  EN: "/assets/banners/evershop/en.png",
-  ES: "/assets/banners/evershop/es.png",
-  FR: "/assets/banners/evershop/fr.png",
-  DE: "/assets/banners/evershop/de.png",
-  JA: "/assets/banners/evershop/ja.png",
-  KO: "/assets/banners/evershop/ko.png"
+  EN: "/assets/banners/evershop/en.png?v=evershop-hero-1197x260-20260801",
+  ES: "/assets/banners/evershop/es.png?v=evershop-hero-1197x260-20260801",
+  FR: "/assets/banners/evershop/fr.png?v=evershop-hero-1197x260-20260801",
+  DE: "/assets/banners/evershop/de.png?v=evershop-hero-1197x260-20260801",
+  JA: "/assets/banners/evershop/ja.png?v=evershop-hero-1197x260-20260801",
+  KO: "/assets/banners/evershop/ko.png?v=evershop-hero-1197x260-20260801"
 };
 
 export function EverShopClient({
@@ -169,11 +169,11 @@ export function EverShopClient({
       <main className="min-h-screen px-4 pb-10 pt-2 md:px-6 md:pb-12 md:pt-3">
         <section className="bond-container">
           <div className="mx-auto max-w-[1500px]">
-            <section className="mx-auto aspect-[1915/821] w-full max-w-[1280px] overflow-hidden rounded-[1.35rem] bg-black">
+            <section className="mx-auto aspect-[1197/260] w-full max-w-[1280px] overflow-hidden rounded-[1.35rem] bg-black">
               <img
                 src={bannerByLanguage[language]}
                 alt={copy.pageTitle}
-                className="block h-full w-full object-cover"
+                className="block h-full w-full object-contain"
               />
             </section>
 
