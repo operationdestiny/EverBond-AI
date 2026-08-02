@@ -8,19 +8,8 @@ import {
   getEverCoinPackByPriceId,
   getEverCoinPackPriceId
 } from "@/lib/billing/evercoin-packs";
-import {
-  getMessageBundle,
-  getMessageBundleByPriceId,
-  getMessageBundlePriceId
-} from "@/lib/billing/message-bundles";
 
 export const runtime = "nodejs";
-
-const planLimits: Record<string, number> = {
-  standard: 2_000,
-  premium: 7_500,
-  elite: 20_000
-};
 
 const UuidSchema = z.string().uuid();
 const REVERSAL_ACTIONS = new Set(["refund", "chargeback"]);
@@ -99,7 +88,7 @@ function proportionalReversal(values: {
 }
 
 async function fetchPaddleTransaction(transactionId: string) {
-  const apiKey = process.env.PADDLE_API_KEY;
+  const apiKey = process.env.PADDLE_API_KEY?.trim();
   if (!apiKey) throw new Error("PADDLE_API_KEY_MISSING");
 
   const response = await fetch(
@@ -159,102 +148,33 @@ async function creditEverCoinTransaction(data: any) {
   return true;
 }
 
-async function creditMessageBundleTransaction(data: any) {
-  const customData = data?.custom_data;
-  if (customData?.kind !== "message_bundle") return false;
-
-  const userIdResult = UuidSchema.safeParse(customData?.user_id);
-  const bundle = getMessageBundle(String(customData?.bundle_code ?? ""));
-  const transactionId = typeof data?.id === "string" ? data.id : null;
-  const priceId = firstItemPriceId(data);
-  const quantity = firstItemQuantity(data);
-
-  if (!userIdResult.success || !bundle || !transactionId || !priceId) {
-    throw new Error("INVALID_MESSAGE_BUNDLE_TRANSACTION_METADATA");
-  }
-
-  if (
-    quantity !== 1 ||
-    Number(customData?.messages) !== bundle.messages ||
-    getMessageBundlePriceId(bundle) !== priceId ||
-    getMessageBundleByPriceId(priceId)?.code !== bundle.code
-  ) {
-    throw new Error("MESSAGE_BUNDLE_PRICE_MISMATCH");
-  }
-
-  const { error } = await getSupabaseServiceClient().rpc(
-    "credit_message_purchase",
-    {
-      p_user_id: userIdResult.data,
-      p_transaction_id: transactionId,
-      p_price_id: priceId,
-      p_bundle_code: bundle.code,
-      p_messages: bundle.messages,
-      p_total_minor: transactionTotalMinor(data),
-      p_currency_code:
-        typeof data?.currency_code === "string" ? data.currency_code : null
-    }
-  );
-
-  if (error) throw error;
-  return true;
-}
-
-async function ensurePurchaseRecorded(transactionId: string) {
+async function ensureEverCoinPurchaseRecorded(transactionId: string) {
   const supabase = getSupabaseServiceClient();
-  const [{ data: coinPurchase }, { data: messagePurchase }] =
-    await Promise.all([
-      supabase
-        .from("evercoin_purchases")
-        .select(
-          "paddle_transaction_id,coins_granted,coins_reversed,transaction_total_minor"
-        )
-        .eq("paddle_transaction_id", transactionId)
-        .maybeSingle(),
-      supabase
-        .from("message_purchases")
-        .select(
-          "paddle_transaction_id,messages_granted,messages_reversed,transaction_total_minor"
-        )
-        .eq("paddle_transaction_id", transactionId)
-        .maybeSingle()
-    ]);
+  const selectPurchase = () =>
+    supabase
+      .from("evercoin_purchases")
+      .select(
+        "paddle_transaction_id,coins_granted,coins_reversed,transaction_total_minor"
+      )
+      .eq("paddle_transaction_id", transactionId)
+      .maybeSingle();
 
-  if (coinPurchase || messagePurchase) {
-    return { coinPurchase, messagePurchase };
-  }
+  const { data: existing, error: existingError } = await selectPurchase();
+  if (existingError) throw existingError;
+  if (existing) return existing;
 
   const transaction = await fetchPaddleTransaction(transactionId);
-  if (!transaction) return { coinPurchase: null, messagePurchase: null };
+  if (!transaction) return null;
 
-  await creditEverCoinTransaction(transaction);
-  await creditMessageBundleTransaction(transaction);
+  const handled = await creditEverCoinTransaction(transaction);
+  if (!handled) return null;
 
-  const [{ data: refreshedCoin }, { data: refreshedMessage }] =
-    await Promise.all([
-      supabase
-        .from("evercoin_purchases")
-        .select(
-          "paddle_transaction_id,coins_granted,coins_reversed,transaction_total_minor"
-        )
-        .eq("paddle_transaction_id", transactionId)
-        .maybeSingle(),
-      supabase
-        .from("message_purchases")
-        .select(
-          "paddle_transaction_id,messages_granted,messages_reversed,transaction_total_minor"
-        )
-        .eq("paddle_transaction_id", transactionId)
-        .maybeSingle()
-    ]);
-
-  return {
-    coinPurchase: refreshedCoin ?? null,
-    messagePurchase: refreshedMessage ?? null
-  };
+  const { data: refreshed, error: refreshedError } = await selectPurchase();
+  if (refreshedError) throw refreshedError;
+  return refreshed ?? null;
 }
 
-async function reversePaidCurrencyAdjustment(data: any) {
+async function reverseEverCoinAdjustment(data: any) {
   const action = String(data?.action ?? "").toLowerCase();
   const status = String(data?.status ?? "").toLowerCase();
 
@@ -263,91 +183,41 @@ async function reversePaidCurrencyAdjustment(data: any) {
   const adjustmentId = typeof data?.id === "string" ? data.id : null;
   const transactionId =
     typeof data?.transaction_id === "string" ? data.transaction_id : null;
+
   if (!adjustmentId || !transactionId) return false;
 
-  const { coinPurchase, messagePurchase } =
-    await ensurePurchaseRecorded(transactionId);
-  const adjustedTotal = adjustmentTotalMinor(data);
-  const full = String(data?.type ?? "").toLowerCase() === "full";
-  const supabase = getSupabaseServiceClient();
-  let handled = false;
+  const purchase = await ensureEverCoinPurchaseRecorded(transactionId);
+  if (!purchase) return false;
 
-  if (coinPurchase) {
-    const coins = proportionalReversal({
-      granted: Number(coinPurchase.coins_granted ?? 0),
-      alreadyReversed: Number(coinPurchase.coins_reversed ?? 0),
-      originalTotal: minorAmount(coinPurchase.transaction_total_minor),
-      adjustedTotal,
-      full
-    });
+  const coins = proportionalReversal({
+    granted: Number(purchase.coins_granted ?? 0),
+    alreadyReversed: Number(purchase.coins_reversed ?? 0),
+    originalTotal: minorAmount(purchase.transaction_total_minor),
+    adjustedTotal: adjustmentTotalMinor(data),
+    full: String(data?.type ?? "").toLowerCase() === "full"
+  });
 
-    if (coins > 0) {
-      const { error } = await supabase.rpc("reverse_evercoin_purchase", {
+  if (coins > 0) {
+    const { error } = await getSupabaseServiceClient().rpc(
+      "reverse_evercoin_purchase",
+      {
         p_transaction_id: transactionId,
         p_adjustment_id: adjustmentId,
         p_action: action,
         p_status: status,
         p_coins: coins
-      });
-      if (error) throw error;
-    }
-    handled = true;
+      }
+    );
+
+    if (error) throw error;
   }
 
-  if (messagePurchase) {
-    const messages = proportionalReversal({
-      granted: Number(messagePurchase.messages_granted ?? 0),
-      alreadyReversed: Number(messagePurchase.messages_reversed ?? 0),
-      originalTotal: minorAmount(messagePurchase.transaction_total_minor),
-      adjustedTotal,
-      full
-    });
-
-    if (messages > 0) {
-      const { error } = await supabase.rpc("reverse_message_purchase", {
-        p_transaction_id: transactionId,
-        p_adjustment_id: adjustmentId,
-        p_action: action,
-        p_status: status,
-        p_messages: messages
-      });
-      if (error) throw error;
-    }
-    handled = true;
-  }
-
-  return handled;
-}
-
-async function preserveLegacySubscriptionEvent(eventType: string, data: any) {
-  if (!eventType.startsWith("subscription.")) return;
-
-  const plan =
-    data?.custom_data?.plan ||
-    data?.items?.[0]?.price?.custom_data?.plan ||
-    "standard";
-  const userId = data?.custom_data?.user_id ?? null;
-  const payload = {
-    user_id: userId,
-    paddle_customer_id: data?.customer_id ?? null,
-    paddle_subscription_id: data?.id,
-    plan,
-    status: data?.status ?? "unknown",
-    monthly_message_limit: planLimits[plan] ?? planLimits.standard,
-    current_period_end: data?.current_billing_period?.ends_at ?? null,
-    updated_at: new Date().toISOString()
-  };
-
-  const { error } = await getSupabaseServiceClient()
-    .from("subscriptions")
-    .upsert(payload, { onConflict: "paddle_subscription_id" });
-
-  if (error) throw error;
+  return true;
 }
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
-  const secret = process.env.PADDLE_WEBHOOK_SECRET;
+  const secret = process.env.PADDLE_WEBHOOK_SECRET?.trim();
 
   if (
     !secret ||
@@ -401,17 +271,14 @@ export async function POST(request: Request) {
 
     if (eventType === "transaction.completed") {
       await creditEverCoinTransaction(data);
-      await creditMessageBundleTransaction(data);
     }
 
     if (
       eventType === "adjustment.created" ||
       eventType === "adjustment.updated"
     ) {
-      await reversePaidCurrencyAdjustment(data);
+      await reverseEverCoinAdjustment(data);
     }
-
-    await preserveLegacySubscriptionEvent(eventType, data);
 
     const { error: eventInsertError } = await supabase
       .from("paddle_events")
@@ -427,7 +294,7 @@ export async function POST(request: Request) {
     if (eventInsertError) throw eventInsertError;
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error("Paddle webhook processing failed:", error);
+    console.error("Paddle EverCoin webhook processing failed:", error);
     return NextResponse.json(
       { error: "Paddle webhook processing failed" },
       { status: 500 }
