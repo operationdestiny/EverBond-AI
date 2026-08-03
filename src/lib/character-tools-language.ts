@@ -47,7 +47,7 @@ export const CHARACTER_TOOLS_COPY: Record<
     tagsRequired: "Choose at least one tag and no more than four.",
     fieldsRequired: "Complete every required field.",
     characterLimitReached:
-      "You have reached the limit of 100 created companions.",
+      "You have reached the limit of 25 created companions.",
     publicDescription:
       "Everyone can discover and chat with this companion.",
     privateDescription:
@@ -77,7 +77,7 @@ export const CHARACTER_TOOLS_COPY: Record<
     tagsRequired: "Elige al menos una etiqueta y no más de cuatro.",
     fieldsRequired: "Completa todos los campos obligatorios.",
     characterLimitReached:
-      "Has alcanzado el límite de 100 compañeros creados.",
+      "Has alcanzado el límite de 25 compañeros creados.",
     publicDescription:
       "Todos pueden descubrir y chatear con este compañero.",
     privateDescription:
@@ -108,7 +108,7 @@ export const CHARACTER_TOOLS_COPY: Record<
       "Choisissez au moins un tag et quatre tags au maximum.",
     fieldsRequired: "Remplissez tous les champs obligatoires.",
     characterLimitReached:
-      "Vous avez atteint la limite de 100 compagnons créés.",
+      "Vous avez atteint la limite de 25 compagnons créés.",
     publicDescription:
       "Tout le monde peut découvrir ce compagnon et discuter avec lui.",
     privateDescription:
@@ -139,7 +139,7 @@ export const CHARACTER_TOOLS_COPY: Record<
       "Wähle mindestens einen und höchstens vier Tags aus.",
     fieldsRequired: "Fülle alle Pflichtfelder aus.",
     characterLimitReached:
-      "Du hast das Limit von 100 erstellten Begleitern erreicht.",
+      "Du hast das Limit von 25 erstellten Begleitern erreicht.",
     publicDescription:
       "Jeder kann diesen Begleiter entdecken und mit ihm chatten.",
     privateDescription:
@@ -169,7 +169,7 @@ export const CHARACTER_TOOLS_COPY: Record<
     tagsRequired: "タグを1個以上4個以下で選択してください。",
     fieldsRequired: "すべての必須項目を入力してください。",
     characterLimitReached:
-      "作成できるコンパニオンの上限100体に達しました。",
+      "作成できるコンパニオンの上限25体に達しました。",
     publicDescription:
       "すべてのユーザーがこのコンパニオンを見つけてチャットできます。",
     privateDescription:
@@ -199,7 +199,7 @@ export const CHARACTER_TOOLS_COPY: Record<
     tagsRequired: "태그를 1개 이상 4개 이하로 선택하세요.",
     fieldsRequired: "모든 필수 항목을 입력하세요.",
     characterLimitReached:
-      "만들 수 있는 컴패니언 100개 한도에 도달했습니다.",
+      "만들 수 있는 컴패니언 25개 한도에 도달했습니다.",
     publicDescription:
       "모든 사용자가 이 컴패니언을 발견하고 채팅할 수 있습니다.",
     privateDescription:

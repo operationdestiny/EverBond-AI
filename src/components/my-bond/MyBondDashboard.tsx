@@ -362,7 +362,7 @@ export function MyBondDashboard({
     },
     {
       label: copy.createdCompanions,
-      value: `${data.counts.createdCompanions} / 100`,
+      value: `${data.counts.createdCompanions} / 25`,
       icon: UserRound
     },
     {
@@ -511,7 +511,7 @@ export function MyBondDashboard({
                   {copy.myCompanions}
                 </h2>
                 <p className="mt-2 text-sm text-bond-muted">
-                  {data.counts.createdCompanions} {copy.characterLimit}
+                  {data.counts.createdCompanions} / 25
                 </p>
               </div>
               <Link

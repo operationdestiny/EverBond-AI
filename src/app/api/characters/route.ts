@@ -31,7 +31,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
 ]);
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const USER_CHARACTER_LIMIT = 100;
+const USER_CHARACTER_LIMIT = 25;
 const CHARACTER_IMAGE_BUCKET = "character-images";
 
 async function getUser(request: Request) {

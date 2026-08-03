@@ -208,7 +208,7 @@ export function HomeCompanionBrowser({
               onClick={browser.toggleOrder}
               className="v20-category-tab shrink-0"
             >
-              {browser.order === "highest" ? sortCopy.lowest : sortCopy.highest}
+              {browser.order === "lowest" ? sortCopy.lowest : sortCopy.highest}
             </button>
 
             {showAllTags && (

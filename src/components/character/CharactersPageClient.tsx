@@ -112,7 +112,7 @@ export function CharactersPageClient({
           onClick={browser.toggleOrder}
           className="rounded-full border border-bond-rose/70 bg-bond-rose/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-bond-rose/20"
         >
-          {browser.order === "highest" ? sortCopy.lowest : sortCopy.highest}
+          {browser.order === "lowest" ? sortCopy.lowest : sortCopy.highest}
         </button>
       </div>
 

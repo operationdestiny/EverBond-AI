@@ -58,6 +58,15 @@ const EVERCOIN_REQUIRED_MESSAGE =
 
 const USER_INPUT_MAX_TOKENS = 80;
 
+const TYPING_COPY = {
+  EN: (name: string) => `${name} is typing...`,
+  ES: (name: string) => `${name} está escribiendo...`,
+  FR: (name: string) => `${name} écrit...`,
+  DE: (name: string) => `${name} schreibt...`,
+  JA: (name: string) => `${name}が入力中...`,
+  KO: (name: string) => `${name} 입력 중...`
+} as const;
+
 function getApiLanguage(languageCode: string): ApiLanguage {
   const normalized = languageCode.toLowerCase();
 
@@ -721,7 +730,9 @@ export function ChatShell({ character }: { character: Character }) {
               {isTyping && (
                 <div className="flex justify-start">
                   <div className="rounded-[1.5rem] border border-bond-rose/55 bg-white/[0.04] px-5 py-4 text-bond-muted">
-                    <span className="animate-pulse">{t("typing")}</span>
+                    <span className="animate-pulse">
+                      {(TYPING_COPY[language] ?? TYPING_COPY.EN)(character.name)}
+                    </span>
                   </div>
                 </div>
               )}
