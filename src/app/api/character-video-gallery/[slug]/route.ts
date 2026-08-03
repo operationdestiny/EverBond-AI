@@ -19,18 +19,14 @@ export const maxDuration = 300;
 const VIDEO_LIMIT = 5;
 const VIDEO_PROMPT_MAX_CHARACTERS = 1_000;
 const MAX_GENERATED_VIDEO_BYTES = 100 * 1024 * 1024;
-const VIDEO_DURATIONS = [8, 10, 12] as const;
+const VIDEO_DURATIONS = [8] as const;
 const TERMINAL_PROVIDER_STATUSES = new Set(["FAILED", "ERROR", "CANCELLED"]);
 
 const GenerateBody = z
   .object({
     requestId: z.string().uuid(),
     prompt: z.string().trim().min(3).max(VIDEO_PROMPT_MAX_CHARACTERS),
-    durationSeconds: z.union([
-      z.literal(VIDEO_DURATIONS[0]),
-      z.literal(VIDEO_DURATIONS[1]),
-      z.literal(VIDEO_DURATIONS[2])
-    ])
+    durationSeconds: z.literal(VIDEO_DURATIONS[0])
   })
   .strict();
 
@@ -673,6 +669,7 @@ export async function POST(
         duration: `${parsed.data.durationSeconds}s`,
         resolution: videoResolution(),
         aspect_ratio: videoAspectRatio(),
+        audio: false,
         reference_image_urls: [referenceImage],
         negative_prompt:
           "identity drift, different person, face distortion, low resolution, blur, watermark, text, duplicate body parts"

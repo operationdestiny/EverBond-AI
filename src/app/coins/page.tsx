@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  Clapperboard,
   Gift,
   ImageIcon,
   LoaderCircle,
@@ -53,7 +54,8 @@ function CoinsPageContent() {
   const [busyPack, setBusyPack] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [callCost, setCallCost] = useState(35);
-  const [imageCost, setImageCost] = useState(20);
+  const [imageCost, setImageCost] = useState(25);
+  const [videoCost, setVideoCost] = useState(40);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,12 +67,16 @@ function CoinsPageContent() {
 
         const nextCallCost = Number(payload?.callCostPerMinute);
         const nextImageCost = Number(payload?.imageCost);
+        const nextVideoCost = Number(payload?.videoCost);
 
         if (Number.isFinite(nextCallCost) && nextCallCost > 0) {
           setCallCost(Math.trunc(nextCallCost));
         }
         if (Number.isFinite(nextImageCost) && nextImageCost > 0) {
           setImageCost(Math.trunc(nextImageCost));
+        }
+        if (Number.isFinite(nextVideoCost) && nextVideoCost > 0) {
+          setVideoCost(Math.trunc(nextVideoCost));
         }
       })
       .catch(() => undefined);
@@ -93,6 +99,12 @@ function CoinsPageContent() {
       title: t("images"),
       body: t("imagesBody"),
       rate: `${imageCost} EverCoin / ${pageCopy.imageUnit}`
+    },
+    {
+      icon: Clapperboard,
+      title: pageCopy.videosTitle,
+      body: pageCopy.videosBody,
+      rate: `${videoCost} EverCoin / ${pageCopy.videoUnit}`
     },
     {
       icon: Phone,
@@ -198,7 +210,7 @@ function CoinsPageContent() {
         </p>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {items.map((item) => {
           const Icon = item.icon;
           return (

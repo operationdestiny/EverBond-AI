@@ -22,12 +22,15 @@ export function everCoinCallCostPerMinute() {
   );
 }
 
+export const EVERCOIN_IMAGE_COST = 25;
+export const EVERCOIN_VIDEO_COST = 40;
+
 export function everCoinImageCost() {
-  return Math.max(integerEnv("EVERCOIN_IMAGE_COST", 20, 100_000), 1);
+  return EVERCOIN_IMAGE_COST;
 }
 
 export function everCoinVideoCost() {
-  return integerEnv("EVERCOIN_VIDEO_COST", 0, 1_000_000);
+  return EVERCOIN_VIDEO_COST;
 }
 
 export async function getEverCoinBalance(userId: string) {

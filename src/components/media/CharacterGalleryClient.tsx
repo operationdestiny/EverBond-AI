@@ -717,27 +717,13 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
                   {videoPrompt.length} / {VIDEO_PROMPT_MAX_CHARACTERS}
                 </p>
 
-                <div className="mt-4">
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-white/55">
-                    {copy.duration}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {videoData.durationOptions.map((duration) => (
-                      <button
-                        key={duration}
-                        type="button"
-                        onClick={() => setVideoDuration(duration)}
-                        disabled={videoBusy}
-                        className={`rounded-full border px-4 py-2 text-sm font-bold transition disabled:opacity-50 ${
-                          videoDuration === duration
-                            ? "border-bond-rose bg-bond-rose text-white"
-                            : "border-white/15 bg-black/25 text-white hover:border-bond-rose/60"
-                        }`}
-                      >
-                        {duration} {copy.seconds}
-                      </button>
-                    ))}
-                  </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-bond-rose/45 bg-bond-rose/10 px-4 py-2 text-sm font-bold text-white">
+                    8 {copy.seconds}
+                  </span>
+                  <span className="rounded-full border border-white/15 bg-black/25 px-4 py-2 text-sm font-bold text-white/70">
+                    Silent
+                  </span>
                 </div>
 
                 {!videoData.pricingConfigured && (

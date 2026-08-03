@@ -16,6 +16,8 @@ export async function GET() {
       callCostPerMinute: everCoinCallCostPerMinute(),
       imageCost: everCoinImageCost(),
       videoCost,
+      videoDurationSeconds: 8,
+      videoAudioEnabled: false,
       videoPricingConfigured: videoCost > 0,
       packs: Object.values(EVERCOIN_PACKS).map((pack) => ({
         code: pack.code,
