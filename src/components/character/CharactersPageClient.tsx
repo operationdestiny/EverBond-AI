@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { Character, CharacterCategory } from "@/types/character";
 import { CharacterGrid } from "@/components/character/CharacterGrid";
@@ -23,6 +23,15 @@ const hiddenDiscoverTags = new Set<string>([
   "Sarcastic"
 ]);
 
+const SORT_COPY = {
+  EN: { lowest: "Lowest", highest: "Highest" },
+  ES: { lowest: "Más bajos", highest: "Más altos" },
+  FR: { lowest: "Plus bas", highest: "Plus haut" },
+  DE: { lowest: "Niedrigste", highest: "Höchste" },
+  JA: { lowest: "下位", highest: "上位" },
+  KO: { lowest: "낮은 순", highest: "높은 순" }
+} as const;
+
 export function CharactersPageClient({
   characters: initial
 }: {
@@ -34,8 +43,28 @@ export function CharactersPageClient({
   const discoverCopy = DISCOVER_COPY[language] ?? DISCOVER_COPY.EN;
   const sharing =
     CHARACTER_SHARING_COPY[language] ?? CHARACTER_SHARING_COPY.EN;
-  const browser = useCharacterBrowser(initial, "everbond-girls", language);
-  const [showAllTags, setShowAllTags] = useState(false);
+  const sortCopy = SORT_COPY[language] ?? SORT_COPY.EN;
+  const browser = useCharacterBrowser(
+    initial,
+    "everbond-girls",
+    language,
+    "discover"
+  );
+  const [showAllTags, setShowAllTags] = useState(() =>
+    ADDITIONAL_CHARACTER_TAGS.includes(
+      browser.tag as (typeof ADDITIONAL_CHARACTER_TAGS)[number]
+    )
+  );
+
+  useEffect(() => {
+    if (
+      ADDITIONAL_CHARACTER_TAGS.includes(
+        browser.tag as (typeof ADDITIONAL_CHARACTER_TAGS)[number]
+      )
+    ) {
+      setShowAllTags(true);
+    }
+  }, [browser.tag]);
 
   const categoryLabels: Record<CharacterCategory, string> = {
     "everbond-girls": t("everbondGirls"),
@@ -50,7 +79,18 @@ export function CharactersPageClient({
   ).filter((tag) => !hiddenDiscoverTags.has(tag));
 
   return (
-    <main className="px-4 py-6 md:px-6">
+    <main
+      className="px-4 py-6 md:px-6"
+      onClickCapture={(event) => {
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest('a[href^="/chat/"]')
+        ) {
+          browser.rememberPosition();
+        }
+      }}
+    >
       <div className="mb-6 flex flex-wrap justify-center gap-2">
         {characterCategories.map((item) => (
           <button
@@ -66,6 +106,14 @@ export function CharactersPageClient({
             {categoryLabels[item.id]}
           </button>
         ))}
+
+        <button
+          type="button"
+          onClick={browser.toggleOrder}
+          className="rounded-full border border-bond-rose/70 bg-bond-rose/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-bond-rose/20"
+        >
+          {browser.order === "highest" ? sortCopy.lowest : sortCopy.highest}
+        </button>
       </div>
 
       <div className="mx-auto mb-6 max-w-4xl">
