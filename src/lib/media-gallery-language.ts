@@ -20,6 +20,7 @@ export type MediaGalleryCopy = {
   videoEmpty: string;
   setChatImage: string;
   activeChatImage: string;
+  useDefaultImage: string;
   deleteImage: string;
   deleteVideo: string;
   imageLimitReached: string;
@@ -58,6 +59,7 @@ export const MEDIA_GALLERY_COPY: Record<LanguageCode, MediaGalleryCopy> = {
     videoEmpty: "No private videos yet. Describe one above to create it.",
     setChatImage: "Use as My Chat Image",
     activeChatImage: "My Active Chat Image",
+    useDefaultImage: "Use Default Image",
     deleteImage: "Delete Image",
     deleteVideo: "Delete Video",
     imageLimitReached: "Delete an image before creating another one.",
@@ -95,6 +97,7 @@ export const MEDIA_GALLERY_COPY: Record<LanguageCode, MediaGalleryCopy> = {
     videoEmpty: "Aún no hay videos privados. Describe uno arriba para crearlo.",
     setChatImage: "Usar como mi imagen de chat",
     activeChatImage: "Mi imagen de chat activa",
+    useDefaultImage: "Usar imagen predeterminada",
     deleteImage: "Eliminar imagen",
     deleteVideo: "Eliminar video",
     imageLimitReached: "Elimina una imagen antes de crear otra.",
@@ -132,6 +135,7 @@ export const MEDIA_GALLERY_COPY: Record<LanguageCode, MediaGalleryCopy> = {
     videoEmpty: "Aucune vidéo privée pour le moment. Décrivez-en une ci-dessus.",
     setChatImage: "Utiliser comme image de chat",
     activeChatImage: "Mon image de chat active",
+    useDefaultImage: "Utiliser l’image par défaut",
     deleteImage: "Supprimer l’image",
     deleteVideo: "Supprimer la vidéo",
     imageLimitReached: "Supprimez une image avant d’en créer une autre.",
@@ -169,6 +173,7 @@ export const MEDIA_GALLERY_COPY: Record<LanguageCode, MediaGalleryCopy> = {
     videoEmpty: "Noch keine privaten Videos. Beschreibe oben dein erstes Video.",
     setChatImage: "Als mein Chatbild verwenden",
     activeChatImage: "Mein aktives Chatbild",
+    useDefaultImage: "Standardbild verwenden",
     deleteImage: "Bild löschen",
     deleteVideo: "Video löschen",
     imageLimitReached: "Lösche ein Bild, bevor du ein weiteres erstellst.",
@@ -206,6 +211,7 @@ export const MEDIA_GALLERY_COPY: Record<LanguageCode, MediaGalleryCopy> = {
     videoEmpty: "まだ非公開動画がありません。上で説明して作成してください。",
     setChatImage: "自分のチャット画像に設定",
     activeChatImage: "現在のチャット画像",
+    useDefaultImage: "デフォルト画像に戻す",
     deleteImage: "画像を削除",
     deleteVideo: "動画を削除",
     imageLimitReached: "新しい画像を作る前に1枚削除してください。",
@@ -243,6 +249,7 @@ export const MEDIA_GALLERY_COPY: Record<LanguageCode, MediaGalleryCopy> = {
     videoEmpty: "아직 비공개 영상이 없습니다. 위에서 설명해 만들어 보세요.",
     setChatImage: "내 채팅 이미지로 사용",
     activeChatImage: "현재 채팅 이미지",
+    useDefaultImage: "기본 이미지로 돌아가기",
     deleteImage: "이미지 삭제",
     deleteVideo: "영상 삭제",
     imageLimitReached: "새 이미지를 만들기 전에 기존 이미지를 삭제하세요.",

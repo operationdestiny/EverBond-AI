@@ -39,6 +39,12 @@ const ActionBody = z.discriminatedUnion("action", [
     .strict(),
   z
     .object({
+      action: z.literal("deselect"),
+      imageId: z.string().uuid()
+    })
+    .strict(),
+  z
+    .object({
       action: z.literal("delete"),
       imageId: z.string().uuid()
     })
@@ -458,6 +464,21 @@ export async function PATCH(
       if (preferenceError) throw preferenceError;
 
       return NextResponse.json({ selectedImageId: image.id });
+    }
+
+    if (parsed.data.action === "deselect") {
+      const { error: preferenceError } = await supabase
+        .from("user_character_preferences")
+        .update({
+          selected_gallery_image_id: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("user_id", user.id)
+        .eq("character_id", character.id)
+        .eq("selected_gallery_image_id", parsed.data.imageId);
+      if (preferenceError) throw preferenceError;
+
+      return NextResponse.json({ selectedImageId: null });
     }
 
     const { data: image, error: lookupError } = await supabase

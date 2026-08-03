@@ -26,6 +26,40 @@ async function getUserId(request: Request) {
   return data.user.id;
 }
 
+async function selectedCharacterImageUrl(
+  userId: string,
+  characterId: string
+) {
+  const supabase = getSupabaseServiceClient();
+  const { data: preference, error: preferenceError } = await supabase
+    .from("user_character_preferences")
+    .select("selected_gallery_image_id")
+    .eq("user_id", userId)
+    .eq("character_id", characterId)
+    .maybeSingle();
+
+  if (preferenceError) throw preferenceError;
+  if (!preference?.selected_gallery_image_id) return null;
+
+  const { data: image, error: imageError } = await supabase
+    .from("character_gallery_images")
+    .select("storage_path")
+    .eq("id", preference.selected_gallery_image_id)
+    .eq("user_id", userId)
+    .eq("character_id", characterId)
+    .maybeSingle();
+
+  if (imageError) throw imageError;
+  if (!image?.storage_path) return null;
+
+  const { data: signed, error: signedError } = await supabase.storage
+    .from("character-gallery")
+    .createSignedUrl(image.storage_path, 60 * 60);
+
+  if (signedError) throw signedError;
+  return signed.signedUrl;
+}
+
 export async function GET(
   request: Request,
   {
@@ -64,9 +98,15 @@ export async function GET(
       { translateTags: true, allowProvider: false }
     );
 
+    const selectedImage = userId
+      ? await selectedCharacterImageUrl(userId, character.id)
+      : null;
+
     return NextResponse.json(
       {
-        character: localized,
+        character: selectedImage
+          ? { ...localized, image: selectedImage }
+          : localized,
         language: languageResult.data
       },
       {

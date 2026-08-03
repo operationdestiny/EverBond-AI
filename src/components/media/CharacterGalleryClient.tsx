@@ -386,7 +386,10 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
     }
   }
 
-  async function actOnImage(action: "select" | "delete", imageId: string) {
+  async function actOnImage(
+    action: "select" | "deselect" | "delete",
+    imageId: string
+  ) {
     if (!session?.access_token || busyImageId) return;
 
     setBusyImageId(imageId);
@@ -416,6 +419,18 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
         window.dispatchEvent(
           new CustomEvent("everbond:chat-image-changed", {
             detail: { characterSlug: slug, imageId }
+          })
+        );
+        return;
+      }
+
+      if (action === "deselect") {
+        setImageData((current) =>
+          current ? { ...current, selectedImageId: null } : current
+        );
+        window.dispatchEvent(
+          new CustomEvent("everbond:chat-image-changed", {
+            detail: { characterSlug: slug, imageId: null }
           })
         );
         return;
@@ -571,9 +586,6 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
                       {imageData.images.length} / {imageData.limit} · {copy.images}
                     </p>
                   </div>
-                  <span className="rounded-full border border-bond-rose/25 bg-bond-rose/10 px-3 py-1 text-xs font-bold text-bond-rose">
-                    {imageData.imageCost} EverCoin
-                  </span>
                 </div>
 
                 <textarea
@@ -656,8 +668,13 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
                           </p>
                           <button
                             type="button"
-                            onClick={() => void actOnImage("select", image.id)}
-                            disabled={selected || Boolean(busyImageId)}
+                            onClick={() =>
+                              void actOnImage(
+                                selected ? "deselect" : "select",
+                                image.id
+                              )
+                            }
+                            disabled={Boolean(busyImageId)}
                             className={`mt-4 flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
                               selected
                                 ? "bg-bond-gold/15 text-bond-gold"
@@ -665,7 +682,7 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
                             }`}
                           >
                             {busy ? <LoaderCircle className="animate-spin" size={16} /> : <Check size={16} />}
-                            {selected ? copy.activeChatImage : copy.setChatImage}
+                            {selected ? copy.useDefaultImage : copy.setChatImage}
                           </button>
                           <button
                             type="button"
@@ -694,11 +711,6 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
                       {videoData.videos.length} / {videoData.limit} · {copy.videos}
                     </p>
                   </div>
-                  <span className="rounded-full border border-bond-violet/35 bg-bond-violet/15 px-3 py-1 text-xs font-bold text-white">
-                    {videoData.pricingConfigured
-                      ? `${videoData.videoCost} EverCoin`
-                      : copy.pricingPending}
-                  </span>
                 </div>
 
                 <textarea
@@ -716,15 +728,6 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
                 <p className="mt-2 text-right text-xs font-semibold text-white/45">
                   {videoPrompt.length} / {VIDEO_PROMPT_MAX_CHARACTERS}
                 </p>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="rounded-full border border-bond-rose/45 bg-bond-rose/10 px-4 py-2 text-sm font-bold text-white">
-                    8 {copy.seconds}
-                  </span>
-                  <span className="rounded-full border border-white/15 bg-black/25 px-4 py-2 text-sm font-bold text-white/70">
-                    Silent
-                  </span>
-                </div>
 
                 {!videoData.pricingConfigured && (
                   <p className="mt-4 rounded-xl border border-bond-gold/25 bg-bond-gold/10 px-4 py-3 text-sm font-semibold text-bond-gold">
