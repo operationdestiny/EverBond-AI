@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, Filter, Search, Sparkles } from "lucide-react";
 import { Character, CharacterCategory } from "@/types/character";
 import { CharacterGrid } from "@/components/character/CharacterGrid";
@@ -34,6 +34,15 @@ const additionalFilters: CharacterTag[] = [
   "Slice of Life"
 ];
 
+const SORT_COPY = {
+  EN: { lowest: "Lowest", highest: "Highest" },
+  ES: { lowest: "Más bajos", highest: "Más altos" },
+  FR: { lowest: "Plus bas", highest: "Plus haut" },
+  DE: { lowest: "Niedrigste", highest: "Höchste" },
+  JA: { lowest: "下位", highest: "上位" },
+  KO: { lowest: "낮은 순", highest: "높은 순" }
+} as const;
+
 export function HomeCompanionBrowser({
   characters: initial
 }: {
@@ -45,9 +54,25 @@ export function HomeCompanionBrowser({
   const discoverCopy = DISCOVER_COPY[language] ?? DISCOVER_COPY.EN;
   const sharing =
     CHARACTER_SHARING_COPY[language] ?? CHARACTER_SHARING_COPY.EN;
-  const browser = useCharacterBrowser(initial, "everbond-girls", language);
-  const [filter, setFilter] = useState("All");
-  const [showAllTags, setShowAllTags] = useState(false);
+  const sortCopy = SORT_COPY[language] ?? SORT_COPY.EN;
+  const browser = useCharacterBrowser(
+    initial,
+    "everbond-girls",
+    language,
+    "home-discover"
+  );
+  const [filter, setFilter] = useState(browser.tag || "All");
+  const [showAllTags, setShowAllTags] = useState(() =>
+    additionalFilters.includes(browser.tag as CharacterTag)
+  );
+
+  useEffect(() => {
+    setFilter(browser.tag || "All");
+
+    if (additionalFilters.includes(browser.tag as CharacterTag)) {
+      setShowAllTags(true);
+    }
+  }, [browser.tag]);
 
   const localizedCategories: Record<CharacterCategory, string> = {
     "everbond-girls": t("everbondGirls"),
@@ -73,7 +98,18 @@ export function HomeCompanionBrowser({
   }
 
   return (
-    <main className="v18-page">
+    <main
+      className="v18-page"
+      onClickCapture={(event) => {
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest('a[href^="/chat/"]')
+        ) {
+          browser.rememberPosition();
+        }
+      }}
+    >
       <section
         className="v19-hero-image"
         aria-label={discoverCopy.bannerLabel}
@@ -166,6 +202,14 @@ export function HomeCompanionBrowser({
                 {localizedCategories[item.id]}
               </button>
             ))}
+
+            <button
+              type="button"
+              onClick={browser.toggleOrder}
+              className="v20-category-tab shrink-0"
+            >
+              {browser.order === "highest" ? sortCopy.lowest : sortCopy.highest}
+            </button>
 
             {showAllTags && (
               <div className="flex min-w-[18rem] flex-1 flex-wrap gap-1.5 xl:pl-2">

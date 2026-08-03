@@ -21,7 +21,7 @@ type BrowserSnapshot = {
 };
 
 type StoredBrowserState = {
-  version: 1;
+  version: 2;
   language: LanguageCode;
   category: CharacterCategory;
   query: string;
@@ -46,6 +46,12 @@ function isCharacterCategory(value: unknown): value is CharacterCategory {
 
 function isBrowserOrder(value: unknown): value is CharacterBrowserOrder {
   return value === "highest" || value === "lowest";
+}
+
+function defaultOrderForCategory(
+  category: CharacterCategory
+): CharacterBrowserOrder {
+  return category === "everbond-girls" ? "lowest" : "highest";
 }
 
 function restoreWindowScroll(scrollY: number) {
@@ -73,28 +79,30 @@ export function useCharacterBrowser(
 ) {
   const cacheKey = persistenceKey ? `${persistenceKey}:${language}` : "";
   const storedSnapshot = cacheKey ? browserMemory.get(cacheKey) : undefined;
+  const initialOrder = defaultOrderForCategory(initialCategory);
+  const requiresInitialReverseLoad = !storedSnapshot && initialOrder === "lowest";
 
   const [characters, setCharacters] = useState(
-    storedSnapshot?.characters ?? initial
+    storedSnapshot?.characters ?? (requiresInitialReverseLoad ? [] : initial)
   );
-  const [category, setCategory] = useState<CharacterCategory>(
+  const [category, setCategoryState] = useState<CharacterCategory>(
     storedSnapshot?.category ?? initialCategory
   );
   const [query, setQuery] = useState(storedSnapshot?.query ?? "");
   const [tag, setTag] = useState(storedSnapshot?.tag ?? "");
   const [order, setOrder] = useState<CharacterBrowserOrder>(
-    storedSnapshot?.order ?? "highest"
+    storedSnapshot?.order ?? initialOrder
   );
   const [hasMore, setHasMore] = useState(
     storedSnapshot?.hasMore ?? initial.length === PAGE_SIZE
   );
   const [loading, setLoading] = useState(
-    storedSnapshot ? false : language !== "EN"
+    storedSnapshot ? false : language !== "EN" || requiresInitialReverseLoad
   );
   const [restoreSequence, setRestoreSequence] = useState(0);
 
   const sourceCharactersRef = useRef<Character[]>(
-    storedSnapshot?.sourceCharacters ?? initial
+    storedSnapshot?.sourceCharacters ?? (requiresInitialReverseLoad ? [] : initial)
   );
   const localizedByIdRef = useRef(
     storedSnapshot
@@ -109,6 +117,7 @@ export function useCharacterBrowser(
     storedSnapshot?.restoreScroll ? storedSnapshot.scrollY : null
   );
   const hadStoredSnapshotRef = useRef(Boolean(storedSnapshot));
+  const requiresInitialReverseLoadRef = useRef(requiresInitialReverseLoad);
 
   function sessionStorageKey() {
     return persistenceKey
@@ -297,7 +306,7 @@ export function useCharacterBrowser(
       const stored = JSON.parse(raw) as Partial<StoredBrowserState>;
 
       if (
-        stored.version !== 1 ||
+        stored.version !== 2 ||
         stored.language !== language ||
         !stored.restoreScroll ||
         !isCharacterCategory(stored.category) ||
@@ -311,7 +320,7 @@ export function useCharacterBrowser(
         PAGE_SIZE
       );
       restoreScrollTargetRef.current = Math.max(Number(stored.scrollY) || 0, 0);
-      setCategory(stored.category);
+      setCategoryState(stored.category);
       setQuery(typeof stored.query === "string" ? stored.query : "");
       setTag(typeof stored.tag === "string" ? stored.tag : "");
       setOrder(stored.order);
@@ -328,7 +337,13 @@ export function useCharacterBrowser(
       firstEffect.current = false;
 
       if (hadStoredSnapshotRef.current) return;
-      if (language === "EN" && restoreSequence === 0) return;
+      if (
+        language === "EN" &&
+        restoreSequence === 0 &&
+        !requiresInitialReverseLoadRef.current
+      ) {
+        return;
+      }
     }
 
     const timer = window.setTimeout(() => {
@@ -377,7 +392,7 @@ export function useCharacterBrowser(
     if (!key) return;
 
     const stored: StoredBrowserState = {
-      version: 1,
+      version: 2,
       language,
       category,
       query,
@@ -395,6 +410,18 @@ export function useCharacterBrowser(
     }
   }
 
+  function chooseCategory(nextCategory: CharacterCategory) {
+    if (cacheKey) {
+      const snapshot = browserMemory.get(cacheKey);
+      if (snapshot) snapshot.restoreScroll = false;
+    }
+    clearStoredRestoreFlag();
+    restoreTargetCountRef.current = 0;
+    restoreScrollTargetRef.current = null;
+    setCategoryState(nextCategory);
+    setOrder(defaultOrderForCategory(nextCategory));
+  }
+
   function toggleOrder() {
     if (cacheKey) {
       const snapshot = browserMemory.get(cacheKey);
@@ -407,7 +434,7 @@ export function useCharacterBrowser(
   return {
     characters,
     category,
-    setCategory,
+    setCategory: chooseCategory,
     query,
     setQuery,
     tag,
