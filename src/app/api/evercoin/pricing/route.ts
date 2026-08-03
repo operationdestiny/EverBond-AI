@@ -3,15 +3,20 @@ import { EVERCOIN_PACKS } from "@/lib/billing/evercoin-packs";
 import {
   everCoinCallCostPerMinute,
   everCoinImageCost,
-  everCoinPerDollar
+  everCoinPerDollar,
+  everCoinVideoCost
 } from "@/lib/evercoin";
 
 export async function GET() {
+  const videoCost = everCoinVideoCost();
+
   return NextResponse.json(
     {
       everCoinPerDollar: everCoinPerDollar(),
       callCostPerMinute: everCoinCallCostPerMinute(),
       imageCost: everCoinImageCost(),
+      videoCost,
+      videoPricingConfigured: videoCost > 0,
       packs: Object.values(EVERCOIN_PACKS).map((pack) => ({
         code: pack.code,
         coins: pack.coins,

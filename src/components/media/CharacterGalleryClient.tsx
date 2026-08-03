@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   Check,
+  Clapperboard,
   ImageIcon,
   LoaderCircle,
   LockKeyhole,
@@ -11,8 +12,15 @@ import {
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { InsufficientEverCoinModal } from "@/components/media/InsufficientEverCoinModal";
+import { MEDIA_GALLERY_COPY } from "@/lib/media-gallery-language";
 import { useSiteLanguage } from "@/lib/site-language";
-import { MEDIA_COPY } from "@/lib/media-language";
+
+type GalleryCharacter = {
+  id: string;
+  slug: string;
+  name: string;
+  image: string;
+};
 
 type GalleryImage = {
   id: string;
@@ -21,80 +29,130 @@ type GalleryImage = {
   createdAt: string;
 };
 
-type GalleryData = {
-  character: {
-    id: string;
-    slug: string;
-    name: string;
-    image: string;
-  };
+type GalleryVideo = {
+  id: string;
+  url: string;
+  prompt: string;
+  durationSeconds: number;
+  createdAt: string;
+};
+
+type ImageGalleryData = {
+  character: GalleryCharacter;
   images: GalleryImage[];
   selectedImageId: string | null;
   limit: number;
   imageCost: number;
 };
 
-const IMAGE_PROMPT_MAX_CHARACTERS = 500;
+type VideoGalleryData = {
+  character: GalleryCharacter;
+  videos: GalleryVideo[];
+  limit: number;
+  videoCost: number;
+  pricingConfigured: boolean;
+  pendingRequestId: string | null;
+  durationOptions: number[];
+};
 
-export function CharacterGalleryClient({
-  slug
-}: {
-  slug: string;
-}) {
+const IMAGE_PROMPT_MAX_CHARACTERS = 600;
+const VIDEO_PROMPT_MAX_CHARACTERS = 1_000;
+const VIDEO_POLL_DELAY_MS = 6_000;
+
+export function CharacterGalleryClient({ slug }: { slug: string }) {
   const { language } = useSiteLanguage();
-  const copy = MEDIA_COPY[language] ?? MEDIA_COPY.EN;
-  const {
-    session,
-    authReady,
-    openAuthModal
-  } = useAuth();
+  const copy = MEDIA_GALLERY_COPY[language] ?? MEDIA_GALLERY_COPY.EN;
+  const { session, authReady, openAuthModal } = useAuth();
 
-  const [data, setData] = useState<GalleryData | null>(null);
-  const [prompt, setPrompt] = useState("");
+  const [imageData, setImageData] = useState<ImageGalleryData | null>(null);
+  const [videoData, setVideoData] = useState<VideoGalleryData | null>(null);
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [videoPrompt, setVideoPrompt] = useState("");
+  const [videoDuration, setVideoDuration] = useState(8);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [pendingCard, setPendingCard] = useState(false);
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [pendingImageCard, setPendingImageCard] = useState(false);
+  const [pendingVideoRequestId, setPendingVideoRequestId] = useState<string | null>(null);
+  const [submittingVideo, setSubmittingVideo] = useState(false);
   const [busyImageId, setBusyImageId] = useState<string | null>(null);
-  const [error, setError] = useState("");
+  const [busyVideoId, setBusyVideoId] = useState<string | null>(null);
+  const [imageError, setImageError] = useState("");
+  const [videoError, setVideoError] = useState("");
   const [coinModal, setCoinModal] = useState(false);
 
-  const atLimit = Boolean(data && data.images.length >= data.limit);
-  const canGenerate =
-    Boolean(data) &&
-    !atLimit &&
-    prompt.trim().length >= 3 &&
-    !generating;
+  const character = imageData?.character ?? videoData?.character ?? null;
+  const imageAtLimit = Boolean(
+    imageData && imageData.images.length >= imageData.limit
+  );
+  const videoAtLimit = Boolean(
+    videoData && videoData.videos.length >= videoData.limit
+  );
+  const videoBusy = Boolean(pendingVideoRequestId || submittingVideo);
 
-  async function loadGallery() {
+  const canGenerateImage =
+    Boolean(imageData) &&
+    !imageAtLimit &&
+    imagePrompt.trim().length >= 3 &&
+    !generatingImage;
+
+  const canGenerateVideo =
+    Boolean(videoData?.pricingConfigured) &&
+    !videoAtLimit &&
+    videoPrompt.trim().length >= 3 &&
+    !videoBusy;
+
+  async function loadGalleries() {
     if (!session?.access_token) return;
 
     setLoading(true);
-    setError("");
+    setImageError("");
+    setVideoError("");
 
     try {
-      const response = await fetch(
-        `/api/character-gallery/${encodeURIComponent(slug)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`
-          },
+      const authorization = {
+        Authorization: `Bearer ${session.access_token}`
+      };
+      const [imageResponse, videoResponse] = await Promise.all([
+        fetch(`/api/character-gallery/${encodeURIComponent(slug)}`, {
+          headers: authorization,
           cache: "no-store"
-        }
-      );
+        }),
+        fetch(`/api/character-video-gallery/${encodeURIComponent(slug)}`, {
+          headers: authorization,
+          cache: "no-store"
+        })
+      ]);
 
-      const payload = await response.json().catch(() => ({}));
+      const [imagePayload, videoPayload] = await Promise.all([
+        imageResponse.json().catch(() => ({})),
+        videoResponse.json().catch(() => ({}))
+      ]);
 
-      if (!response.ok) {
-        throw new Error(payload?.message || payload?.error || copy.mediaError);
+      if (!imageResponse.ok) {
+        throw new Error(
+          imagePayload?.message || imagePayload?.error || copy.mediaError
+        );
+      }
+      if (!videoResponse.ok) {
+        throw new Error(
+          videoPayload?.message || videoPayload?.error || copy.mediaError
+        );
       }
 
-      setData(payload as GalleryData);
+      const nextImages = imagePayload as ImageGalleryData;
+      const nextVideos = videoPayload as VideoGalleryData;
+      setImageData(nextImages);
+      setVideoData(nextVideos);
+      setPendingVideoRequestId(nextVideos.pendingRequestId);
+
+      if (nextVideos.durationOptions?.length) {
+        setVideoDuration(nextVideos.durationOptions[0]);
+      }
     } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : copy.mediaError
-      );
+      const message =
+        loadError instanceof Error ? loadError.message : copy.mediaError;
+      setImageError(message);
+      setVideoError(message);
     } finally {
       setLoading(false);
     }
@@ -109,17 +167,85 @@ export function CharacterGalleryClient({
       return;
     }
 
-    void loadGallery();
+    void loadGalleries();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady, session?.access_token, slug]);
 
+  useEffect(() => {
+    if (!session?.access_token || !pendingVideoRequestId) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    async function poll() {
+      try {
+        const response = await fetch(
+          `/api/character-video-gallery/${encodeURIComponent(slug)}?requestId=${encodeURIComponent(pendingVideoRequestId!)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${session!.access_token}`
+            },
+            cache: "no-store"
+          }
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (cancelled) return;
+
+        if (!response.ok) {
+          throw new Error(payload?.message || payload?.error || copy.mediaError);
+        }
+
+        if (payload?.status === "completed" && payload?.video) {
+          const nextVideo = payload.video as GalleryVideo;
+          setVideoData((current) =>
+            current
+              ? {
+                  ...current,
+                  videos: [
+                    nextVideo,
+                    ...current.videos.filter((video) => video.id !== nextVideo.id)
+                  ],
+                  pendingRequestId: null
+                }
+              : current
+          );
+          setVideoPrompt("");
+          setPendingVideoRequestId(null);
+          setVideoError("");
+          return;
+        }
+
+        if (payload?.status === "failed") {
+          setVideoError(payload?.message || payload?.error || copy.mediaError);
+          setPendingVideoRequestId(null);
+          return;
+        }
+
+        timer = setTimeout(() => void poll(), VIDEO_POLL_DELAY_MS);
+      } catch (pollError) {
+        if (cancelled) return;
+        setVideoError(
+          pollError instanceof Error ? pollError.message : copy.mediaError
+        );
+        timer = setTimeout(() => void poll(), VIDEO_POLL_DELAY_MS * 2);
+      }
+    }
+
+    void poll();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [copy.mediaError, pendingVideoRequestId, session?.access_token, slug]);
+
   async function generateImage() {
-    if (!session?.access_token || !canGenerate) return;
+    if (!session?.access_token || !canGenerateImage) return;
 
     const requestId = crypto.randomUUID();
-    setGenerating(true);
-    setPendingCard(true);
-    setError("");
+    setGeneratingImage(true);
+    setPendingImageCard(true);
+    setImageError("");
 
     try {
       const response = await fetch(
@@ -132,11 +258,10 @@ export function CharacterGalleryClient({
           },
           body: JSON.stringify({
             requestId,
-            prompt: prompt.trim()
+            prompt: imagePrompt.trim()
           })
         }
       );
-
       const payload = await response.json().catch(() => ({}));
 
       if (
@@ -147,54 +272,125 @@ export function CharacterGalleryClient({
         setCoinModal(true);
         return;
       }
-
       if (payload?.error === "IMAGE_LIMIT_REACHED") {
-        setError(copy.galleryLimitReached);
+        setImageError(copy.imageLimitReached);
         return;
       }
-
       if (payload?.error === "IMAGE_REQUEST_IN_PROGRESS") {
-        setError(copy.generating);
+        setImageError(copy.imageRequestBusy);
         return;
       }
-
       if (!response.ok || !payload?.image) {
         throw new Error(payload?.message || payload?.error || copy.mediaError);
       }
 
-      setData((current) => {
-        if (!current) return current;
-        const nextImage = payload.image as GalleryImage;
-        const withoutDuplicate = current.images.filter(
-          (image) => image.id !== nextImage.id
-        );
-
-        return {
-          ...current,
-          images: [nextImage, ...withoutDuplicate]
-        };
-      });
-      setPrompt("");
+      const nextImage = payload.image as GalleryImage;
+      setImageData((current) =>
+        current
+          ? {
+              ...current,
+              images: [
+                nextImage,
+                ...current.images.filter((image) => image.id !== nextImage.id)
+              ]
+            }
+          : current
+      );
+      setImagePrompt("");
     } catch (generateError) {
-      setError(
-        generateError instanceof Error
-          ? generateError.message
-          : copy.mediaError
+      setImageError(
+        generateError instanceof Error ? generateError.message : copy.mediaError
       );
     } finally {
-      setGenerating(false);
-      setPendingCard(false);
+      setGeneratingImage(false);
+      setPendingImageCard(false);
     }
   }
 
-  async function act(
-    action: "select" | "delete",
-    imageId: string
-  ) {
+  async function generateVideo() {
+    if (!session?.access_token || !canGenerateVideo) return;
+
+    const requestId = crypto.randomUUID();
+    setSubmittingVideo(true);
+    setVideoError("");
+
+    try {
+      const response = await fetch(
+        `/api/character-video-gallery/${encodeURIComponent(slug)}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            requestId,
+            prompt: videoPrompt.trim(),
+            durationSeconds: videoDuration
+          })
+        }
+      );
+      const payload = await response.json().catch(() => ({}));
+
+      if (
+        response.status === 402 ||
+        payload?.error === "INSUFFICIENT_EVERCOIN" ||
+        payload?.error === "EVERCOIN_DEBT"
+      ) {
+        setCoinModal(true);
+        return;
+      }
+      if (payload?.error === "VIDEO_LIMIT_REACHED") {
+        setVideoError(copy.videoLimitReached);
+        return;
+      }
+      if (payload?.error === "VIDEO_REQUEST_IN_PROGRESS") {
+        setVideoError(copy.videoRequestBusy);
+        return;
+      }
+      if (payload?.error === "VIDEO_PRICING_NOT_CONFIGURED") {
+        setVideoError(copy.pricingPendingBody);
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(payload?.message || payload?.error || copy.mediaError);
+      }
+
+      if (payload?.status === "completed" && payload?.video) {
+        const nextVideo = payload.video as GalleryVideo;
+        setVideoData((current) =>
+          current
+            ? {
+                ...current,
+                videos: [
+                  nextVideo,
+                  ...current.videos.filter((video) => video.id !== nextVideo.id)
+                ]
+              }
+            : current
+        );
+        setVideoPrompt("");
+        return;
+      }
+
+      setPendingVideoRequestId(requestId);
+      setVideoData((current) =>
+        current ? { ...current, pendingRequestId: requestId } : current
+      );
+    } catch (generateError) {
+      setVideoError(
+        generateError instanceof Error ? generateError.message : copy.mediaError
+      );
+    } finally {
+      setSubmittingVideo(false);
+    }
+  }
+
+  async function actOnImage(action: "select" | "delete", imageId: string) {
     if (!session?.access_token || busyImageId) return;
 
     setBusyImageId(imageId);
-    setError("");
+    setImageError("");
 
     try {
       const response = await fetch(
@@ -205,43 +401,28 @@ export function CharacterGalleryClient({
             "Content-Type": "application/json",
             Authorization: `Bearer ${session.access_token}`
           },
-          body: JSON.stringify({
-            action,
-            imageId
-          })
+          body: JSON.stringify({ action, imageId })
         }
       );
-
       const payload = await response.json().catch(() => ({}));
-
       if (!response.ok) {
         throw new Error(payload?.message || payload?.error || copy.mediaError);
       }
 
       if (action === "select") {
-        setData((current) =>
-          current
-            ? {
-                ...current,
-                selectedImageId: imageId
-              }
-            : current
+        setImageData((current) =>
+          current ? { ...current, selectedImageId: imageId } : current
         );
-
         window.dispatchEvent(
           new CustomEvent("everbond:chat-image-changed", {
-            detail: {
-              characterSlug: slug,
-              imageId
-            }
+            detail: { characterSlug: slug, imageId }
           })
         );
         return;
       }
 
-      const deletedWasSelected = data?.selectedImageId === imageId;
-
-      setData((current) =>
+      const deletedWasSelected = imageData?.selectedImageId === imageId;
+      setImageData((current) =>
         current
           ? {
               ...current,
@@ -256,21 +437,56 @@ export function CharacterGalleryClient({
       if (deletedWasSelected) {
         window.dispatchEvent(
           new CustomEvent("everbond:chat-image-changed", {
-            detail: {
-              characterSlug: slug,
-              imageId: null
-            }
+            detail: { characterSlug: slug, imageId: null }
           })
         );
       }
     } catch (actionError) {
-      setError(
-        actionError instanceof Error
-          ? actionError.message
-          : copy.mediaError
+      setImageError(
+        actionError instanceof Error ? actionError.message : copy.mediaError
       );
     } finally {
       setBusyImageId(null);
+    }
+  }
+
+  async function deleteVideo(videoId: string) {
+    if (!session?.access_token || busyVideoId) return;
+
+    setBusyVideoId(videoId);
+    setVideoError("");
+
+    try {
+      const response = await fetch(
+        `/api/character-video-gallery/${encodeURIComponent(slug)}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ action: "delete", videoId })
+        }
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || payload?.error || copy.mediaError);
+      }
+
+      setVideoData((current) =>
+        current
+          ? {
+              ...current,
+              videos: current.videos.filter((video) => video.id !== videoId)
+            }
+          : current
+      );
+    } catch (actionError) {
+      setVideoError(
+        actionError instanceof Error ? actionError.message : copy.mediaError
+      );
+    } finally {
+      setBusyVideoId(null);
     }
   }
 
@@ -291,19 +507,19 @@ export function CharacterGalleryClient({
       <main className="min-h-screen px-4 py-12">
         <div className="bond-container">
           <div className="mx-auto max-w-3xl rounded-[2rem] border border-bond-rose/35 bg-white/[0.03] p-10 text-center text-bond-muted">
-            {copy.gallerySubtitle}
+            {copy.subtitle}
           </div>
         </div>
       </main>
     );
   }
 
-  if (!data) {
+  if (!imageData || !videoData || !character) {
     return (
       <main className="min-h-screen px-4 py-12">
         <div className="bond-container">
           <div className="mx-auto max-w-3xl rounded-[2rem] border border-red-400/25 bg-red-500/10 p-10 text-center text-red-100">
-            {error || copy.mediaError}
+            {imageError || videoError || copy.mediaError}
           </div>
         </div>
       </main>
@@ -314,113 +530,114 @@ export function CharacterGalleryClient({
     <>
       <main className="min-h-screen px-4 py-10 md:px-6">
         <div className="bond-container">
-          <div className="mx-auto max-w-7xl">
+          <div className="mx-auto max-w-[1500px]">
             <section className="overflow-hidden rounded-[2.25rem] border border-bond-rose/45 bg-[linear-gradient(135deg,rgba(255,92,168,0.12),rgba(255,255,255,0.025),rgba(89,45,130,0.14))] p-7 shadow-[0_0_48px_rgba(255,92,168,0.10)] md:p-10">
-              <div className="grid gap-8 lg:grid-cols-[280px_1fr] lg:items-center">
+              <div className="grid gap-8 lg:grid-cols-[230px_1fr] lg:items-center">
                 <img
-                  src={data.character.image}
-                  alt={data.character.name}
+                  src={character.image}
+                  alt={character.name}
                   className="aspect-[4/5] w-full rounded-[1.75rem] border border-bond-rose/35 object-cover shadow-[0_0_35px_rgba(255,92,168,0.12)]"
                 />
-
                 <div>
                   <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.24em] text-bond-rose">
                     <LockKeyhole size={16} />
-                    {copy.privateGallery}
-                  </p>
-                  <h1 className="mt-3 font-display text-4xl font-bold text-white md:text-6xl">
-                    {copy.galleryTitle(data.character.name)}
-                  </h1>
-                  <p className="mt-4 max-w-2xl text-lg leading-8 text-bond-muted">
-                    {copy.gallerySubtitle}
-                  </p>
-                  <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-bond-rose/25 bg-bond-rose/10 px-3 py-1.5 text-sm font-semibold text-bond-rose">
-                    <LockKeyhole size={14} />
                     {copy.privateOnly}
                   </p>
-                  <p className="mt-3 text-sm font-semibold text-white/75">
-                    {data.images.length} / {data.limit} · {copy.imageLimit}
+                  <h1 className="mt-3 font-display text-4xl font-bold text-white md:text-6xl">
+                    {copy.title(character.name)}
+                  </h1>
+                  <p className="mt-4 max-w-4xl text-lg leading-8 text-bond-muted">
+                    {copy.subtitle}
                   </p>
-
-                  <textarea
-                    value={prompt}
-                    onChange={(event) =>
-                      setPrompt(
-                        event.target.value.slice(
-                          0,
-                          IMAGE_PROMPT_MAX_CHARACTERS
-                        )
-                      )
-                    }
-                    placeholder={copy.describeImage}
-                    rows={4}
-                    maxLength={IMAGE_PROMPT_MAX_CHARACTERS}
-                    disabled={atLimit || generating}
-                    className="mt-6 w-full resize-none rounded-[1.5rem] border border-white/10 bg-black/25 px-5 py-4 text-white outline-none placeholder:text-bond-muted focus:border-bond-rose/65 disabled:cursor-not-allowed disabled:opacity-55"
-                  />
-
-                  {atLimit && (
-                    <p className="mt-3 text-sm font-semibold text-bond-gold">
-                      {copy.galleryLimitReached}
-                    </p>
-                  )}
-
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => void generateImage()}
-                      disabled={!canGenerate}
-                      className="bond-pink-button inline-flex items-center gap-2 rounded-full bg-bond-rose px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-45"
-                    >
-                      {generating ? (
-                        <LoaderCircle size={17} className="animate-spin" />
-                      ) : (
-                        <ImageIcon size={17} />
-                      )}
-                      {generating
-                        ? copy.generating
-                        : `${copy.generateImage} · ${data.imageCost} EverCoin`}
-                    </button>
-
-                    <Link
-                      href={`/chat/${data.character.slug}`}
-                      className="inline-flex rounded-full border border-bond-rose/55 bg-black/25 px-6 py-3 text-sm font-bold text-white hover:bg-bond-rose/10"
-                    >
-                      {copy.backToChat}
-                    </Link>
-                  </div>
-
-                  {error && (
-                    <p className="mt-4 rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-                      {error}
-                    </p>
-                  )}
+                  <Link
+                    href={`/chat/${character.slug}`}
+                    className="mt-6 inline-flex rounded-full border border-bond-rose/55 bg-black/25 px-6 py-3 text-sm font-bold text-white hover:bg-bond-rose/10"
+                  >
+                    {copy.backToChat}
+                  </Link>
                 </div>
               </div>
             </section>
 
-            <section className="mt-8">
-              {data.images.length === 0 && !pendingCard ? (
-                <div className="rounded-[2rem] border border-dashed border-white/10 bg-white/[0.02] p-14 text-center text-bond-muted">
-                  {copy.emptyGallery}
+            <div className="mt-8 grid gap-8 lg:grid-cols-2 lg:items-start">
+              <section className="rounded-[2.25rem] border border-bond-rose/35 bg-white/[0.025] p-6 md:p-8">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.2em] text-bond-rose">
+                      <ImageIcon size={17} />
+                      {copy.imageStudio}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-white/75">
+                      {imageData.images.length} / {imageData.limit} · {copy.images}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-bond-rose/25 bg-bond-rose/10 px-3 py-1 text-xs font-bold text-bond-rose">
+                    {imageData.imageCost} EverCoin
+                  </span>
                 </div>
-              ) : (
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {pendingCard && (
+
+                <textarea
+                  value={imagePrompt}
+                  onChange={(event) =>
+                    setImagePrompt(
+                      event.target.value.slice(0, IMAGE_PROMPT_MAX_CHARACTERS)
+                    )
+                  }
+                  placeholder={copy.describeImage}
+                  rows={5}
+                  maxLength={IMAGE_PROMPT_MAX_CHARACTERS}
+                  className="mt-5 w-full resize-none rounded-[1.5rem] border border-white/10 bg-black/25 px-5 py-4 text-white outline-none placeholder:text-bond-muted focus:border-bond-rose/65"
+                />
+                <p className="mt-2 text-right text-xs font-semibold text-white/45">
+                  {imagePrompt.length} / {IMAGE_PROMPT_MAX_CHARACTERS}
+                </p>
+
+                {imageAtLimit && (
+                  <p className="mt-3 text-sm font-semibold text-bond-gold">
+                    {copy.imageLimitReached}
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => void generateImage()}
+                  disabled={!canGenerateImage}
+                  className="bond-pink-button mt-4 inline-flex items-center gap-2 rounded-full bg-bond-rose px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {generatingImage ? (
+                    <LoaderCircle size={17} className="animate-spin" />
+                  ) : (
+                    <ImageIcon size={17} />
+                  )}
+                  {generatingImage
+                    ? copy.generatingImage
+                    : `${copy.generateImage} · ${imageData.imageCost} EverCoin`}
+                </button>
+
+                {imageError && (
+                  <p className="mt-4 rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                    {imageError}
+                  </p>
+                )}
+
+                <div className="mt-7 grid gap-5 sm:grid-cols-2">
+                  {pendingImageCard && (
                     <article className="aspect-[4/5] animate-pulse rounded-[1.75rem] border border-bond-rose/40 bg-[radial-gradient(circle_at_center,rgba(255,92,168,0.18),rgba(255,255,255,0.03))]">
                       <div className="flex h-full items-center justify-center">
-                        <LoaderCircle
-                          className="animate-spin text-bond-rose"
-                          size={34}
-                        />
+                        <LoaderCircle className="animate-spin text-bond-rose" size={34} />
                       </div>
                     </article>
                   )}
 
-                  {data.images.map((image) => {
-                    const selected = data.selectedImageId === image.id;
-                    const busy = busyImageId === image.id;
+                  {imageData.images.length === 0 && !pendingImageCard ? (
+                    <div className="sm:col-span-2 rounded-[1.75rem] border border-dashed border-white/10 bg-white/[0.02] p-10 text-center text-bond-muted">
+                      {copy.imageEmpty}
+                    </div>
+                  ) : null}
 
+                  {imageData.images.map((image) => {
+                    const selected = imageData.selectedImageId === image.id;
+                    const busy = busyImageId === image.id;
                     return (
                       <article
                         key={image.id}
@@ -431,21 +648,15 @@ export function CharacterGalleryClient({
                         }`}
                       >
                         <div className="aspect-[4/5] overflow-hidden bg-black">
-                          <img
-                            src={image.url}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
+                          <img src={image.url} alt="" className="h-full w-full object-cover" />
                         </div>
-
                         <div className="p-4">
                           <p className="line-clamp-2 min-h-[2.7rem] text-sm leading-6 text-bond-muted">
                             {image.prompt}
                           </p>
-
                           <button
                             type="button"
-                            onClick={() => void act("select", image.id)}
+                            onClick={() => void actOnImage("select", image.id)}
                             disabled={selected || Boolean(busyImageId)}
                             className={`mt-4 flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
                               selected
@@ -453,27 +664,16 @@ export function CharacterGalleryClient({
                                 : "bg-bond-rose text-white"
                             }`}
                           >
-                            {busy ? (
-                              <LoaderCircle className="animate-spin" size={16} />
-                            ) : (
-                              <Check size={16} />
-                            )}
-                            {selected
-                              ? copy.activeChatImage
-                              : copy.setAsChatImage}
+                            {busy ? <LoaderCircle className="animate-spin" size={16} /> : <Check size={16} />}
+                            {selected ? copy.activeChatImage : copy.setChatImage}
                           </button>
-
                           <button
                             type="button"
-                            onClick={() => void act("delete", image.id)}
+                            onClick={() => void actOnImage("delete", image.id)}
                             disabled={Boolean(busyImageId)}
                             className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-bold text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {busy ? (
-                              <LoaderCircle className="animate-spin" size={16} />
-                            ) : (
-                              <Trash2 size={16} />
-                            )}
+                            {busy ? <LoaderCircle className="animate-spin" size={16} /> : <Trash2 size={16} />}
                             {copy.deleteImage}
                           </button>
                         </div>
@@ -481,8 +681,157 @@ export function CharacterGalleryClient({
                     );
                   })}
                 </div>
-              )}
-            </section>
+              </section>
+
+              <section className="rounded-[2.25rem] border border-bond-violet/45 bg-white/[0.025] p-6 md:p-8">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.2em] text-bond-rose">
+                      <Clapperboard size={17} />
+                      {copy.videoStudio}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-white/75">
+                      {videoData.videos.length} / {videoData.limit} · {copy.videos}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-bond-violet/35 bg-bond-violet/15 px-3 py-1 text-xs font-bold text-white">
+                    {videoData.pricingConfigured
+                      ? `${videoData.videoCost} EverCoin`
+                      : copy.pricingPending}
+                  </span>
+                </div>
+
+                <textarea
+                  value={videoPrompt}
+                  onChange={(event) =>
+                    setVideoPrompt(
+                      event.target.value.slice(0, VIDEO_PROMPT_MAX_CHARACTERS)
+                    )
+                  }
+                  placeholder={copy.describeVideo}
+                  rows={5}
+                  maxLength={VIDEO_PROMPT_MAX_CHARACTERS}
+                  className="mt-5 w-full resize-none rounded-[1.5rem] border border-white/10 bg-black/25 px-5 py-4 text-white outline-none placeholder:text-bond-muted focus:border-bond-rose/65"
+                />
+                <p className="mt-2 text-right text-xs font-semibold text-white/45">
+                  {videoPrompt.length} / {VIDEO_PROMPT_MAX_CHARACTERS}
+                </p>
+
+                <div className="mt-4">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-white/55">
+                    {copy.duration}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {videoData.durationOptions.map((duration) => (
+                      <button
+                        key={duration}
+                        type="button"
+                        onClick={() => setVideoDuration(duration)}
+                        disabled={videoBusy}
+                        className={`rounded-full border px-4 py-2 text-sm font-bold transition disabled:opacity-50 ${
+                          videoDuration === duration
+                            ? "border-bond-rose bg-bond-rose text-white"
+                            : "border-white/15 bg-black/25 text-white hover:border-bond-rose/60"
+                        }`}
+                      >
+                        {duration} {copy.seconds}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {!videoData.pricingConfigured && (
+                  <p className="mt-4 rounded-xl border border-bond-gold/25 bg-bond-gold/10 px-4 py-3 text-sm font-semibold text-bond-gold">
+                    {copy.pricingPendingBody}
+                  </p>
+                )}
+                {videoAtLimit && (
+                  <p className="mt-3 text-sm font-semibold text-bond-gold">
+                    {copy.videoLimitReached}
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => void generateVideo()}
+                  disabled={!canGenerateVideo}
+                  className="bond-pink-button mt-4 inline-flex items-center gap-2 rounded-full bg-bond-rose px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {videoBusy ? (
+                    <LoaderCircle size={17} className="animate-spin" />
+                  ) : (
+                    <Clapperboard size={17} />
+                  )}
+                  {videoBusy
+                    ? copy.creatingVideo
+                    : videoData.pricingConfigured
+                      ? `${copy.generateVideo} · ${videoData.videoCost} EverCoin`
+                      : copy.pricingPending}
+                </button>
+
+                {videoError && (
+                  <p className="mt-4 rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                    {videoError}
+                  </p>
+                )}
+
+                <div className="mt-7 grid gap-5 sm:grid-cols-2">
+                  {pendingVideoRequestId && (
+                    <article className="aspect-[9/16] animate-pulse rounded-[1.75rem] border border-bond-violet/45 bg-[radial-gradient(circle_at_center,rgba(136,78,255,0.20),rgba(255,255,255,0.03))] p-5">
+                      <div className="flex h-full flex-col items-center justify-center text-center">
+                        <LoaderCircle className="animate-spin text-bond-rose" size={34} />
+                        <p className="mt-4 text-sm font-semibold leading-6 text-bond-muted">
+                          {copy.videoQueued}
+                        </p>
+                      </div>
+                    </article>
+                  )}
+
+                  {videoData.videos.length === 0 && !pendingVideoRequestId ? (
+                    <div className="sm:col-span-2 rounded-[1.75rem] border border-dashed border-white/10 bg-white/[0.02] p-10 text-center text-bond-muted">
+                      {copy.videoEmpty}
+                    </div>
+                  ) : null}
+
+                  {videoData.videos.map((video) => {
+                    const busy = busyVideoId === video.id;
+                    return (
+                      <article
+                        key={video.id}
+                        className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/25"
+                      >
+                        <div className="aspect-[9/16] overflow-hidden bg-black">
+                          <video
+                            src={video.url}
+                            controls
+                            playsInline
+                            preload="metadata"
+                            className="h-full w-full object-contain"
+                          />
+                        </div>
+                        <div className="p-4">
+                          <p className="line-clamp-2 min-h-[2.7rem] text-sm leading-6 text-bond-muted">
+                            {video.prompt}
+                          </p>
+                          <p className="mt-2 text-xs font-bold text-white/55">
+                            {video.durationSeconds} {copy.seconds}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => void deleteVideo(video.id)}
+                            disabled={Boolean(busyVideoId)}
+                            className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-bold text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {busy ? <LoaderCircle className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                            {copy.deleteVideo}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
           </div>
         </div>
       </main>

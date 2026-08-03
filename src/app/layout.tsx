@@ -5,9 +5,11 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const space = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
 
+const EVERBOND_SLOGAN = "Bond forever with truly unrestricted AI companions";
+
 export const metadata: Metadata = {
-  title: "EverBond — AI companions that will remember you",
-  description: "Start chatting instantly with AI companions built around Living Memory, story continuity, and emotional roleplay.",
+  title: `EverBond — ${EVERBOND_SLOGAN}`,
+  description: "Start chatting instantly with truly unrestricted AI companions built around Living Memory, story continuity, and emotional roleplay.",
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://everbond.ai"),
   icons: {
     icon: "/favicon.png",
@@ -16,7 +18,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "EverBond",
-    description: "AI companions that will remember you.",
+    description: EVERBOND_SLOGAN,
     url: "https://everbond.ai",
     siteName: "EverBond",
     images: ["/everbond-logo.png"],

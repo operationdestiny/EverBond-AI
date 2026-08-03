@@ -1,4 +1,3 @@
-import { isIP } from "node:net";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/api-auth";
@@ -11,12 +10,12 @@ import {
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getCharacterBySlugForUser } from "@/lib/user-characters";
 import { veniceApiUrl } from "@/lib/venice-media";
+import { activeCharacterReferenceDataUrl } from "@/lib/character-media-reference";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const GALLERY_LIMIT = 5;
-const MAX_SOURCE_IMAGE_BYTES = 10 * 1024 * 1024;
+const GALLERY_LIMIT = 7;
 const MAX_GENERATED_IMAGE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_SOURCE_MIME_TYPES = new Set([
   "image/png",
@@ -27,7 +26,7 @@ const ALLOWED_SOURCE_MIME_TYPES = new Set([
 const GenerateBody = z
   .object({
     requestId: z.string().uuid(),
-    prompt: z.string().trim().min(3).max(500)
+    prompt: z.string().trim().min(3).max(600)
   })
   .strict();
 
@@ -60,151 +59,6 @@ async function signedUrl(path: string) {
 
   if (error) throw error;
   return data.signedUrl;
-}
-
-function isPrivateIpAddress(hostname: string) {
-  const normalized = hostname.replace(/^\[|\]$/g, "").toLowerCase();
-
-  if (
-    normalized === "localhost" ||
-    normalized.endsWith(".localhost") ||
-    normalized === "0.0.0.0" ||
-    normalized === "::" ||
-    normalized === "::1"
-  ) {
-    return true;
-  }
-
-  if (isIP(normalized) === 4) {
-    const parts = normalized.split(".").map(Number);
-    return (
-      parts[0] === 10 ||
-      parts[0] === 127 ||
-      (parts[0] === 169 && parts[1] === 254) ||
-      (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
-      (parts[0] === 192 && parts[1] === 168) ||
-      parts[0] === 0
-    );
-  }
-
-  if (isIP(normalized) === 6) {
-    return (
-      normalized.startsWith("fc") ||
-      normalized.startsWith("fd") ||
-      normalized.startsWith("fe8") ||
-      normalized.startsWith("fe9") ||
-      normalized.startsWith("fea") ||
-      normalized.startsWith("feb")
-    );
-  }
-
-  return false;
-}
-
-function trustedSiteOrigin(request: Request) {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL;
-
-  if (configured) {
-    try {
-      const url = new URL(configured);
-      if (url.protocol === "https:" || url.protocol === "http:") {
-        return url.origin;
-      }
-    } catch {
-      // Development falls back to the request origin below.
-    }
-  }
-
-  return new URL(request.url).origin;
-}
-
-function allowedReferenceHosts(request: Request) {
-  const hosts = new Set<string>();
-  hosts.add(new URL(trustedSiteOrigin(request)).hostname.toLowerCase());
-
-  const supabaseUrl =
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-  for (const candidate of [supabaseUrl]) {
-    if (!candidate) continue;
-    try {
-      hosts.add(new URL(candidate).hostname.toLowerCase());
-    } catch {
-      // Invalid optional environment values are ignored here and fail elsewhere.
-    }
-  }
-
-  for (const host of (process.env.IMAGE_REFERENCE_ALLOWED_HOSTS || "")
-    .split(",")
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean)) {
-    hosts.add(host);
-  }
-
-  return hosts;
-}
-
-function parseDataImage(image: string) {
-  const match = image.match(
-    /^data:(image\/(?:png|jpeg|webp));base64,([a-z0-9+/=\r\n]+)$/i
-  );
-
-  if (!match) throw new Error("REFERENCE_IMAGE_INVALID");
-
-  const bytes = Buffer.from(match[2], "base64");
-  if (!bytes.length || bytes.length > MAX_SOURCE_IMAGE_BYTES) {
-    throw new Error("REFERENCE_IMAGE_TOO_LARGE");
-  }
-
-  return `data:${match[1].toLowerCase()};base64,${bytes.toString("base64")}`;
-}
-
-async function sourceImageDataUrl(request: Request, image: string) {
-  if (image.startsWith("data:")) return parseDataImage(image);
-
-  const url = new URL(image, trustedSiteOrigin(request));
-  if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new Error("REFERENCE_IMAGE_INVALID");
-  }
-
-  const hostname = url.hostname.toLowerCase();
-  if (
-    isPrivateIpAddress(hostname) ||
-    !allowedReferenceHosts(request).has(hostname)
-  ) {
-    throw new Error("REFERENCE_IMAGE_HOST_NOT_ALLOWED");
-  }
-
-  const response = await fetch(url, {
-    cache: "no-store",
-    redirect: "error",
-    signal: AbortSignal.timeout(20_000)
-  });
-
-  if (!response.ok) throw new Error("REFERENCE_IMAGE_LOAD_FAILED");
-
-  const contentLength = Number(response.headers.get("content-length"));
-  if (
-    Number.isFinite(contentLength) &&
-    contentLength > MAX_SOURCE_IMAGE_BYTES
-  ) {
-    throw new Error("REFERENCE_IMAGE_TOO_LARGE");
-  }
-
-  const contentType =
-    response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ||
-    "";
-
-  if (!ALLOWED_SOURCE_MIME_TYPES.has(contentType)) {
-    throw new Error("REFERENCE_IMAGE_INVALID");
-  }
-
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (!bytes.length || bytes.length > MAX_SOURCE_IMAGE_BYTES) {
-    throw new Error("REFERENCE_IMAGE_TOO_LARGE");
-  }
-
-  return `data:${contentType};base64,${bytes.toString("base64")}`;
 }
 
 async function galleryImageResponse(imageId: string, userId: string) {
@@ -397,8 +251,13 @@ export async function POST(
     const apiKey = process.env.VENICE_API_KEY;
     if (!apiKey) throw new Error("VENICE_NOT_CONFIGURED");
 
-    const model = process.env.VENICE_IMAGE_MODEL || "qwen-edit";
-    const referenceImage = await sourceImageDataUrl(request, character.image);
+    const model = process.env.VENICE_IMAGE_MODEL || "seedream-v5-pro-edit";
+    const referenceImage = await activeCharacterReferenceDataUrl({
+      request,
+      userId: user.id,
+      characterId: character.id,
+      fallbackImage: character.image
+    });
 
     const providerResponse = await fetch(
       veniceApiUrl("image/edit"),

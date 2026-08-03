@@ -11,6 +11,7 @@ import { InsufficientEverCoinModal } from "@/components/media/InsufficientEverCo
 import { VoiceCallModal } from "@/components/media/VoiceCallModal";
 import { useSiteLanguage } from "@/lib/site-language";
 import { MEDIA_COPY } from "@/lib/media-language";
+import { MEDIA_GALLERY_COPY } from "@/lib/media-gallery-language";
 import { EVERSHOP_COPY } from "@/lib/evershop-language";
 
 function chatSlug(pathname: string) {
@@ -28,6 +29,7 @@ export function ChatMediaBridge() {
   const slug = chatSlug(pathname);
   const { language } = useSiteLanguage();
   const copy = MEDIA_COPY[language] ?? MEDIA_COPY.EN;
+  const galleryCopy = MEDIA_GALLERY_COPY[language] ?? MEDIA_GALLERY_COPY.EN;
   const shopCopy = EVERSHOP_COPY[language] ?? EVERSHOP_COPY.EN;
   const {
     session,
@@ -259,7 +261,7 @@ export function ChatMediaBridge() {
         className="bond-pink-button inline-flex shrink-0 items-center gap-2 rounded-full border border-bond-rose/60 bg-bond-rose/10 px-5 py-2.5 text-sm font-bold text-white"
       >
         <ImageIcon size={16} />
-        {copy.imageGallery(character.name)}
+        {galleryCopy.toolbarLabel(character.name)}
       </Link>
 
       <Link

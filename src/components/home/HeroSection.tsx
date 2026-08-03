@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Sparkles } from "lucide-react";
-import { MemoryBadge } from "@/components/ui/MemoryBadge";
+
+const EVERBOND_SLOGAN = "Bond forever with truly unrestricted AI companions";
 
 export function HeroSection() {
   const hero = {
@@ -20,11 +21,11 @@ export function HeroSection() {
             </div>
             <div>
               <p className="font-display text-5xl font-bold text-bond-rose md:text-6xl">EverBond AI</p>
-              <p className="text-sm text-bond-muted md:text-base">AI companions that will remember you.</p>
+              <p className="text-sm text-bond-muted md:text-base">{EVERBOND_SLOGAN}</p>
             </div>
           </div>
           <h1 className="mt-6 font-display text-5xl font-bold leading-[0.95] tracking-tight md:text-7xl">
-            AI companions that will remember you.
+            {EVERBOND_SLOGAN}
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-bond-muted md:text-xl">
             Chat instantly with AI companions powered with Ever Memory™ so you can always continue where you left off. 100% private chats.

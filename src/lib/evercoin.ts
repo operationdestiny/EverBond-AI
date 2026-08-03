@@ -23,7 +23,11 @@ export function everCoinCallCostPerMinute() {
 }
 
 export function everCoinImageCost() {
-  return Math.max(integerEnv("EVERCOIN_IMAGE_COST", 20, 100_000), 20);
+  return Math.max(integerEnv("EVERCOIN_IMAGE_COST", 20, 100_000), 1);
+}
+
+export function everCoinVideoCost() {
+  return integerEnv("EVERCOIN_VIDEO_COST", 0, 1_000_000);
 }
 
 export async function getEverCoinBalance(userId: string) {
@@ -394,6 +398,117 @@ export async function failCharacterImageRequest(values: {
 }) {
   const { data, error } = await getSupabaseServiceClient().rpc(
     "fail_character_image_request",
+    {
+      p_user_id: values.userId,
+      p_request_id: values.requestId,
+      p_error_code: values.errorCode
+    }
+  );
+
+  if (error) throw error;
+  return Number(data ?? 0);
+}
+
+
+export async function startCharacterVideoRequest(values: {
+  userId: string;
+  requestId: string;
+  characterId: string;
+  prompt: string;
+  durationSeconds: number;
+  amount: number;
+  galleryLimit: number;
+  providerModel: string;
+}) {
+  const { data, error } = await getSupabaseServiceClient().rpc(
+    "start_character_video_request",
+    {
+      p_user_id: values.userId,
+      p_request_id: values.requestId,
+      p_character_id: values.characterId,
+      p_prompt: values.prompt,
+      p_duration_seconds: Math.max(Math.trunc(values.durationSeconds), 1),
+      p_amount: Math.max(Math.trunc(values.amount), 0),
+      p_gallery_limit: Math.max(Math.trunc(values.galleryLimit), 1),
+      p_provider_model: values.providerModel
+    }
+  );
+
+  if (error) throw error;
+
+  const row = firstRow(data as {
+    request_status: string;
+    balance: number | string;
+    debt: number | string;
+    video_id: string | null;
+    provider_queue_id: string | null;
+    error_code: string | null;
+  } | Array<{
+    request_status: string;
+    balance: number | string;
+    debt: number | string;
+    video_id: string | null;
+    provider_queue_id: string | null;
+    error_code: string | null;
+  }> | null);
+
+  return {
+    status: row?.request_status ?? "failed",
+    balance: Number(row?.balance ?? 0),
+    debt: Number(row?.debt ?? 0),
+    videoId: row?.video_id ?? null,
+    providerQueueId: row?.provider_queue_id ?? null,
+    errorCode: row?.error_code ?? null
+  };
+}
+
+export async function setCharacterVideoQueue(values: {
+  userId: string;
+  requestId: string;
+  providerModel: string;
+  providerQueueId: string;
+  providerDownloadUrl?: string | null;
+}) {
+  const { data, error } = await getSupabaseServiceClient().rpc(
+    "set_character_video_queue",
+    {
+      p_user_id: values.userId,
+      p_request_id: values.requestId,
+      p_provider_model: values.providerModel,
+      p_provider_queue_id: values.providerQueueId,
+      p_provider_download_url: values.providerDownloadUrl ?? null
+    }
+  );
+
+  if (error) throw error;
+  return data === true;
+}
+
+export async function completeCharacterVideoRequest(values: {
+  userId: string;
+  requestId: string;
+  videoId: string;
+}) {
+  const { data, error } = await getSupabaseServiceClient().rpc(
+    "complete_character_video_request",
+    {
+      p_user_id: values.userId,
+      p_request_id: values.requestId,
+      p_video_id: values.videoId
+    }
+  );
+
+  if (error) throw error;
+  return data === true;
+}
+
+export async function failCharacterVideoRequest(values: {
+  userId: string;
+  requestId: string;
+  errorCode: string;
+}) {
+  const { data, error } = await getSupabaseServiceClient().rpc(
+    "fail_character_video_request",
     {
       p_user_id: values.userId,
       p_request_id: values.requestId,

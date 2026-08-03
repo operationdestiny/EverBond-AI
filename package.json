@@ -2,7 +2,7 @@
   "name": "everbond-ai",
   "version": "0.1.0",
   "private": true,
-  "description": "EverBond AI - AI characters that remember you.",
+  "description": "EverBond AI - Bond forever with truly unrestricted AI companions.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
