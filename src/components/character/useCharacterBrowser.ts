@@ -419,7 +419,6 @@ export function useCharacterBrowser(
     restoreTargetCountRef.current = 0;
     restoreScrollTargetRef.current = null;
     setCategoryState(nextCategory);
-    setOrder(defaultOrderForCategory(nextCategory));
   }
 
   function toggleOrder() {
