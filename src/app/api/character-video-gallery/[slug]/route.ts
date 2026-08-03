@@ -201,10 +201,13 @@ async function retrieveProviderVideo(values: {
     const terminal = [400, 401, 402, 403, 404, 410, 413, 415, 422].includes(
       response.status
     );
-    return {
-      state: terminal ? ("failed" as const) : ("processing" as const),
-      errorCode: `VIDEO_PROVIDER_FAILED:${response.status}:${detail}`
-    };
+    const errorCode = `VIDEO_PROVIDER_FAILED:${response.status}:${detail}`;
+
+    if (terminal) {
+      return { state: "failed" as const, errorCode };
+    }
+
+    return { state: "processing" as const, errorCode };
   }
 
   if (contentType === "video/mp4" || contentType === "application/octet-stream") {
