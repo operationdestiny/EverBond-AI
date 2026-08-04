@@ -1,0 +1,42 @@
+name: Purge retired characters
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "data/characters/*.json"
+      - "public/character-assets/**"
+      - "scripts/apply-retired-character-removals.mjs"
+      - ".github/workflows/purge-retired-characters.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Remove retired catalog records and assets
+        run: node scripts/apply-retired-character-removals.mjs --local-only
+
+      - name: Commit permanent source cleanup
+        run: |
+          if git diff --quiet; then
+            echo "Retired characters are already absent."
+            exit 0
+          fi
+          git config user.name "everbond-retirement-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/characters public/character-assets
+          git commit -m "Permanently remove retired characters"
+          git push
