@@ -1,4 +1,4 @@
-name: Purge retired characters
+name: Maintain official characters
 
 on:
   push:
@@ -8,6 +8,7 @@ on:
       - "data/characters/*.json"
       - "public/character-assets/**"
       - "scripts/apply-retired-character-removals.mjs"
+      - "scripts/_character-category-overrides.mjs"
       - ".github/workflows/purge-retired-characters.yml"
   workflow_dispatch:
 
@@ -15,7 +16,7 @@ permissions:
   contents: write
 
 jobs:
-  purge:
+  maintain:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,17 +27,17 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Remove retired catalog records and assets
+      - name: Apply retirements and category overrides
         run: node scripts/apply-retired-character-removals.mjs --local-only
 
-      - name: Commit permanent source cleanup
+      - name: Commit permanent source maintenance
         run: |
           if git diff --quiet; then
-            echo "Retired characters are already absent."
+            echo "Official character sources already match the maintenance rules."
             exit 0
           fi
-          git config user.name "everbond-retirement-bot"
+          git config user.name "everbond-character-maintenance-bot"
           git config user.email "actions@users.noreply.github.com"
           git add data/characters public/character-assets
-          git commit -m "Permanently remove retired characters"
+          git commit -m "Apply permanent character maintenance"
           git push
