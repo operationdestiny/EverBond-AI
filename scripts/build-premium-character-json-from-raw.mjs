@@ -10,6 +10,12 @@ import {
   CATEGORY_OUTPUTS,
   TOTAL_EXPECTED
 } from "./_premium-raw-library.mjs";
+import {
+  applyCategoryOverride,
+  categoryOverrideDelta,
+  findCategoryOverride,
+  readCategoryOverrides
+} from "./_character-category-overrides.mjs";
 
 loadEnvFiles();
 
@@ -55,6 +61,7 @@ for (const item of retired) {
   );
 }
 
+const categoryOverrides = readCategoryOverrides(root);
 const raw = readRawRecords();
 if (raw.records.length !== TOTAL_EXPECTED) {
   throw new Error(
@@ -73,13 +80,17 @@ if (fs.existsSync(proposalsPath)) {
 const normalized = [];
 
 for (const record of raw.records) {
-  validatePremiumRecord(record);
+  const copy = structuredClone(record);
+  const categoryOverride = findCategoryOverride(copy, categoryOverrides);
+  applyCategoryOverride(copy, categoryOverride);
+  validatePremiumRecord(copy);
 
-  if (retiredKeys.has(retirementKey(record.category, record.name))) {
+  if (
+    retiredKeys.has(retirementKey(record.category, record.name)) ||
+    retiredKeys.has(retirementKey(copy.category, copy.name))
+  ) {
     continue;
   }
-
-  const copy = structuredClone(record);
   const proposal = proposalById.get(copy.id);
 
   if (APPLY_TITLE_TRIM && proposal) {
@@ -118,7 +129,9 @@ for (const cfg of CATEGORY_OUTPUTS) {
       a.id.localeCompare(b.id)
   );
   const expected =
-    cfg.expected - (retiredCountByCategory.get(cfg.category) || 0);
+    cfg.expected -
+    (retiredCountByCategory.get(cfg.category) || 0) +
+    categoryOverrideDelta(cfg.category, categoryOverrides);
 
   if (arr.length !== expected) {
     throw new Error(`${cfg.category}: expected ${expected}, got ${arr.length}`);
@@ -136,6 +149,7 @@ const manifest = {
   source: raw.sourceDir,
   total: siteRows.length,
   retired_characters_excluded: retired.length,
+  category_overrides_applied: categoryOverrides.length,
   title_trim_applied: APPLY_TITLE_TRIM,
   changed_titles_available: proposalById.size,
   categories: Object.fromEntries(

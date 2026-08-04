@@ -8,6 +8,12 @@ import {
   validatePremiumRecord,
   slugify
 } from "./_premium-raw-library.mjs";
+import {
+  applyCategoryOverride,
+  categoryOverrideDelta,
+  findCategoryOverride,
+  readCategoryOverrides
+} from "./_character-category-overrides.mjs";
 
 loadEnvFiles();
 
@@ -35,6 +41,8 @@ const UPLOAD_IMAGES =
 const IMAGE_ROOT =
   process.env.CHARACTER_ASSETS_DIR ||
   path.join(root, "public", "character-assets");
+
+const categoryOverrides = readCategoryOverrides(root);
 
 const RETIRED_PATH = path.join(
   root,
@@ -96,23 +104,34 @@ function readCategoryFiles() {
 
     const retiredCount = retiredCountByCategory.get(cfg.category) || 0;
     const activeExpected = cfg.expected - retiredCount;
+    const overriddenExpected =
+      activeExpected + categoryOverrideDelta(cfg.category, categoryOverrides);
 
-    if (arr.length !== cfg.expected && arr.length !== activeExpected) {
+    if (
+      arr.length !== cfg.expected &&
+      arr.length !== activeExpected &&
+      arr.length !== overriddenExpected
+    ) {
       throw new Error(
-        `${cfg.file}: expected ${cfg.expected} before retirement or ${activeExpected} after retirement, got ${arr.length}`
+        `${cfg.file}: expected ${cfg.expected} before retirement, ${activeExpected} after retirement, or ${overriddenExpected} after category overrides; got ${arr.length}`
       );
     }
 
     for (const character of arr) {
+      const copy = structuredClone(character);
+      const categoryOverride = findCategoryOverride(copy, categoryOverrides);
+      applyCategoryOverride(copy, categoryOverride);
+
       if (
         retiredKeys.has(
           retirementKey(character.category || cfg.category, character.name)
-        )
+        ) ||
+        retiredKeys.has(retirementKey(copy.category, copy.name))
       ) {
         continue;
       }
 
-      rows.push(character);
+      rows.push(copy);
     }
   }
 

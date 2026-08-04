@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import {
+  applyCategoryOverride,
+  matchesCategoryOverride,
+  readCategoryOverrides
+} from "./_character-category-overrides.mjs";
 
 const root = process.cwd();
 const args = new Set(process.argv.slice(2));
@@ -100,6 +105,7 @@ const retired = readRetiredCharacters();
 const retiredByKey = new Map(
   retired.map((item) => [retirementKey(item.category, item.name), item])
 );
+const categoryOverrides = readCategoryOverrides(root);
 
 function removeLocalCatalogRecords() {
   const categories = [...new Set(retired.map((item) => item.category))];
@@ -191,6 +197,130 @@ function removeLocalCatalogRecords() {
   );
 
   return removed;
+}
+
+function readCatalog(category) {
+  const filePath = path.join(root, "data", "characters", `${category}.json`);
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Missing category catalog: ${filePath}`);
+  }
+
+  const rows = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  if (!Array.isArray(rows)) {
+    throw new Error(`${filePath} must contain a JSON array.`);
+  }
+
+  return { filePath, rows };
+}
+
+function writeCatalog(filePath, rows) {
+  fs.writeFileSync(filePath, `${JSON.stringify(rows, null, 2)}\n`, "utf8");
+}
+
+function moveLocalCategoryOverrideImage(record, override) {
+  const imageFile = String(record.image_file ?? "").trim();
+  if (!imageFile) return;
+
+  const sourcePath = path.join(
+    root,
+    "public",
+    "character-assets",
+    override.from_category,
+    imageFile
+  );
+  const destinationPath = path.join(
+    root,
+    "public",
+    "character-assets",
+    override.to_category,
+    imageFile
+  );
+
+  if (!fs.existsSync(sourcePath)) {
+    if (!fs.existsSync(destinationPath)) {
+      console.warn(
+        `Category override image was not found locally: ${path.relative(root, sourcePath)}`
+      );
+    }
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+
+  if (fs.existsSync(destinationPath)) {
+    const sourceBytes = fs.readFileSync(sourcePath);
+    const destinationBytes = fs.readFileSync(destinationPath);
+
+    if (!sourceBytes.equals(destinationBytes)) {
+      throw new Error(
+        `Cannot move ${imageFile}: a different destination image already exists.`
+      );
+    }
+
+    fs.rmSync(sourcePath, { force: true });
+  } else {
+    fs.renameSync(sourcePath, destinationPath);
+  }
+
+  console.log(
+    `Moved category image: ${path.relative(root, sourcePath)} -> ${path.relative(root, destinationPath)}`
+  );
+}
+
+function applyLocalCategoryOverrides() {
+  for (const override of categoryOverrides) {
+    const source = readCatalog(override.from_category);
+    const destination = readCatalog(override.to_category);
+
+    const sourceMatches = source.rows.filter((row) =>
+      matchesCategoryOverride(row, override)
+    );
+    const destinationMatches = destination.rows.filter((row) =>
+      matchesCategoryOverride(row, override)
+    );
+    const totalMatches = sourceMatches.length + destinationMatches.length;
+
+    if (totalMatches !== 1) {
+      throw new Error(
+        `Expected exactly one category override match for ${override.name}; found ${totalMatches}.`
+      );
+    }
+
+    const original = structuredClone(
+      sourceMatches[0] ?? destinationMatches[0]
+    );
+    const moved = applyCategoryOverride(structuredClone(original), override);
+
+    const nextSourceRows = source.rows.filter(
+      (row) => !matchesCategoryOverride(row, override)
+    );
+    const nextDestinationRows = destination.rows
+      .filter((row) => !matchesCategoryOverride(row, override))
+      .concat(moved)
+      .sort(
+        (a, b) =>
+          (Number(a.display_order) || 0) - (Number(b.display_order) || 0) ||
+          String(a.id).localeCompare(String(b.id))
+      );
+
+    const sourceChanged =
+      JSON.stringify(nextSourceRows) !== JSON.stringify(source.rows);
+    const destinationChanged =
+      JSON.stringify(nextDestinationRows) !== JSON.stringify(destination.rows);
+
+    if (sourceChanged) writeCatalog(source.filePath, nextSourceRows);
+    if (destinationChanged) {
+      writeCatalog(destination.filePath, nextDestinationRows);
+    }
+
+    moveLocalCategoryOverrideImage(original, override);
+
+    console.log(
+      sourceMatches.length
+        ? `Moved ${override.name} from ${override.from_category} to ${override.to_category}.`
+        : `${override.name} is already in ${override.to_category}.`
+    );
+  }
 }
 
 function chunks(values, size = 100) {
@@ -412,8 +542,12 @@ async function removeRemoteCharacters() {
 
 async function main() {
   console.log(`Retirement manifest entries: ${retired.length}`);
+  console.log(`Category override entries: ${categoryOverrides.length}`);
 
-  if (runLocal) removeLocalCatalogRecords();
+  if (runLocal) {
+    removeLocalCatalogRecords();
+    applyLocalCategoryOverrides();
+  }
   if (runRemote) await removeRemoteCharacters();
 }
 

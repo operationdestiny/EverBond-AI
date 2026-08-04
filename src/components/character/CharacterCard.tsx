@@ -10,6 +10,13 @@ export function CharacterCard({
   priority?: boolean;
   compact?: boolean;
 }) {
+  const openingPreview =
+    character.openingScenario?.trim() ||
+    character.description?.trim() ||
+    character.openingMessage?.trim() ||
+    character.firstMessage?.trim() ||
+    character.tagline;
+
   return (
     <article className="v18-card group flex h-full flex-col">
       <div className="relative h-[310px] overflow-hidden bg-[#0b0b0e] sm:h-[282px] lg:h-[272px] xl:h-[278px] 2xl:h-[288px]">
@@ -43,8 +50,8 @@ export function CharacterCard({
           <h3 className="truncate font-display text-base font-bold leading-tight text-white">
             {character.name}
           </h3>
-          <p className="mt-2 line-clamp-2 min-h-[2.45rem] text-[13px] leading-5 text-bond-muted">
-            {character.tagline}
+          <p className="mt-2 line-clamp-2 min-h-[2.45rem] break-normal text-[13px] leading-5 text-bond-muted [hyphens:none]">
+            {openingPreview}
           </p>
         </Link>
 
