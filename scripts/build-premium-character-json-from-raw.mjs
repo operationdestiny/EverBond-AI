@@ -16,14 +16,50 @@ loadEnvFiles();
 const root = process.cwd();
 const outDir = path.join(root, "output", "clean-character-reset");
 const proposalsPath = path.join(outDir, "title-trim-proposals.json");
-const APPLY_TITLE_TRIM = String(process.env.APPLY_TITLE_TRIM || "false").toLowerCase() === "true";
+const retiredPath = path.join(
+  root,
+  "data",
+  "characters",
+  "retired-official-characters.json"
+);
+const APPLY_TITLE_TRIM =
+  String(process.env.APPLY_TITLE_TRIM || "false").toLowerCase() === "true";
 
 const backupDir = path.join(outDir, "backups");
 fs.mkdirSync(backupDir, { recursive: true });
 
+function normalizeText(value) {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’‘`]/g, "'")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function retirementKey(category, name) {
+  return `${String(category)}\u0000${normalizeText(name)}`;
+}
+
+const retired = JSON.parse(fs.readFileSync(retiredPath, "utf8"));
+const retiredKeys = new Set(
+  retired.map((item) => retirementKey(item.category, item.name))
+);
+const retiredCountByCategory = new Map();
+for (const item of retired) {
+  retiredCountByCategory.set(
+    item.category,
+    (retiredCountByCategory.get(item.category) || 0) + 1
+  );
+}
+
 const raw = readRawRecords();
 if (raw.records.length !== TOTAL_EXPECTED) {
-  throw new Error(`Expected ${TOTAL_EXPECTED} raw records, found ${raw.records.length}`);
+  throw new Error(
+    `Expected ${TOTAL_EXPECTED} raw records, found ${raw.records.length}`
+  );
 }
 
 const proposalById = new Map();
@@ -38,6 +74,10 @@ const normalized = [];
 
 for (const record of raw.records) {
   validatePremiumRecord(record);
+
+  if (retiredKeys.has(retirementKey(record.category, record.name))) {
+    continue;
+  }
 
   const copy = structuredClone(record);
   const proposal = proposalById.get(copy.id);
@@ -66,32 +106,56 @@ for (const cfg of CATEGORY_OUTPUTS) {
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
 
   if (fs.existsSync(targetPath)) {
-    fs.copyFileSync(targetPath, path.join(backupDir, `${path.basename(cfg.file)}.${stamp}.bak`));
+    fs.copyFileSync(
+      targetPath,
+      path.join(backupDir, `${path.basename(cfg.file)}.${stamp}.bak`)
+    );
   }
 
-  const arr = (byCategory.get(cfg.category) || [])
-    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0) || a.id.localeCompare(b.id));
+  const arr = (byCategory.get(cfg.category) || []).sort(
+    (a, b) =>
+      (a.display_order || 0) - (b.display_order || 0) ||
+      a.id.localeCompare(b.id)
+  );
+  const expected =
+    cfg.expected - (retiredCountByCategory.get(cfg.category) || 0);
 
-  if (arr.length !== cfg.expected) {
-    throw new Error(`${cfg.category}: expected ${cfg.expected}, got ${arr.length}`);
+  if (arr.length !== expected) {
+    throw new Error(`${cfg.category}: expected ${expected}, got ${arr.length}`);
   }
 
-  fs.writeFileSync(targetPath, JSON.stringify(arr, null, 2) + "\n", "utf8");
+  fs.writeFileSync(
+    targetPath,
+    `${JSON.stringify(arr, null, 2)}\n`,
+    "utf8"
+  );
   console.log(`Wrote ${arr.length} records: ${cfg.file}`);
 }
 
 const manifest = {
   source: raw.sourceDir,
   total: siteRows.length,
+  retired_characters_excluded: retired.length,
   title_trim_applied: APPLY_TITLE_TRIM,
   changed_titles_available: proposalById.size,
-  categories: Object.fromEntries(CATEGORY_OUTPUTS.map((cfg) => [cfg.category, (byCategory.get(cfg.category) || []).length])),
-  everbond_girls_order: "mixed deterministic display_order; original 0001-0500 spread through category",
+  categories: Object.fromEntries(
+    CATEGORY_OUTPUTS.map((cfg) => [
+      cfg.category,
+      (byCategory.get(cfg.category) || []).length
+    ])
+  ),
+  everbond_girls_order:
+    "mixed deterministic display_order; original 0001-0500 spread through category",
   generated_at: new Date().toISOString()
 };
 
-fs.writeFileSync(path.join(root, "data", "characters", "PREMIUM_LIBRARY_MANIFEST.json"), JSON.stringify(manifest, null, 2) + "\n", "utf8");
+fs.writeFileSync(
+  path.join(root, "data", "characters", "PREMIUM_LIBRARY_MANIFEST.json"),
+  `${JSON.stringify(manifest, null, 2)}\n`,
+  "utf8"
+);
 
 console.log(`Backups saved in ${backupDir}`);
+console.log(`Retired characters excluded: ${retired.length}`);
 console.log(`Title trim applied: ${APPLY_TITLE_TRIM}`);
 console.log("Fresh premium site JSON is ready.");

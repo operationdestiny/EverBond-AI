@@ -13,27 +13,66 @@ loadEnvFiles();
 
 const root = process.cwd();
 
-const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const url =
+  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const DRY_RUN =
-  String(process.env.CHARACTER_IMPORT_DRY_RUN || "true").toLowerCase() === "true";
+  String(process.env.CHARACTER_IMPORT_DRY_RUN || "true").toLowerCase() ===
+  "true";
 
-const BATCH_SIZE = Number(process.env.CHARACTER_IMPORT_BATCH_SIZE || 200);
+const BATCH_SIZE = Number(
+  process.env.CHARACTER_IMPORT_BATCH_SIZE || 200
+);
 
 const STORAGE_BUCKET =
   process.env.CHARACTER_ASSETS_BUCKET || "character-assets";
 
 const UPLOAD_IMAGES =
-  String(process.env.CHARACTER_IMPORT_UPLOAD_IMAGES || "true").toLowerCase() === "true";
+  String(process.env.CHARACTER_IMPORT_UPLOAD_IMAGES || "true").toLowerCase() ===
+  "true";
 
 const IMAGE_ROOT =
   process.env.CHARACTER_ASSETS_DIR ||
   path.join(root, "public", "character-assets");
 
+const RETIRED_PATH = path.join(
+  root,
+  "data",
+  "characters",
+  "retired-official-characters.json"
+);
+
 if (!url || !serviceKey) {
   throw new Error(
     "Missing SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY"
+  );
+}
+
+function normalizeText(value) {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’‘`]/g, "'")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function retirementKey(category, name) {
+  return `${String(category)}\u0000${normalizeText(name)}`;
+}
+
+const retired = JSON.parse(fs.readFileSync(RETIRED_PATH, "utf8"));
+const retiredKeys = new Set(
+  retired.map((item) => retirementKey(item.category, item.name))
+);
+const retiredCountByCategory = new Map();
+for (const item of retired) {
+  retiredCountByCategory.set(
+    item.category,
+    (retiredCountByCategory.get(item.category) || 0) + 1
   );
 }
 
@@ -55,11 +94,26 @@ function readCategoryFiles() {
       throw new Error(`${cfg.file} must contain a JSON array`);
     }
 
-    if (arr.length !== cfg.expected) {
-      throw new Error(`${cfg.file}: expected ${cfg.expected}, got ${arr.length}`);
+    const retiredCount = retiredCountByCategory.get(cfg.category) || 0;
+    const activeExpected = cfg.expected - retiredCount;
+
+    if (arr.length !== cfg.expected && arr.length !== activeExpected) {
+      throw new Error(
+        `${cfg.file}: expected ${cfg.expected} before retirement or ${activeExpected} after retirement, got ${arr.length}`
+      );
     }
 
-    for (const c of arr) rows.push(c);
+    for (const character of arr) {
+      if (
+        retiredKeys.has(
+          retirementKey(character.category || cfg.category, character.name)
+        )
+      ) {
+        continue;
+      }
+
+      rows.push(character);
+    }
   }
 
   return rows;
@@ -91,7 +145,9 @@ function toDbRow(character, imageUrl) {
 
   const generatedSeo = character.generated_seo || {};
   const slug = String(
-    character.slug || generatedSeo.slug || slugify(`${character.name}-${character.title}`)
+    character.slug ||
+      generatedSeo.slug ||
+      slugify(`${character.name}-${character.title}`)
   );
 
   const category = character.category;
@@ -124,14 +180,16 @@ function toDbRow(character, imageUrl) {
     visibility: "public",
     is_public: true,
     official: category !== "public-creations",
-    creator_username: category === "public-creations" ? null : "everbond",
+    creator_username:
+      category === "public-creations" ? null : "everbond",
     is_active: true,
     updated_at: new Date().toISOString()
   };
 }
 
 async function ensureBucketExists(supabase) {
-  const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+  const { data: buckets, error: listError } =
+    await supabase.storage.listBuckets();
 
   if (listError) {
     throw new Error(`Could not list storage buckets: ${listError.message}`);
@@ -144,11 +202,18 @@ async function ensureBucketExists(supabase) {
   const { error } = await supabase.storage.createBucket(STORAGE_BUCKET, {
     public: true,
     fileSizeLimit: 10 * 1024 * 1024,
-    allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    allowedMimeTypes: [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/gif"
+    ]
   });
 
   if (error) {
-    throw new Error(`Could not create storage bucket ${STORAGE_BUCKET}: ${error.message}`);
+    throw new Error(
+      `Could not create storage bucket ${STORAGE_BUCKET}: ${error.message}`
+    );
   }
 
   console.log(`Created storage bucket: ${STORAGE_BUCKET}`);
@@ -199,10 +264,16 @@ async function main() {
   const slugs = new Set();
 
   const sortedSourceRows = sourceRows.sort((a, b) => {
-    if (a.category !== b.category) return a.category.localeCompare(b.category);
+    if (a.category !== b.category) {
+      return a.category.localeCompare(b.category);
+    }
 
-    const aOrder = Number.isInteger(a.display_order) ? a.display_order : 0;
-    const bOrder = Number.isInteger(b.display_order) ? b.display_order : 0;
+    const aOrder = Number.isInteger(a.display_order)
+      ? a.display_order
+      : 0;
+    const bOrder = Number.isInteger(b.display_order)
+      ? b.display_order
+      : 0;
 
     return aOrder - bOrder || String(a.id).localeCompare(String(b.id));
   });
@@ -212,11 +283,17 @@ async function main() {
 
     const generatedSeo = character.generated_seo || {};
     const slug = String(
-      character.slug || generatedSeo.slug || slugify(`${character.name}-${character.title}`)
+      character.slug ||
+        generatedSeo.slug ||
+        slugify(`${character.name}-${character.title}`)
     );
 
-    if (ids.has(character.id)) throw new Error(`Duplicate id: ${character.id}`);
-    if (slugs.has(slug)) throw new Error(`Duplicate slug: ${slug}`);
+    if (ids.has(character.id)) {
+      throw new Error(`Duplicate id: ${character.id}`);
+    }
+    if (slugs.has(slug)) {
+      throw new Error(`Duplicate slug: ${slug}`);
+    }
 
     ids.add(character.id);
     slugs.add(slug);
@@ -229,7 +306,10 @@ async function main() {
     }
   }
 
-  console.log(`Ready to import ${sortedSourceRows.length} premium characters.`);
+  console.log(
+    `Ready to import ${sortedSourceRows.length} active premium characters.`
+  );
+  console.log(`Retired characters excluded: ${retired.length}`);
   console.log(`Dry run: ${DRY_RUN}`);
   console.log(`Batch size: ${BATCH_SIZE}`);
   console.log(`Upload images: ${UPLOAD_IMAGES}`);
@@ -243,7 +323,9 @@ async function main() {
   console.log("Category counts:", counts);
 
   if (DRY_RUN) {
-    console.log("Dry run complete. Set CHARACTER_IMPORT_DRY_RUN=false to import.");
+    console.log(
+      "Dry run complete. Set CHARACTER_IMPORT_DRY_RUN=false to import."
+    );
     return;
   }
 
@@ -267,7 +349,9 @@ async function main() {
     dbRows.push(toDbRow(character, imageUrl));
 
     if ((i + 1) % 100 === 0 || i + 1 === sortedSourceRows.length) {
-      console.log(`Prepared images/rows ${i + 1}/${sortedSourceRows.length}`);
+      console.log(
+        `Prepared images/rows ${i + 1}/${sortedSourceRows.length}`
+      );
     }
   }
 
@@ -280,7 +364,9 @@ async function main() {
 
     if (error) throw error;
 
-    console.log(`Imported ${Math.min(i + batch.length, dbRows.length)}/${dbRows.length}`);
+    console.log(
+      `Imported ${Math.min(i + batch.length, dbRows.length)}/${dbRows.length}`
+    );
   }
 
   console.log("Import complete.");

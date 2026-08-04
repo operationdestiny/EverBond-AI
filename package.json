@@ -5,9 +5,11 @@
   "description": "EverBond AI - Bond forever with truly unrestricted AI companions.",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/apply-retired-character-removals.mjs",
     "build": "next build",
     "start": "next start",
-    "import:characters": "node scripts/import-characters.mjs"
+    "retire:characters": "node scripts/apply-retired-character-removals.mjs",
+    "import:characters": "node scripts/import-characters.mjs && node scripts/apply-retired-character-removals.mjs --remote-only"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.3",
