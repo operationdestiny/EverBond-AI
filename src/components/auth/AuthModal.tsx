@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { MailKey, X } from "lucide-react";
+import { KeyRound, X } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AuthModalCharacter } from "@/components/auth/AuthProvider";
 import {
@@ -622,7 +622,7 @@ export function AuthModal({
             </button>
 
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-bond-rose/15 text-bond-rose">
-              <MailKey size={24} />
+              <KeyRound size={24} />
             </span>
 
             <h2 className="mt-5 pr-10 font-display text-3xl font-bold text-bond-rose">
