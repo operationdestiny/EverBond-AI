@@ -90,7 +90,7 @@ function LinkRow({
   return (
     <Link
       href={href}
-      className={`v18-sidebar-row !h-[46px] ${active ? "active" : ""}`}
+      className={`v18-sidebar-row !h-[52px] ${active ? "active" : ""}`}
       title={label}
     >
       <span className="flex items-center gap-3">
@@ -113,7 +113,7 @@ export function DashboardSidebar({
 
   return (
     <aside className="v18-sidebar !overflow-y-hidden">
-      <div className="v51-sidebar-brand-row !mb-2 !min-h-[40px]">
+      <div className="v51-sidebar-brand-row !mb-2 !min-h-[44px]">
         <Link href="/" className="v51-sidebar-brand">
           <span className="v18-infinity h-10 w-10 text-[43px]" />
           <BrandName className="font-display text-2xl font-bold" />
@@ -131,38 +131,39 @@ export function DashboardSidebar({
         </button>
       </div>
 
-      <nav className="space-y-0.5">
-        {topLinks.map((item) => (
-          <LinkRow
-            key={item.href}
-            href={item.href}
-            icon={item.icon}
-            active={"active" in item ? item.active : undefined}
-            label={
-              "customLabel" in item
-                ? shopCopy.sidebarLabel
-                : t(item.labelKey)
-            }
-          />
-        ))}
-      </nav>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <nav className="flex min-h-0 flex-[5] flex-col justify-evenly">
+          {topLinks.map((item) => (
+            <LinkRow
+              key={item.href}
+              href={item.href}
+              icon={item.icon}
+              active={"active" in item ? item.active : undefined}
+              label={
+                "customLabel" in item
+                  ? shopCopy.sidebarLabel
+                  : t(item.labelKey)
+              }
+            />
+          ))}
+        </nav>
 
-      <div className="my-1.5 h-px bg-white/10" />
+        <div className="my-1 h-px bg-white/10" />
 
-      <nav className="space-y-0.5">
-        {infoLinks.map((item) => (
-          <LinkRow
-            key={item.href}
-            href={item.href}
-            icon={item.icon}
-            label={t(item.labelKey)}
-          />
-        ))}
-      </nav>
+        <nav className="flex min-h-0 flex-[3] flex-col justify-evenly">
+          {infoLinks.map((item) => (
+            <LinkRow
+              key={item.href}
+              href={item.href}
+              icon={item.icon}
+              label={t(item.labelKey)}
+            />
+          ))}
+        </nav>
 
-      <div className="v51-sidebar-footer mt-auto pt-1.5">
-        <div className="mx-auto flex max-w-[144px] flex-wrap justify-center gap-1.5 text-bond-muted">
-          {socialLinks.map((item) => (
+        <div className="v51-sidebar-footer pt-3">
+          <div className="mx-auto flex max-w-[152px] flex-wrap justify-center gap-2 text-bond-muted">
+            {socialLinks.map((item) => (
             <a
               key={item.label}
               href={item.href}
@@ -170,25 +171,26 @@ export function DashboardSidebar({
               rel="noopener noreferrer"
               aria-label={`EverBond on ${item.label}`}
               title={`EverBond on ${item.label}`}
-              className="v21-social-circle !h-[30px] !w-[30px] transition duration-200 hover:border-bond-rose/70 hover:bg-bond-rose/15 hover:text-bond-rose focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bond-rose/70"
+              className="v21-social-circle !h-8 !w-8 transition duration-200 hover:border-bond-rose/70 hover:bg-bond-rose/15 hover:text-bond-rose focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bond-rose/70"
             >
               <svg
                 viewBox="0 0 24 24"
                 aria-hidden="true"
-                className="!h-4 !w-4"
+                className="!h-[17px] !w-[17px]"
                 fill="currentColor"
               >
                 <path d={item.path} />
               </svg>
             </a>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        <p className="mt-2 text-center text-xs leading-4 text-bond-muted">
-          {t("copyright")}
-          <br />
-          {t("allRightsReserved")}
-        </p>
+          <p className="mt-4 text-center text-xs leading-5 text-bond-muted">
+            {t("copyright")}
+            <br />
+            {t("allRightsReserved")}
+          </p>
+        </div>
       </div>
     </aside>
   );
