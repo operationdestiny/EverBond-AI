@@ -1,89 +1,12 @@
 "use client";
 
 import { AppShell } from "@/components/layout/AppShell";
+import { LEGAL_PAGE_COPY } from "@/lib/legal-page-language";
 import { useSiteLanguage } from "@/lib/site-language";
 
 export default function LegalPage() {
-  const { t } = useSiteLanguage();
-
-  const legalBody = (key: string) =>
-    t(key)
-      .split("\n")
-      .map((paragraph) => paragraph.trim())
-      .filter(Boolean);
-
-  const sections = [
-    {
-      id: "terms",
-      title: t("legalV2TermsOfUseTitle"),
-      body: legalBody("legalV2TermsBody")
-    },
-    {
-      id: "privacy",
-      title: t("legalV2PrivacyPolicyTitle"),
-      body: legalBody("legalV2PrivacyBody")
-    },
-    {
-      id: "safety",
-      title: t("legalV2SafetyPolicyTitle"),
-      body: legalBody("legalV2SafetyBody")
-    },
-    {
-      id: "ai-disclaimer",
-      title: t("legalV2AiDisclaimerTitle"),
-      body: legalBody("legalV2AiDisclaimerBody")
-    },
-    {
-      id: "user-responsibility",
-      title: t("legalV2UserResponsibilityTitle"),
-      body: legalBody("legalV2UserResponsibilityBody")
-    },
-    {
-      id: "content-ownership",
-      title: t("legalV2ContentOwnershipTitle"),
-      body: legalBody("legalV2ContentOwnershipBody")
-    },
-    {
-      id: "copyright-impersonation",
-      title: t("legalV2CopyrightAndImpersonationTitle"),
-      body: legalBody("legalV2CopyrightBody")
-    },
-    {
-      id: "ai-image-generation-similarity",
-      title: t("legalV2AiImageGenerationSimilarityNoticeTitle"),
-      body: legalBody("legalV2ImageNoticeBody")
-    },
-    {
-      id: "dmca-takedown",
-      title: t("legalV2DmcaTakedownProcedureTitle"),
-      body: legalBody("legalV2DmcaBody")
-    },
-    {
-      id: "arbitration",
-      title: t("legalV2ArbitrationAgreementTitle"),
-      body: legalBody("legalV2ArbitrationBody")
-    },
-    {
-      id: "limitation-of-liability",
-      title: t("legalV2LimitationOfLiabilityTitle"),
-      body: legalBody("legalV2LiabilityBody")
-    },
-    {
-      id: "indemnification",
-      title: t("legalV2IndemnificationTitle"),
-      body: legalBody("legalV2IndemnificationBody")
-    },
-    {
-      id: "refund",
-      title: t("legalV2RefundPolicyTitle"),
-      body: legalBody("legalV2RefundBody")
-    },
-    {
-      id: "contact",
-      title: t("legalV2ContactTitle"),
-      body: legalBody("legalV2ContactBody")
-    }
-  ];
+  const { language } = useSiteLanguage();
+  const copy = LEGAL_PAGE_COPY[language] ?? LEGAL_PAGE_COPY.EN;
 
   return (
     <AppShell>
@@ -92,22 +15,28 @@ export default function LegalPage() {
           <div className="mx-auto max-w-5xl">
             <div className="mx-auto max-w-4xl text-center">
               <p className="text-sm font-bold uppercase tracking-[0.35em] text-bond-rose">
-                {t("legalV2PageLabel")}
+                {copy.label}
               </p>
               <h1 className="mx-auto mt-4 max-w-4xl font-display text-5xl font-bold tracking-tight text-white md:text-7xl">
-                {t("legalV2PageTitle")}
+                {copy.title}
               </h1>
-              <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-bond-muted">
-                {t("legalV2UseTableOfContents")}
+              <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-bond-muted">
+                {copy.intro}
+              </p>
+              <p className="mt-4 text-sm font-bold text-bond-rose">
+                {copy.effectiveDate}
+              </p>
+              <p className="mx-auto mt-3 max-w-3xl text-sm leading-6 text-white/65">
+                {copy.controllingLanguage}
               </p>
             </div>
 
             <nav className="mt-10 rounded-[2rem] border border-bond-rose/45 bg-white/[0.03] p-6">
               <p className="mb-4 text-sm font-bold uppercase tracking-[0.25em] text-bond-rose">
-                {t("legalV2TableOfContents")}
+                {copy.contents}
               </p>
               <div className="flex flex-wrap gap-3">
-                {sections.map((section) => (
+                {copy.sections.map((section) => (
                   <a
                     key={section.id}
                     href={`#${section.id}`}
@@ -120,7 +49,7 @@ export default function LegalPage() {
             </nav>
 
             <div className="mt-8 space-y-6">
-              {sections.map((section) => (
+              {copy.sections.map((section) => (
                 <section
                   key={section.id}
                   id={section.id}
@@ -130,7 +59,7 @@ export default function LegalPage() {
                     {section.title}
                   </h2>
                   <div className="mt-5 space-y-5 text-base leading-8 text-bond-muted">
-                    {section.body.map((paragraph, index) => (
+                    {section.paragraphs.map((paragraph, index) => (
                       <p key={`${section.id}-${index}`}>{paragraph}</p>
                     ))}
                   </div>

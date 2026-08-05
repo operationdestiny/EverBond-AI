@@ -710,6 +710,335 @@ if (
 
 write(whyPath, why);
 
+let finalWhy = read(whyPath);
+const voiceVideoWhyReplacements = [
+  [
+    "Live uncensored voice calls",
+    "Live uncensored voice video calls"
+  ],
+  [
+    "live voice calls",
+    "live uncensored voice video calls"
+  ],
+  [
+    "Move beyond messages and connect live. Your companion carries the same identity, personality, and relationship into a more immediate experience.",
+    "Talk live by voice in a video-call-style companion screen. Your companion carries the same identity, personality, relationship, and Ever Memory™ into the call; the experience uses character artwork rather than a live camera feed."
+  ],
+  [
+    "EverCoin is the official EverBond currency for voice calls, image generation, video generation, in-chat gifts, and premium character chats.",
+    "EverCoin is the official EverBond currency for live voice video calls, image generation, video generation, in-chat gifts, and premium character chats."
+  ],
+  [
+    "Yes. EverBond is built around 100% truly private chats.",
+    "Yes. Chats are private to your account and are not publicly posted or shared with other users. EverBond and contracted providers still process data as needed to deliver, secure, and legally operate the service."
+  ],
+  [
+    "No. EverBond does not have filters ever.",
+    "EverBond does not impose a general NSFW filter on private adult chat. Illegal, exploitative, non-consensual, minor-related, and rights-violating content remains prohibited, and media providers may apply technical or safety limits."
+  ],
+  [
+    "Llamadas de voz en directo sin censura",
+    "Videollamadas de voz en directo sin censura"
+  ],
+  [
+    "llamadas de voz en directo, regalos",
+    "videollamadas de voz en directo sin censura, regalos"
+  ],
+  [
+    "Ve más allá de los mensajes y conecta en directo. Tu compañero mantiene la misma identidad, personalidad y relación en una experiencia más inmediata.",
+    "Habla en directo por voz dentro de una pantalla con estilo de videollamada. Tu compañero mantiene la misma identidad, personalidad, relación y Ever Memory™; la experiencia usa la imagen del personaje, no una cámara en directo."
+  ],
+  [
+    "EverCoin es la moneda oficial de EverBond para llamadas de voz, generación de imágenes, generación de vídeos, regalos dentro del chat y chats premium con personajes.",
+    "EverCoin es la moneda oficial de EverBond para videollamadas de voz en directo, generación de imágenes, generación de vídeos, regalos dentro del chat y chats premium con personajes."
+  ],
+  [
+    "Sí. EverBond está diseñado alrededor de chats verdaderamente privados al 100 %.",
+    "Sí. Los chats son privados para tu cuenta y no se publican ni se comparten con otros usuarios. EverBond y sus proveedores contratados procesan los datos necesarios para prestar, proteger y operar legalmente el servicio."
+  ],
+  [
+    "No. EverBond no aplica filtros.",
+    "EverBond no aplica un filtro NSFW general al chat adulto privado. El contenido ilegal, explotador, no consentido, relacionado con menores o que vulnere derechos sigue prohibido, y los proveedores de medios pueden aplicar límites técnicos o de seguridad."
+  ],
+  [
+    "Appels vocaux en direct non censurés",
+    "Appels vidéo vocaux en direct non censurés"
+  ],
+  [
+    "appels vocaux en direct",
+    "appels vidéo vocaux en direct non censurés"
+  ],
+  [
+    "Allez au-delà des messages et échangez en direct. Votre compagnon conserve la même identité, personnalité et relation dans une expérience plus immédiate.",
+    "Parlez en direct par la voix dans une interface de type appel vidéo. Votre compagnon conserve la même identité, personnalité, relation et Ever Memory™ ; l’expérience utilise l’illustration du personnage et non une caméra en direct."
+  ],
+  [
+    "EverCoin est la monnaie officielle d’EverBond pour les appels vocaux, la génération d’images, la génération de vidéos, les cadeaux dans le chat et les discussions premium avec les personnages.",
+    "EverCoin est la monnaie officielle d’EverBond pour les appels vidéo vocaux en direct, la génération d’images, la génération de vidéos, les cadeaux dans le chat et les discussions premium avec les personnages."
+  ],
+  [
+    "Oui. EverBond est conçu autour de discussions véritablement privées à 100 %.",
+    "Oui. Les discussions sont privées pour votre compte et ne sont ni publiées ni partagées avec d’autres utilisateurs. EverBond et ses prestataires traitent les données nécessaires pour fournir, sécuriser et exploiter légalement le service."
+  ],
+  [
+    "Non. EverBond n’applique pas de filtres.",
+    "EverBond n’applique pas de filtre NSFW général aux discussions privées entre adultes. Les contenus illégaux, exploitants, non consentis, liés aux mineurs ou portant atteinte aux droits restent interdits, et les fournisseurs de médias peuvent appliquer des limites techniques ou de sécurité."
+  ],
+  [
+    "Unzensierte Live-Sprachanrufe",
+    "Unzensierte Live-Voice-Videoanrufe"
+  ],
+  [
+    "Live-Sprachanrufe",
+    "unzensierte Live-Voice-Videoanrufe"
+  ],
+  [
+    "Gehe über Nachrichten hinaus und verbinde dich live. Dein Begleiter nimmt dieselbe Identität, Persönlichkeit und Beziehung in ein unmittelbares Erlebnis mit.",
+    "Sprich live per Stimme in einer Begleiteroberfläche im Videoanruf-Stil. Dein Begleiter behält dieselbe Identität, Persönlichkeit, Beziehung und Ever Memory™; verwendet wird Charaktergrafik statt eines Live-Kamerabilds."
+  ],
+  [
+    "EverCoin ist die offizielle EverBond-Währung für Sprachanrufe, Bilderstellung, Videoerstellung, Geschenke im Chat und Premium-Charakter-Chats.",
+    "EverCoin ist die offizielle EverBond-Währung für Live-Voice-Videoanrufe, Bilderstellung, Videoerstellung, Geschenke im Chat und Premium-Charakter-Chats."
+  ],
+  [
+    "Ja. EverBond ist auf vollständig private Chats ausgelegt.",
+    "Ja. Chats sind deinem Konto vorbehalten und werden nicht öffentlich veröffentlicht oder mit anderen Nutzern geteilt. EverBond und beauftragte Anbieter verarbeiten die Daten, die zur Bereitstellung, Sicherung und rechtmäßigen Durchführung des Dienstes erforderlich sind."
+  ],
+  [
+    "Nein. EverBond verwendet keine Filter.",
+    "EverBond verwendet keinen allgemeinen NSFW-Filter für private Chats zwischen Erwachsenen. Illegale, ausbeuterische, nicht einvernehmliche, minderjährigenbezogene oder rechtsverletzende Inhalte bleiben verboten; Medienanbieter können technische oder sicherheitsbezogene Grenzen anwenden."
+  ],
+  [
+    "無検閲のライブ音声通話",
+    "無検閲のライブ音声ビデオ通話"
+  ],
+  [
+    "ライブ音声通話",
+    "無検閲のライブ音声ビデオ通話"
+  ],
+  [
+    "メッセージを超えてリアルタイムにつながります。コンパニオンは同じ人格、個性、関係性をより直接的な体験へ引き継ぎます。",
+    "ビデオ通話風のコンパニオン画面で、音声によるライブ会話ができます。同じ人格、関係、Ever Memory™が引き継がれますが、ライブカメラ映像ではなくキャラクター画像を使用します。"
+  ],
+  [
+    "EverCoinは、音声通話、画像生成、動画生成、チャット内ギフト、プレミアムキャラクターチャットに使うEverBond公式通貨です。",
+    "EverCoinは、ライブ音声ビデオ通話、画像生成、動画生成、チャット内ギフト、プレミアムキャラクターチャットに使うEverBond公式通貨です。"
+  ],
+  [
+    "はい。EverBondは完全にプライベートなチャットを中心に設計されています。",
+    "はい。チャットはあなたのアカウント内で非公開となり、他のユーザーに公開または共有されません。EverBondと委託先は、サービスの提供、安全確保、法的運営に必要な範囲でデータを処理します。"
+  ],
+  [
+    "いいえ。EverBondはフィルターを使用しません。",
+    "EverBondは成人向けの非公開チャットに一般的なNSFWフィルターを設けません。ただし、違法、搾取的、非同意、未成年関連、権利侵害のコンテンツは禁止され、メディア提供者が技術上または安全上の制限を適用する場合があります。"
+  ],
+  [
+    "무검열 라이브 음성 통화",
+    "무검열 라이브 음성 영상 통화"
+  ],
+  [
+    "라이브 음성 통화",
+    "무검열 라이브 음성 영상 통화"
+  ],
+  [
+    "메시지를 넘어 실시간으로 연결하세요. 컴패니언은 같은 정체성, 성격, 관계를 더 즉각적인 경험으로 이어갑니다.",
+    "영상 통화 스타일의 컴패니언 화면에서 음성으로 실시간 대화하세요. 같은 정체성, 성격, 관계, Ever Memory™가 이어지며, 라이브 카메라 영상 대신 캐릭터 이미지를 사용합니다."
+  ],
+  [
+    "EverCoin은 음성 통화, 이미지 생성, 영상 생성, 채팅 내 선물, 프리미엄 캐릭터 채팅에 사용하는 EverBond 공식 통화입니다.",
+    "EverCoin은 라이브 음성 영상 통화, 이미지 생성, 영상 생성, 채팅 내 선물, 프리미엄 캐릭터 채팅에 사용하는 EverBond 공식 통화입니다."
+  ],
+  [
+    "네. EverBond는 완전히 비공개인 채팅을 중심으로 설계되었습니다.",
+    "네. 채팅은 사용자 계정에 비공개로 유지되며 다른 사용자에게 공개되거나 공유되지 않습니다. EverBond와 계약된 제공업체는 서비스 제공, 보안, 합법적 운영에 필요한 범위에서 데이터를 처리합니다."
+  ],
+  [
+    "아니요. EverBond는 필터를 사용하지 않습니다.",
+    "EverBond는 성인용 비공개 채팅에 일반적인 NSFW 필터를 적용하지 않습니다. 불법, 착취, 비동의, 미성년자 관련, 권리 침해 콘텐츠는 금지되며 미디어 제공업체가 기술적 또는 안전 제한을 적용할 수 있습니다."
+  ]
+];
+
+for (const [from, to] of voiceVideoWhyReplacements) {
+  finalWhy = replaceAll(finalWhy, from, to);
+}
+
+if (!finalWhy.includes("Live uncensored voice video calls")) {
+  throw new Error(
+    "The Why EverBond voice video call wording was not applied."
+  );
+}
+
+write(whyPath, finalWhy);
+
+let finalPageCopy = read(pageCopyPath);
+const voiceVideoCoinReplacements = [
+  [
+    "premium voice calls.",
+    "premium live uncensored voice video calls."
+  ],
+  [
+    'voiceCallsTitle: "Live Voice Calls"',
+    'voiceCallsTitle: "Live Uncensored Voice Video Calls"'
+  ],
+  [
+    "Speak live with your companion using the same personality, relationship, and Ever Memory™.",
+    "Talk live by voice in a video-call-style companion screen using the same personality, relationship, and Ever Memory™. Character artwork is used instead of a live camera feed."
+  ],
+  [
+    "llamadas de voz prémium.",
+    "videollamadas de voz en directo sin censura."
+  ],
+  [
+    'voiceCallsTitle: "Llamadas de voz en directo"',
+    'voiceCallsTitle: "Videollamadas de voz en directo sin censura"'
+  ],
+  [
+    "Habla en directo con tu compañero manteniendo la misma personalidad, relación y Ever Memory™.",
+    "Habla por voz en una pantalla con estilo de videollamada, con la misma personalidad, relación y Ever Memory™. Se usa la imagen del personaje, no una cámara en directo."
+  ],
+  [
+    "appels vocaux premium.",
+    "appels vidéo vocaux en direct non censurés."
+  ],
+  [
+    'voiceCallsTitle: "Appels vocaux en direct"',
+    'voiceCallsTitle: "Appels vidéo vocaux en direct non censurés"'
+  ],
+  [
+    "Parlez en direct avec votre compagnon en conservant la même personnalité, relation et Ever Memory™.",
+    "Parlez par la voix dans une interface de type appel vidéo avec la même personnalité, relation et Ever Memory™. L’illustration du personnage remplace une caméra en direct."
+  ],
+  [
+    "Premium-Sprachanrufe.",
+    "unzensierte Live-Voice-Videoanrufe."
+  ],
+  [
+    'voiceCallsTitle: "Live-Sprachanrufe"',
+    'voiceCallsTitle: "Unzensierte Live-Voice-Videoanrufe"'
+  ],
+  [
+    "Sprich live mit deinem Begleiter mit derselben Persönlichkeit, Beziehung und Ever Memory™.",
+    "Sprich per Stimme in einer Oberfläche im Videoanruf-Stil mit derselben Persönlichkeit, Beziehung und Ever Memory™. Charaktergrafik ersetzt ein Live-Kamerabild."
+  ],
+  [
+    "プレミアム音声通話に使えます。",
+    "無検閲のライブ音声ビデオ通話に使えます。"
+  ],
+  [
+    'voiceCallsTitle: "ライブ音声通話"',
+    'voiceCallsTitle: "無検閲のライブ音声ビデオ通話"'
+  ],
+  [
+    "同じ性格、関係、Ever Memory™を保ったコンパニオンとリアルタイムで話せます。",
+    "ビデオ通話風の画面で、同じ性格、関係、Ever Memory™を保ったコンパニオンと音声で話せます。ライブカメラではなくキャラクター画像を使用します。"
+  ],
+  [
+    "프리미엄 음성 통화를 이용하세요.",
+    "무검열 라이브 음성 영상 통화를 이용하세요."
+  ],
+  [
+    'voiceCallsTitle: "라이브 음성 통화"',
+    'voiceCallsTitle: "무검열 라이브 음성 영상 통화"'
+  ],
+  [
+    "같은 성격, 관계, Ever Memory™를 유지하는 컴패니언과 실시간으로 대화하세요.",
+    "영상 통화 스타일 화면에서 같은 성격, 관계, Ever Memory™를 유지하는 컴패니언과 음성으로 대화하세요. 라이브 카메라 대신 캐릭터 이미지를 사용합니다."
+  ]
+];
+
+for (const [from, to] of voiceVideoCoinReplacements) {
+  finalPageCopy = replaceAll(finalPageCopy, from, to);
+}
+
+write(pageCopyPath, finalPageCopy);
+
+const siteLanguagePath = "src/lib/site-language.ts";
+let finalSiteLanguage = read(siteLanguagePath);
+const siteLanguageReplacements = [
+  [
+    'voiceCalls: "Voice Calls"',
+    'voiceCalls: "Live Uncensored Voice Video Calls"'
+  ],
+  [
+    'voiceCallsBody: "Unlock real-time voice calls with your companion."',
+    'voiceCallsBody: "Talk live by voice in a video-call-style companion screen using character artwork."'
+  ],
+  [
+    'privateByDefaultBody: "Your chats are 100% private."',
+    'privateByDefaultBody: "Your chats are private to your account and are not publicly posted or shared with other users."'
+  ],
+  [
+    'voiceCalls: "Llamadas de voz"',
+    'voiceCalls: "Videollamadas de voz en directo sin censura"'
+  ],
+  [
+    'voiceCallsBody: "Desbloquea llamadas de voz en tiempo real con tu compañero."',
+    'voiceCallsBody: "Habla por voz en una pantalla con estilo de videollamada usando la imagen del personaje."'
+  ],
+  [
+    'privateByDefaultBody: "Tus chats son 100% privados."',
+    'privateByDefaultBody: "Tus chats son privados para tu cuenta y no se publican ni se comparten con otros usuarios."'
+  ],
+  [
+    'voiceCalls: "Appels vocaux"',
+    'voiceCalls: "Appels vidéo vocaux en direct non censurés"'
+  ],
+  [
+    'voiceCallsBody: "Débloquez des appels vocaux en temps réel avec votre compagnon."',
+    'voiceCallsBody: "Parlez par la voix dans une interface de type appel vidéo utilisant l’illustration du personnage."'
+  ],
+  [
+    'privateByDefaultBody: "Vos chats sont 100 % privés."',
+    'privateByDefaultBody: "Vos discussions sont privées pour votre compte et ne sont ni publiées ni partagées avec d’autres utilisateurs."'
+  ],
+  [
+    'voiceCalls: "Sprachanrufe"',
+    'voiceCalls: "Unzensierte Live-Voice-Videoanrufe"'
+  ],
+  [
+    'voiceCallsBody: "Schalte Echtzeit-Sprachanrufe mit deinem Begleiter frei."',
+    'voiceCallsBody: "Sprich per Stimme in einer Videoanruf-Oberfläche mit Charaktergrafik."'
+  ],
+  [
+    'privateByDefaultBody: "Deine Chats sind zu 100 % privat."',
+    'privateByDefaultBody: "Deine Chats sind deinem Konto vorbehalten und werden nicht öffentlich veröffentlicht oder mit anderen Nutzern geteilt."'
+  ],
+  [
+    'voiceCalls: "音声通話"',
+    'voiceCalls: "無検閲のライブ音声ビデオ通話"'
+  ],
+  [
+    'voiceCallsBody: "コンパニオンとのリアルタイム音声通話を解放します。"',
+    'voiceCallsBody: "キャラクター画像を使うビデオ通話風画面で、コンパニオンと音声で話せます。"'
+  ],
+  [
+    'privateByDefaultBody: "チャットは 100% 非公開です。"',
+    'privateByDefaultBody: "チャットはアカウント内で非公開となり、他のユーザーに公開または共有されません。"'
+  ],
+  [
+    'voiceCalls: "음성 통화"',
+    'voiceCalls: "무검열 라이브 음성 영상 통화"'
+  ],
+  [
+    'voiceCallsBody: "컴패니언과의 실시간 음성 통화를 잠금 해제하세요."',
+    'voiceCallsBody: "캐릭터 이미지를 사용하는 영상 통화 스타일 화면에서 컴패니언과 음성으로 대화하세요."'
+  ],
+  [
+    'privateByDefaultBody: "채팅은 100% 비공개입니다."',
+    'privateByDefaultBody: "채팅은 계정에 비공개로 유지되며 다른 사용자에게 공개되거나 공유되지 않습니다."'
+  ]
+];
+
+for (const [from, to] of siteLanguageReplacements) {
+  finalSiteLanguage = replaceAll(
+    finalSiteLanguage,
+    from,
+    to
+  );
+}
+
+write(siteLanguagePath, finalSiteLanguage);
+
 console.log(
-  "Final media pricing, dynamic video quotes, Seedream V5 Pro, and voice-call wording are applied."
+  "Final media pricing, dynamic video quotes, Seedream V5 Pro, voice video call advertising, and legal-safe privacy wording are applied."
 );
