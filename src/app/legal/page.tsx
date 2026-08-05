@@ -6,7 +6,8 @@ import { useSiteLanguage } from "@/lib/site-language";
 
 export default function LegalPage() {
   const { language } = useSiteLanguage();
-  const copy = LEGAL_PAGE_COPY[language] ?? LEGAL_PAGE_COPY.EN;
+  const copy =
+    LEGAL_PAGE_COPY[language] ?? LEGAL_PAGE_COPY.EN;
 
   return (
     <AppShell>
@@ -20,13 +21,7 @@ export default function LegalPage() {
               <h1 className="mx-auto mt-4 max-w-4xl font-display text-5xl font-bold tracking-tight text-white md:text-7xl">
                 {copy.title}
               </h1>
-              <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-bond-muted">
-                {copy.intro}
-              </p>
-              <p className="mt-4 text-sm font-bold text-bond-rose">
-                {copy.effectiveDate}
-              </p>
-              <p className="mx-auto mt-3 max-w-3xl text-sm leading-6 text-white/65">
+              <p className="mx-auto mt-6 max-w-3xl text-sm leading-6 text-white/65">
                 {copy.controllingLanguage}
               </p>
             </div>
@@ -59,9 +54,13 @@ export default function LegalPage() {
                     {section.title}
                   </h2>
                   <div className="mt-5 space-y-5 text-base leading-8 text-bond-muted">
-                    {section.paragraphs.map((paragraph, index) => (
-                      <p key={`${section.id}-${index}`}>{paragraph}</p>
-                    ))}
+                    {section.paragraphs.map(
+                      (paragraph, index) => (
+                        <p key={`${section.id}-${index}`}>
+                          {paragraph}
+                        </p>
+                      )
+                    )}
                   </div>
                 </section>
               ))}
