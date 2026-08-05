@@ -3,6 +3,7 @@
 import { Coins, Gift } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { InsufficientEverCoinModal } from "@/components/media/InsufficientEverCoinModal";
 import {
   EVERSHOP_CATEGORIES,
   EVERSHOP_GIFTS,
@@ -56,7 +57,7 @@ export function EverShopClient({
   const [buyingId, setBuyingId] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [purchasePopup, setPurchasePopup] = useState("");
+  const [coinModalOpen, setCoinModalOpen] = useState(false);
 
   const visibleGifts = useMemo(() => {
     const gifts =
@@ -116,7 +117,7 @@ export function EverShopClient({
     setBuyingId(gift.id);
     setError("");
     setNotice("");
-    setPurchasePopup("");
+    setCoinModalOpen(false);
 
     try {
       const response = await fetch("/api/evershop/purchase", {
@@ -135,7 +136,7 @@ export function EverShopClient({
 
       if (!response.ok) {
         if (payload?.error === "INSUFFICIENT_EVERCOIN") {
-          setPurchasePopup(copy.insufficientEverCoin);
+          setCoinModalOpen(true);
           return;
         }
 
@@ -280,34 +281,10 @@ export function EverShopClient({
         </section>
       </main>
 
-      {purchasePopup && (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-label={purchasePopup}
-          onClick={() => setPurchasePopup("")}
-        >
-          <div
-            className="w-full max-w-md rounded-[1.75rem] border border-bond-rose/70 bg-bond-card p-7 text-center shadow-[0_0_42px_rgba(255,92,168,0.28)]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-bond-rose/15 text-bond-rose">
-              <Gift size={27} />
-            </span>
-            <p className="mt-5 text-base font-bold leading-7 text-white">
-              {purchasePopup}
-            </p>
-            <button
-              type="button"
-              onClick={() => setPurchasePopup("")}
-              className="bond-pink-button mt-6 inline-flex min-w-32 items-center justify-center rounded-full bg-bond-rose px-6 py-3 text-sm font-bold text-white"
-            >
-              {copy.close}
-            </button>
-          </div>
-        </div>
-      )}
+      <InsufficientEverCoinModal
+        open={coinModalOpen}
+        onClose={() => setCoinModalOpen(false)}
+      />
     </>
   );
 }

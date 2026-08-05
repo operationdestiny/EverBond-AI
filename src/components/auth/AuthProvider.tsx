@@ -10,6 +10,8 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { MY_BOND_COPY } from "@/lib/my-bond-language";
+import type { LanguageCode } from "@/lib/site-language";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export type AuthModalCharacter = {
@@ -26,6 +28,22 @@ type AuthContextValue = {
   closeAuthModal: () => void;
   signOut: () => Promise<void>;
 };
+
+const AUTH_LEGAL_PREFIX: Record<LanguageCode, string> = {
+  EN: "By continuing, you confirm that you are at least 18 years of age and agree to our",
+  ES: "Al continuar, confirmas que tienes al menos 18 años y aceptas nuestros",
+  FR: "En continuant, vous confirmez avoir au moins 18 ans et accepter nos",
+  DE: "Wenn du fortfährst, bestätigst du, dass du mindestens 18 Jahre alt bist, und stimmst unseren",
+  JA: "続行すると、18歳以上であり、以下に同意することを確認します：",
+  KO: "계속하면 만 18세 이상이며 다음에 동의함을 확인합니다:"
+};
+
+for (const language of Object.keys(
+  AUTH_LEGAL_PREFIX
+) as LanguageCode[]) {
+  MY_BOND_COPY[language].legalPrefix =
+    AUTH_LEGAL_PREFIX[language];
+}
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
