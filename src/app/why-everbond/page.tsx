@@ -25,7 +25,6 @@ type WhyCopy = {
   showcaseDescription: string;
   features: Array<{
     key: FeatureImageKey;
-    number: string;
     title: string;
     description: string;
   }>;
@@ -73,35 +72,30 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     features: [
       {
         key: "unrestricted-chat",
-        number: "01",
         title: "Unrestricted chats",
         description:
           "Say what you actually mean. Explore romance, intimacy, fantasy, comfort, conflict, roleplay, and long-running stories without constant refusals or watered-down replies."
       },
       {
         key: "image-generation",
-        number: "02",
         title: "Uncensored image generation",
         description:
           "Create private images of your companion in the outfit, pose, setting, lighting, and mood you choose, then keep the results inside your personal gallery."
       },
       {
         key: "live-video-calls",
-        number: "03",
         title: "Live uncensored video calls",
         description:
           "Move beyond messages and connect live. Your companion carries the same identity, personality, and relationship into a more immediate experience."
       },
       {
         key: "video-generation",
-        number: "04",
         title: "Uncensored video generation",
         description:
           "Turn private ideas and scenes into companion videos with movement and atmosphere, so the relationship can feel visual instead of only imagined."
       },
       {
         key: "gifts-special-items",
-        number: "05",
         title: "Gifts and special items",
         description:
           "Give outfits, accessories, romantic gifts, rare collectibles, and milestone items in chat—and receive reactions that feel personal to the moment."
@@ -213,35 +207,30 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     features: [
       {
         key: "unrestricted-chat",
-        number: "01",
         title: "Chats sin restricciones",
         description:
           "Di lo que realmente quieres decir. Explora romance, intimidad, fantasía, consuelo, conflicto, rol e historias largas sin rechazos constantes ni respuestas diluidas."
       },
       {
         key: "image-generation",
-        number: "02",
         title: "Generación de imágenes sin censura",
         description:
           "Crea imágenes privadas de tu compañero con la ropa, pose, escenario, iluminación y ambiente que elijas, y guárdalas en tu galería personal."
       },
       {
         key: "live-video-calls",
-        number: "03",
         title: "Videollamadas en directo sin censura",
         description:
           "Ve más allá de los mensajes y conecta en directo. Tu compañero mantiene la misma identidad, personalidad y relación en una experiencia más inmediata."
       },
       {
         key: "video-generation",
-        number: "04",
         title: "Generación de vídeo sin censura",
         description:
           "Convierte ideas y escenas privadas en vídeos con movimiento y atmósfera para que la relación pueda sentirse visual y no solo imaginada."
       },
       {
         key: "gifts-special-items",
-        number: "05",
         title: "Regalos y objetos especiales",
         description:
           "Entrega ropa, accesorios, regalos románticos, coleccionables raros y objetos de momentos importantes, con reacciones personales dentro del chat."
@@ -354,35 +343,30 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     features: [
       {
         key: "unrestricted-chat",
-        number: "01",
         title: "Discussions sans restrictions",
         description:
           "Dites ce que vous pensez vraiment. Explorez romance, intimité, fantaisie, réconfort, conflit, jeu de rôle et histoires longues sans refus constants ni réponses édulcorées."
       },
       {
         key: "image-generation",
-        number: "02",
         title: "Génération d’images non censurée",
         description:
           "Créez des images privées de votre compagnon avec la tenue, la pose, le décor, la lumière et l’ambiance de votre choix, puis gardez-les dans votre galerie personnelle."
       },
       {
         key: "live-video-calls",
-        number: "03",
         title: "Appels vidéo en direct non censurés",
         description:
           "Allez au-delà des messages et échangez en direct. Votre compagnon conserve la même identité, personnalité et relation dans une expérience plus immédiate."
       },
       {
         key: "video-generation",
-        number: "04",
         title: "Génération vidéo non censurée",
         description:
           "Transformez vos idées et scènes privées en vidéos avec mouvement et atmosphère afin que la relation devienne visuelle, et pas seulement imaginée."
       },
       {
         key: "gifts-special-items",
-        number: "05",
         title: "Cadeaux et objets spéciaux",
         description:
           "Offrez tenues, accessoires, cadeaux romantiques, objets rares et souvenirs d’étapes importantes, avec des réactions personnelles dans le chat."
@@ -495,35 +479,30 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     features: [
       {
         key: "unrestricted-chat",
-        number: "01",
         title: "Uneingeschränkte Chats",
         description:
           "Sag, was du wirklich meinst. Erlebe Romantik, Intimität, Fantasie, Trost, Konflikte, Rollenspiel und lange Geschichten ohne ständige Ablehnungen oder verwässerte Antworten."
       },
       {
         key: "image-generation",
-        number: "02",
         title: "Unzensierte Bilderstellung",
         description:
           "Erstelle private Bilder deines Begleiters mit Kleidung, Pose, Umgebung, Licht und Stimmung deiner Wahl und bewahre sie in deiner persönlichen Galerie auf."
       },
       {
         key: "live-video-calls",
-        number: "03",
         title: "Unzensierte Live-Videoanrufe",
         description:
           "Gehe über Nachrichten hinaus und verbinde dich live. Dein Begleiter nimmt dieselbe Identität, Persönlichkeit und Beziehung in ein unmittelbares Erlebnis mit."
       },
       {
         key: "video-generation",
-        number: "04",
         title: "Unzensierte Videoerstellung",
         description:
           "Verwandle private Ideen und Szenen in Begleiter-Videos mit Bewegung und Atmosphäre, damit die Beziehung sichtbar und nicht nur vorgestellt wird."
       },
       {
         key: "gifts-special-items",
-        number: "05",
         title: "Geschenke und besondere Gegenstände",
         description:
           "Verschenke Outfits, Accessoires, romantische Geschenke, seltene Sammlerstücke und Meilenstein-Objekte und erhalte persönliche Reaktionen im Chat."
@@ -636,35 +615,30 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     features: [
       {
         key: "unrestricted-chat",
-        number: "01",
         title: "制限のないチャット",
         description:
           "本当に言いたいことを自然に伝えられます。ロマンス、親密さ、ファンタジー、癒やし、対立、ロールプレイ、長編ストーリーを、頻繁な拒否や薄められた返答なしで楽しめます。"
       },
       {
         key: "image-generation",
-        number: "02",
         title: "無検閲の画像生成",
         description:
           "衣装、ポーズ、場所、照明、雰囲気を自由に指定してコンパニオンのプライベート画像を作り、自分だけのギャラリーに保存できます。"
       },
       {
         key: "live-video-calls",
-        number: "03",
         title: "無検閲のライブビデオ通話",
         description:
           "メッセージを超えてリアルタイムにつながります。コンパニオンは同じ人格、個性、関係性をより直接的な体験へ引き継ぎます。"
       },
       {
         key: "video-generation",
-        number: "04",
         title: "無検閲の動画生成",
         description:
           "プライベートなアイデアや場面を、動きと空気感のある動画に変え、想像だけではなく視覚的に関係を感じられます。"
       },
       {
         key: "gifts-special-items",
-        number: "05",
         title: "ギフトと特別なアイテム",
         description:
           "衣装、アクセサリー、ロマンチックな贈り物、レアなコレクション、節目のアイテムをチャットで贈り、その瞬間に合った反応を受け取れます。"
@@ -777,35 +751,30 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     features: [
       {
         key: "unrestricted-chat",
-        number: "01",
         title: "제한 없는 채팅",
         description:
           "정말 하고 싶은 말을 자연스럽게 표현하세요. 로맨스, 친밀함, 판타지, 위로, 갈등, 역할극, 장기 스토리를 반복되는 거절이나 약해진 답변 없이 이어갈 수 있습니다."
       },
       {
         key: "image-generation",
-        number: "02",
         title: "무검열 이미지 생성",
         description:
           "원하는 의상, 포즈, 장소, 조명, 분위기로 컴패니언의 비공개 이미지를 만들고 개인 갤러리에 보관할 수 있습니다."
       },
       {
         key: "live-video-calls",
-        number: "03",
         title: "무검열 라이브 영상 통화",
         description:
           "메시지를 넘어 실시간으로 연결하세요. 컴패니언은 같은 정체성, 성격, 관계를 더 즉각적인 경험으로 이어갑니다."
       },
       {
         key: "video-generation",
-        number: "04",
         title: "무검열 영상 생성",
         description:
           "비공개 아이디어와 장면을 움직임과 분위기가 있는 영상으로 바꾸어 관계를 상상뿐 아니라 시각적으로 느낄 수 있습니다."
       },
       {
         key: "gifts-special-items",
-        number: "05",
         title: "선물과 특별 아이템",
         description:
           "의상, 액세서리, 로맨틱한 선물, 희귀 수집품, 기념 아이템을 채팅에서 전하고 그 순간에 맞는 개인적인 반응을 받을 수 있습니다."
@@ -902,6 +871,362 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
   }
 };
 
+
+type FaqCopy = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  items: Array<{
+    question: string;
+    answer: string;
+  }>;
+};
+
+const FAQ_COPY: Record<LanguageCode, FaqCopy> = {
+  EN: {
+    eyebrow: "FAQ",
+    title: "Before You Start",
+    description: "Commonly asked questions.",
+    items: [
+      {
+        question: "What is EverBond?",
+        answer:
+          "EverBond is a private, unrestricted AI companion platform built for romance, roleplay, and emotional continuity. Companions remember you, your story, and your relationship. You can choose companions or create your own instantly."
+      },
+      {
+        question: "Are chats private?",
+        answer:
+          "Yes. EverBond is built around 100% truly private chats."
+      },
+      {
+        question: "What is Ever Memory™?",
+        answer:
+          "Ever Memory™ lets companions remember what you say so conversations grow naturally and continue where they left off."
+      },
+      {
+        question: "Do I need to pay to start chatting?",
+        answer:
+          "No. You can start trying it for free. You can buy EverCoin as you go for longer chats and all other premium features."
+      },
+      {
+        question: "Can I reset a conversation?",
+        answer:
+          "Yes. You can reset any chat at any time."
+      },
+      {
+        question: "Does EverBond have a NSFW filter?",
+        answer:
+          "No. EverBond does not have filters ever."
+      },
+      {
+        question: "What is EverCoin?",
+        answer:
+          "EverCoin is the official EverBond currency for voice calls, image generation, video generation, in-chat gifts, and premium character chats."
+      },
+      {
+        question: "What is EverShop?",
+        answer:
+          "EverShop is EverBond’s virtual store for outfits, accessories, romantic gifts, rare collectibles, and special milestone items. Buy items with EverCoin, keep them in My Gifts, and give them to companions in chat for personal reactions."
+      },
+      {
+        question: "Are there subscriptions?",
+        answer:
+          "No. EverBond has no subscriptions and no automatic renewals. Buy EverCoin only when you choose."
+      },
+      {
+        question: "Can I create and share my own companion?",
+        answer:
+          "Yes. Create your own companion, keep them private, or choose Share by link to generate a copyable link. Shared companions do not appear in a public directory."
+      }
+    ]
+  },
+  ES: {
+    eyebrow: "PREGUNTAS FRECUENTES",
+    title: "Antes de empezar",
+    description: "Preguntas habituales.",
+    items: [
+      {
+        question: "¿Qué es EverBond?",
+        answer:
+          "EverBond es una plataforma privada de compañeros de IA sin restricciones, creada para el romance, el rol y la continuidad emocional. Los compañeros te recuerdan a ti, tu historia y vuestra relación. Puedes elegir un compañero o crear el tuyo al instante."
+      },
+      {
+        question: "¿Los chats son privados?",
+        answer:
+          "Sí. EverBond está diseñado alrededor de chats verdaderamente privados al 100 %."
+      },
+      {
+        question: "¿Qué es Ever Memory™?",
+        answer:
+          "Ever Memory™ permite que los compañeros recuerden lo que dices para que las conversaciones crezcan de forma natural y continúen donde se quedaron."
+      },
+      {
+        question: "¿Tengo que pagar para empezar a chatear?",
+        answer:
+          "No. Puedes empezar a probarlo gratis. Puedes comprar EverCoin sobre la marcha para chats más largos y todas las demás funciones premium."
+      },
+      {
+        question: "¿Puedo reiniciar una conversación?",
+        answer:
+          "Sí. Puedes reiniciar cualquier chat en cualquier momento."
+      },
+      {
+        question: "¿EverBond tiene filtro NSFW?",
+        answer:
+          "No. EverBond no aplica filtros."
+      },
+      {
+        question: "¿Qué es EverCoin?",
+        answer:
+          "EverCoin es la moneda oficial de EverBond para llamadas de voz, generación de imágenes, generación de vídeos, regalos dentro del chat y chats premium con personajes."
+      },
+      {
+        question: "¿Qué es EverShop?",
+        answer:
+          "EverShop es la tienda virtual de EverBond para ropa, accesorios, regalos románticos, coleccionables raros y objetos especiales de momentos importantes. Compra artículos con EverCoin, guárdalos en Mis regalos y entrégalos en el chat para recibir reacciones personales."
+      },
+      {
+        question: "¿Hay suscripciones?",
+        answer:
+          "No. EverBond no tiene suscripciones ni renovaciones automáticas. Compra EverCoin solo cuando tú elijas."
+      },
+      {
+        question: "¿Puedo crear y compartir mi propio compañero?",
+        answer:
+          "Sí. Crea tu propio compañero, mantenlo privado o elige Compartir por enlace para generar un enlace copiable. Los compañeros compartidos no aparecen en un directorio público."
+      }
+    ]
+  },
+  FR: {
+    eyebrow: "FAQ",
+    title: "Avant de commencer",
+    description: "Questions fréquemment posées.",
+    items: [
+      {
+        question: "Qu’est-ce qu’EverBond ?",
+        answer:
+          "EverBond est une plateforme privée de compagnons IA sans restrictions, conçue pour la romance, le jeu de rôle et la continuité émotionnelle. Les compagnons se souviennent de vous, de votre histoire et de votre relation. Vous pouvez choisir un compagnon ou créer le vôtre immédiatement."
+      },
+      {
+        question: "Les discussions sont-elles privées ?",
+        answer:
+          "Oui. EverBond est conçu autour de discussions véritablement privées à 100 %."
+      },
+      {
+        question: "Qu’est-ce qu’Ever Memory™ ?",
+        answer:
+          "Ever Memory™ permet aux compagnons de se souvenir de ce que vous dites afin que les conversations évoluent naturellement et reprennent là où elles se sont arrêtées."
+      },
+      {
+        question: "Dois-je payer pour commencer à discuter ?",
+        answer:
+          "Non. Vous pouvez commencer gratuitement. Vous pouvez acheter des EverCoin au fur et à mesure pour des discussions plus longues et toutes les autres fonctions premium."
+      },
+      {
+        question: "Puis-je réinitialiser une conversation ?",
+        answer:
+          "Oui. Vous pouvez réinitialiser n’importe quelle discussion à tout moment."
+      },
+      {
+        question: "EverBond possède-t-il un filtre NSFW ?",
+        answer:
+          "Non. EverBond n’applique pas de filtres."
+      },
+      {
+        question: "Qu’est-ce qu’EverCoin ?",
+        answer:
+          "EverCoin est la monnaie officielle d’EverBond pour les appels vocaux, la génération d’images, la génération de vidéos, les cadeaux dans le chat et les discussions premium avec les personnages."
+      },
+      {
+        question: "Qu’est-ce qu’EverShop ?",
+        answer:
+          "EverShop est la boutique virtuelle d’EverBond pour les tenues, accessoires, cadeaux romantiques, objets rares et cadeaux d’étapes importantes. Achetez-les avec des EverCoin, gardez-les dans Mes cadeaux et offrez-les dans le chat pour obtenir des réactions personnelles."
+      },
+      {
+        question: "Existe-t-il des abonnements ?",
+        answer:
+          "Non. EverBond ne propose aucun abonnement ni renouvellement automatique. Achetez des EverCoin uniquement lorsque vous le décidez."
+      },
+      {
+        question: "Puis-je créer et partager mon propre compagnon ?",
+        answer:
+          "Oui. Créez votre compagnon, gardez-le privé ou choisissez Partager par lien pour générer un lien copiable. Les compagnons partagés n’apparaissent pas dans un répertoire public."
+      }
+    ]
+  },
+  DE: {
+    eyebrow: "FAQ",
+    title: "Bevor du beginnst",
+    description: "Häufig gestellte Fragen.",
+    items: [
+      {
+        question: "Was ist EverBond?",
+        answer:
+          "EverBond ist eine private, uneingeschränkte KI-Begleiter-Plattform für Romantik, Rollenspiel und emotionale Kontinuität. Begleiter erinnern sich an dich, deine Geschichte und eure Beziehung. Du kannst einen Begleiter auswählen oder sofort deinen eigenen erstellen."
+      },
+      {
+        question: "Sind Chats privat?",
+        answer:
+          "Ja. EverBond ist auf vollständig private Chats ausgelegt."
+      },
+      {
+        question: "Was ist Ever Memory™?",
+        answer:
+          "Mit Ever Memory™ können Begleiter sich an deine Aussagen erinnern, damit Gespräche natürlich wachsen und dort weitergehen, wo sie aufgehört haben."
+      },
+      {
+        question: "Muss ich bezahlen, um mit dem Chatten zu beginnen?",
+        answer:
+          "Nein. Du kannst EverBond kostenlos ausprobieren. Für längere Chats und alle weiteren Premium-Funktionen kannst du EverCoin nach Bedarf kaufen."
+      },
+      {
+        question: "Kann ich ein Gespräch zurücksetzen?",
+        answer:
+          "Ja. Du kannst jeden Chat jederzeit zurücksetzen."
+      },
+      {
+        question: "Hat EverBond einen NSFW-Filter?",
+        answer:
+          "Nein. EverBond verwendet keine Filter."
+      },
+      {
+        question: "Was ist EverCoin?",
+        answer:
+          "EverCoin ist die offizielle EverBond-Währung für Sprachanrufe, Bilderstellung, Videoerstellung, Geschenke im Chat und Premium-Charakter-Chats."
+      },
+      {
+        question: "Was ist EverShop?",
+        answer:
+          "EverShop ist EverBonds virtueller Shop für Outfits, Accessoires, romantische Geschenke, seltene Sammlerstücke und besondere Meilenstein-Objekte. Kaufe Artikel mit EverCoin, bewahre sie unter Meine Geschenke auf und verschenke sie im Chat für persönliche Reaktionen."
+      },
+      {
+        question: "Gibt es Abonnements?",
+        answer:
+          "Nein. EverBond hat keine Abonnements und keine automatischen Verlängerungen. Kaufe EverCoin nur, wenn du es möchtest."
+      },
+      {
+        question: "Kann ich meinen eigenen Begleiter erstellen und teilen?",
+        answer:
+          "Ja. Erstelle deinen eigenen Begleiter, halte ihn privat oder wähle Per Link teilen, um einen kopierbaren Link zu erzeugen. Geteilte Begleiter erscheinen nicht in einem öffentlichen Verzeichnis."
+      }
+    ]
+  },
+  JA: {
+    eyebrow: "FAQ",
+    title: "始める前に",
+    description: "よくある質問。",
+    items: [
+      {
+        question: "EverBondとは何ですか？",
+        answer:
+          "EverBondは、ロマンス、ロールプレイ、感情の継続性のために作られた、非公開で制限のないAIコンパニオン・プラットフォームです。コンパニオンはあなた、あなたの物語、二人の関係を覚えます。既存のコンパニオンを選ぶことも、すぐに自分で作ることもできます。"
+      },
+      {
+        question: "チャットは非公開ですか？",
+        answer:
+          "はい。EverBondは完全にプライベートなチャットを中心に設計されています。"
+      },
+      {
+        question: "Ever Memory™とは何ですか？",
+        answer:
+          "Ever Memory™により、コンパニオンはあなたの言葉を覚え、会話が自然に成長し、前回の続きから再開できます。"
+      },
+      {
+        question: "チャットを始めるには支払いが必要ですか？",
+        answer:
+          "いいえ。無料で試し始められます。より長いチャットやその他すべてのプレミアム機能には、必要に応じてEverCoinを購入できます。"
+      },
+      {
+        question: "会話をリセットできますか？",
+        answer:
+          "はい。どのチャットもいつでもリセットできます。"
+      },
+      {
+        question: "EverBondにNSFWフィルターはありますか？",
+        answer:
+          "いいえ。EverBondはフィルターを使用しません。"
+      },
+      {
+        question: "EverCoinとは何ですか？",
+        answer:
+          "EverCoinは、音声通話、画像生成、動画生成、チャット内ギフト、プレミアムキャラクターチャットに使うEverBond公式通貨です。"
+      },
+      {
+        question: "EverShopとは何ですか？",
+        answer:
+          "EverShopは、衣装、アクセサリー、ロマンチックなギフト、レアなコレクション、節目の特別アイテムを扱うEverBondの仮想ショップです。EverCoinで購入し、マイギフトに保管して、チャットでコンパニオンに贈ると個人的な反応を受け取れます。"
+      },
+      {
+        question: "サブスクリプションはありますか？",
+        answer:
+          "いいえ。EverBondにはサブスクリプションも自動更新もありません。EverCoinは必要なときだけ購入できます。"
+      },
+      {
+        question: "自分のコンパニオンを作成して共有できますか？",
+        answer:
+          "はい。自分のコンパニオンを作り、非公開に保つか、リンク共有を選んでコピー可能なリンクを生成できます。共有したコンパニオンが公開ディレクトリに表示されることはありません。"
+      }
+    ]
+  },
+  KO: {
+    eyebrow: "FAQ",
+    title: "시작하기 전에",
+    description: "자주 묻는 질문.",
+    items: [
+      {
+        question: "EverBond란 무엇인가요?",
+        answer:
+          "EverBond는 로맨스, 역할극, 감정의 연속성을 위해 만든 비공개 제한 없는 AI 컴패니언 플랫폼입니다. 컴패니언은 사용자, 사용자의 이야기, 두 사람의 관계를 기억합니다. 기존 컴패니언을 선택하거나 즉시 직접 만들 수 있습니다."
+      },
+      {
+        question: "채팅은 비공개인가요?",
+        answer:
+          "네. EverBond는 완전히 비공개인 채팅을 중심으로 설계되었습니다."
+      },
+      {
+        question: "Ever Memory™란 무엇인가요?",
+        answer:
+          "Ever Memory™는 컴패니언이 사용자의 말을 기억하게 하여 대화가 자연스럽게 성장하고 이전에 멈춘 곳에서 계속되도록 합니다."
+      },
+      {
+        question: "채팅을 시작하려면 결제해야 하나요?",
+        answer:
+          "아니요. 무료로 시작해 볼 수 있습니다. 더 긴 채팅과 다른 모든 프리미엄 기능에는 필요할 때 EverCoin을 구매할 수 있습니다."
+      },
+      {
+        question: "대화를 초기화할 수 있나요?",
+        answer:
+          "네. 어떤 채팅이든 언제든지 초기화할 수 있습니다."
+      },
+      {
+        question: "EverBond에 NSFW 필터가 있나요?",
+        answer:
+          "아니요. EverBond는 필터를 사용하지 않습니다."
+      },
+      {
+        question: "EverCoin이란 무엇인가요?",
+        answer:
+          "EverCoin은 음성 통화, 이미지 생성, 영상 생성, 채팅 내 선물, 프리미엄 캐릭터 채팅에 사용하는 EverBond 공식 통화입니다."
+      },
+      {
+        question: "EverShop이란 무엇인가요?",
+        answer:
+          "EverShop은 의상, 액세서리, 로맨틱한 선물, 희귀 수집품, 특별한 기념 아이템을 판매하는 EverBond 가상 상점입니다. EverCoin으로 구매해 내 선물에 보관하고 채팅에서 컴패니언에게 주면 개인적인 반응을 받을 수 있습니다."
+      },
+      {
+        question: "구독이 있나요?",
+        answer:
+          "아니요. EverBond에는 구독이나 자동 갱신이 없습니다. 원할 때만 EverCoin을 구매하세요."
+      },
+      {
+        question: "내 컴패니언을 만들고 공유할 수 있나요?",
+        answer:
+          "네. 직접 컴패니언을 만들고 비공개로 유지하거나 링크 공유를 선택해 복사 가능한 링크를 만들 수 있습니다. 공유된 컴패니언은 공개 디렉터리에 표시되지 않습니다."
+      }
+    ]
+  }
+};
+
 const IMAGE_LANGUAGE: Record<LanguageCode, string> = {
   EN: "en",
   ES: "es",
@@ -924,24 +1249,16 @@ export default function WhyEverBondPage() {
   const copy = WHY_COPY[language] ?? WHY_COPY.EN;
   const imageLanguage = IMAGE_LANGUAGE[language] ?? "en";
 
-  const faqs = [
-    { question: t("whatIsEverBond"), answer: t("whatIsEverBondAnswer") },
-    { question: t("areChatsPrivate"), answer: t("areChatsPrivateAnswer") },
-    { question: t("whatIsEverMemory"), answer: t("whatIsEverMemoryAnswer") },
-    {
-      question: t("doINeedToSignUpOrPay"),
-      answer: t("doINeedToSignUpOrPayAnswer")
-    },
-    {
-      question: t("canIResetAConversation"),
-      answer: t("canIResetAConversationAnswer")
-    },
-    {
-      question: t("doesEverBondHaveNsfwFilter"),
-      answer: t("doesEverBondHaveNsfwFilterAnswer")
-    },
-    { question: t("whatIsEverCoin"), answer: t("whatIsEverCoinAnswer") }
+  const memoryItems = [
+    t("whyMemoryItem1"),
+    t("whyMemoryItem2"),
+    t("whyMemoryItem3"),
+    t("whyMemoryItem4"),
+    t("whyMemoryItem5"),
+    t("whyMemoryItem6")
   ];
+  const faqCopy = FAQ_COPY[language] ?? FAQ_COPY.EN;
+  const faqs = faqCopy.items;
 
   return (
     <AppShell>
@@ -993,36 +1310,115 @@ export default function WhyEverBondPage() {
               </p>
             </div>
 
-            <div className="mt-12 grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
-              {copy.features.map((feature) => (
+            <div className="mt-14 space-y-14 md:mt-16 md:space-y-24">
+              {copy.features.map((feature, index) => (
                 <article
                   key={feature.key}
-                  className="group overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.025] shadow-[0_0_32px_rgba(255,92,168,0.05)] transition duration-300 hover:-translate-y-1 hover:border-bond-rose/45 hover:shadow-[0_0_40px_rgba(255,92,168,0.12)]"
+                  className="grid gap-8 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.025] p-4 shadow-[0_0_40px_rgba(255,92,168,0.06)] md:p-7 lg:grid-cols-2 lg:items-center lg:gap-12"
                 >
-                  <div className="relative aspect-[2/3] overflow-hidden bg-black">
+                  <div
+                    className={`relative mx-auto aspect-[2/3] w-full max-w-[560px] overflow-hidden rounded-[1.5rem] border border-bond-rose/25 bg-black shadow-[0_0_38px_rgba(255,92,168,0.10)] ${
+                      index % 2 === 1 ? "lg:order-2" : ""
+                    }`}
+                  >
                     <Image
                       src={`/assets/why-everbond/${imageLanguage}/${IMAGE_FILE[feature.key]}`}
                       alt={feature.title}
                       fill
-                      sizes="(min-width: 1280px) 18vw, (min-width: 640px) 46vw, 92vw"
-                      className="object-cover transition duration-500 group-hover:scale-[1.025]"
+                      sizes="(min-width: 1024px) 46vw, 92vw"
+                      className="object-cover"
+                      priority={index === 0}
                     />
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/90 to-transparent" />
-                    <span className="absolute bottom-4 left-4 rounded-full border border-bond-rose/50 bg-black/65 px-3 py-1 text-xs font-extrabold tracking-[0.16em] text-bond-rose backdrop-blur-sm">
-                      {feature.number}
-                    </span>
                   </div>
 
-                  <div className="p-5">
-                    <h3 className="font-display text-xl font-bold text-white">
+                  <div
+                    className={`px-2 pb-4 text-center md:px-5 lg:pb-0 lg:text-left ${
+                      index % 2 === 1 ? "lg:order-1" : ""
+                    }`}
+                  >
+                    <p className="text-sm font-extrabold uppercase tracking-[0.22em] text-bond-rose">
+                      {copy.showcaseEyebrow}
+                    </p>
+                    <h3 className="mt-4 font-display text-4xl font-bold leading-tight text-white md:text-5xl">
                       {feature.title}
                     </h3>
-                    <p className="mt-3 text-sm leading-6 text-bond-muted">
+                    <p className="mt-6 text-lg leading-8 text-bond-muted">
                       {feature.description}
                     </p>
                   </div>
                 </article>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="relative border-b border-white/5 bg-[linear-gradient(180deg,rgba(255,255,255,0.015),transparent)] py-16 md:py-24">
+          <div className="bond-container">
+            <div className="relative mx-auto max-w-6xl overflow-hidden rounded-[2.25rem] border border-bond-rose/35 bg-[linear-gradient(135deg,rgba(12,12,18,0.96),rgba(20,10,24,0.98))] p-6 shadow-[0_0_52px_rgba(255,92,168,0.09)] md:p-9">
+              <div className="pointer-events-none absolute left-1/2 top-0 h-64 w-64 -translate-x-1/2 rounded-full bg-bond-rose/15 blur-3xl" />
+              <div className="pointer-events-none absolute bottom-0 left-8 h-32 w-32 rounded-full bg-bond-violet/20 blur-3xl" />
+
+              <div className="relative grid gap-10 lg:grid-cols-[1.02fr_0.98fr] lg:items-center">
+                <div className="relative flex min-h-[420px] items-center justify-center overflow-hidden rounded-[1.75rem] border border-white/10 bg-[radial-gradient(circle_at_center,rgba(255,92,168,0.15),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))]">
+                  <div className="absolute h-[360px] w-[360px] rounded-full border border-bond-rose/20" />
+                  <div className="absolute h-[285px] w-[285px] animate-pulse rounded-full border border-bond-violet/20" />
+                  <div className="absolute h-[205px] w-[205px] rounded-full border border-bond-rose/35 shadow-[0_0_48px_rgba(255,92,168,0.20)]" />
+                  <div className="absolute h-32 w-32 animate-pulse rounded-full bg-bond-rose/20 blur-2xl" />
+
+                  <div className="relative z-10 rounded-full border border-bond-rose/35 bg-black/50 px-10 py-9 text-center shadow-[0_0_34px_rgba(255,92,168,0.16)] backdrop-blur-sm">
+                    <p className="text-xs font-extrabold uppercase tracking-[0.32em] text-bond-rose">
+                      {t("memory")}
+                    </p>
+                    <p className="mt-3 max-w-[230px] font-display text-3xl font-bold text-white">
+                      {t("livesOn")}
+                    </p>
+                  </div>
+
+                  <div className="absolute left-5 top-7 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-xs text-white/90 backdrop-blur-sm md:left-8">
+                    {memoryItems[0]}
+                  </div>
+                  <div className="absolute right-5 top-14 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-xs text-white/90 backdrop-blur-sm md:right-8">
+                    {memoryItems[3]}
+                  </div>
+                  <div className="absolute bottom-14 left-6 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-xs text-white/90 backdrop-blur-sm md:left-10">
+                    {memoryItems[4]}
+                  </div>
+                  <div className="absolute bottom-8 right-6 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-xs text-white/90 backdrop-blur-sm md:right-9">
+                    {memoryItems[5]}
+                  </div>
+                </div>
+
+                <div className="text-center lg:text-left">
+                  <p className="text-sm font-extrabold uppercase tracking-[0.25em] text-bond-rose">
+                    {t("memory")}
+                  </p>
+                  <h2 className="mt-4 font-display text-4xl font-bold text-white md:text-6xl">
+                    {t("bondDoesNotReset")}
+                  </h2>
+                  <p className="mt-6 text-lg leading-8 text-bond-muted">
+                    {t("whyMemoryIntro")}
+                  </p>
+
+                  <ul className="mt-7 grid gap-3 text-left text-base leading-7 text-bond-muted sm:grid-cols-2">
+                    {memoryItems.map((item) => (
+                      <li
+                        key={item}
+                        className="flex items-start gap-3 rounded-2xl border border-white/8 bg-black/20 p-4"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="mt-2 h-2 w-2 shrink-0 rounded-full bg-bond-rose shadow-[0_0_12px_rgba(255,92,168,0.55)]"
+                        />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <p className="mt-7 text-base font-semibold leading-7 text-white/90">
+                    {t("bondDoesNotResetDescription")}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -1044,15 +1440,12 @@ export default function WhyEverBondPage() {
             </div>
 
             <div className="mx-auto mt-12 grid max-w-6xl gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {copy.depthCards.map((card, index) => (
+              {copy.depthCards.slice(1).map((card) => (
                 <article
                   key={card.title}
-                  className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/25 p-6 shadow-[0_0_28px_rgba(255,92,168,0.04)]"
+                  className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/25 p-7 shadow-[0_0_28px_rgba(255,92,168,0.04)]"
                 >
-                  <span className="text-xs font-extrabold tracking-[0.22em] text-bond-rose">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <h3 className="mt-4 font-display text-2xl font-bold text-white">
+                  <h3 className="font-display text-2xl font-bold text-bond-rose">
                     {card.title}
                   </h3>
                   <p className="mt-4 leading-7 text-bond-muted">
@@ -1164,13 +1557,13 @@ export default function WhyEverBondPage() {
             <div className="mx-auto max-w-5xl">
               <div className="text-center">
                 <p className="text-sm font-bold uppercase tracking-[0.25em] text-bond-rose">
-                  {t("faq")}
+                  {faqCopy.eyebrow}
                 </p>
                 <h2 className="mt-4 font-display text-4xl font-bold md:text-5xl">
-                  {t("questionsBeforeYouStart")}
+                  {faqCopy.title}
                 </h2>
                 <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-bond-muted md:text-lg">
-                  {t("everythingImportantAtAGlance")}
+                  {faqCopy.description}
                 </p>
               </div>
 
