@@ -11,123 +11,82 @@ function write(relativePath, content) {
   fs.writeFileSync(path.join(root, relativePath), content, "utf8");
 }
 
-function replaceRequired(content, from, to, label) {
-  if (content.includes(to)) return content;
-
-  if (!content.includes(from)) {
+function replaceRequired(content, pattern, replacement, label) {
+  if (!pattern.test(content)) {
     throw new Error(
       `Buy EverCoin copy patch could not find: ${label}`
     );
   }
 
-  return content.replace(from, to);
+  return content.replace(pattern, replacement);
 }
 
-function replaceOneOf(content, candidates, to, label) {
-  if (content.includes(to)) return content;
+function setStringField(block, field, value) {
+  const pattern = new RegExp(
+    `(\\n\\s*${field}:\\s*)"(?:\\\\.|[^"\\\\])*"`
+  );
 
-  for (const candidate of candidates) {
-    if (content.includes(candidate)) {
-      return content.replace(candidate, to);
-    }
+  if (!pattern.test(block)) {
+    throw new Error(
+      `Buy EverCoin copy patch could not find English field: ${field}`
+    );
   }
 
-  throw new Error(
-    `Buy EverCoin copy patch could not find: ${label}`
+  return block.replace(
+    pattern,
+    `$1${JSON.stringify(value)}`
   );
 }
 
 const copyPath = "src/lib/evercoin-page-language.ts";
 let copy = read(copyPath);
 
-copy = replaceRequired(
-  copy,
-  "Use EverCoin for messages, gifts, unrestricted companion images, silent companion videos, and premium voice calls.",
-  "Use EverCoin for uncensored messages, gifts, uncensored companion images, uncensored companion videos, and live uncensored voice calls.",
-  "page description"
-);
+const englishStart = copy.indexOf("  EN: {");
+const spanishStart = copy.indexOf("\n  ES: {", englishStart);
 
-copy = replaceRequired(
-  copy,
-  "Keep every bond and story going with one simple balance.",
-  "Say what you actually mean. Explore romance, intimacy, fantasy, comfort, conflict, and roleplay without refusals or watered-down replies.",
-  "message description"
-);
+if (englishStart < 0 || spanishStart < 0) {
+  throw new Error(
+    "Buy EverCoin copy patch could not isolate the English copy."
+  );
+}
 
-copy = replaceRequired(
-  copy,
-  'imagesTitle: "Full-Body Companion Images"',
-  'imagesTitle: "Uncensored Companion Images"',
-  "image title"
-);
+let english = copy.slice(englishStart, spanishStart);
 
-copy = replaceRequired(
-  copy,
-  "Create private 1K images from your companion’s identity reference with new poses, outfits, angles, and backgrounds.",
-  "Create private images of your companion.",
-  "image description"
-);
+const englishFields = {
+  title: "One currency for everything on EverBond.",
+  description:
+    "Use EverCoin for uncensored messages, gifts, uncensored companion images, uncensored companion videos, and live uncensored voice calls.",
+  messagesTitle: "Messages",
+  messagesBody:
+    "Say what you actually mean. Explore romance, intimacy, fantasy, comfort, conflict, and roleplay without refusals or watered-down replies.",
+  messageUnit: "message",
+  imageUnit: "image",
+  videosTitle: "Uncensored Companion Videos",
+  videosBody:
+    "Create premium private videos of your companion.",
+  videoUnit: "video",
+  imagesTitle: "Uncensored Companion Images",
+  imagesBody:
+    "Create private images of your companion.",
+  voiceCallsTitle: "Live Uncensored Voice Video Calls",
+  voiceCallsBody:
+    "Talk live with your companion who has the same personality, relationship, and Ever Memory™.",
+  about: "Around"
+};
 
-copy = replaceRequired(
-  copy,
-  'videosTitle: "Companion Videos"',
-  'videosTitle: "Uncensored Companion Videos"',
-  "video title"
-);
+for (const [field, value] of Object.entries(englishFields)) {
+  english = setStringField(english, field, value);
+}
 
-copy = replaceRequired(
-  copy,
-  "Create a private eight-second 720p video that preserves your companion’s appearance. The EverCoin price adjusts automatically with Venice’s current generation cost.",
-  "Create premium private videos of your companion.",
-  "video description"
-);
+copy =
+  copy.slice(0, englishStart) +
+  english +
+  copy.slice(spanishStart);
 
-copy = replaceRequired(
-  copy,
-  'videoUnit: "8-second video"',
-  'videoUnit: "video"',
-  "video unit"
-);
-
-copy = replaceOneOf(
-  copy,
-  [
-    'voiceCallsTitle: "Live Voice Calls"',
-    'voiceCallsTitle: "Live Uncensored Voice Calls"'
-  ],
-  'voiceCallsTitle: "Live Uncensored Voice Video Calls"',
-  "voice-call title"
-);
-
-copy = replaceOneOf(
-  copy,
-  [
-    "Speak live with your companion using the same personality, relationship, and Ever Memory™.",
-    "Talk live with your companion through a voice-based video-call-style experience using the same personality, relationship, and Ever Memory™."
-  ],
-  "Talk live with your companion who has the same personality, relationship, and Ever Memory™.",
-  "voice-call description"
-);
-
-copy = replaceRequired(
-  copy,
-  'about: "About"',
-  'about: "Around"',
-  "video estimate prefix"
-);
-
-for (const required of [
-  "Use EverCoin for uncensored messages, gifts, uncensored companion images, uncensored companion videos, and live uncensored voice calls.",
-  "Say what you actually mean. Explore romance, intimacy, fantasy, comfort, conflict, and roleplay without refusals or watered-down replies.",
-  'imagesTitle: "Uncensored Companion Images"',
-  'videosTitle: "Uncensored Companion Videos"',
-  'videoUnit: "video"',
-  'voiceCallsTitle: "Live Uncensored Voice Video Calls"',
-  'about: "Around"'
-]) {
-  if (!copy.includes(required)) {
+for (const required of Object.values(englishFields)) {
+  if (!english.includes(JSON.stringify(required))) {
     throw new Error(
-      `Buy EverCoin copy is missing: ${required}`
+      `Buy EverCoin English copy is missing: ${required}`
     );
   }
 }
@@ -137,46 +96,30 @@ write(copyPath, copy);
 const pagePath = "src/app/coins/page.tsx";
 let page = read(pagePath);
 
-if (page.includes(`  Phone,
-  Sparkles
-`)) {
-  page = page.replace(
-    `  Phone,
-  Sparkles
-`,
-    `  Phone
-`
-  );
-} else if (page.includes("Sparkles")) {
-  throw new Error(
-    "Buy EverCoin copy patch could not remove the premium-currency icon."
-  );
-}
-
-page = replaceOneOf(
-  page,
-  [
-    "const [videoCost, setVideoCost] = useState(200);",
-    "const [videoCost, setVideoCost] = useState(40);"
-  ],
-  "const [videoCost, setVideoCost] = useState(199);",
-  "initial video estimate"
-);
-
-page = replaceOneOf(
-  page,
-  [
-    "const nextVideoCost = Number(payload?.videoDisplayCost ?? payload?.videoCost);",
-    "const nextVideoCost = Number(payload?.videoCost);"
-  ],
-  "const nextVideoCost = Number(payload?.videoCost);",
-  "dynamic exact video cost"
+page = page.replace(
+  /\n\s*Sparkles,?/,
+  ""
 );
 
 page = replaceRequired(
   page,
-  `    { icon: Gift, title: t("gifts"), body: t("giftsBody"), rate: null },`,
-  `    {
+  /const \[videoCost, setVideoCost\] = useState\(\d+\);/,
+  "const [videoCost, setVideoCost] = useState(199);",
+  "initial video estimate"
+);
+
+page = replaceRequired(
+  page,
+  /const nextVideoCost = Number\(\s*payload\?\.(?:videoDisplayCost \?\? payload\?\.videoCost|videoCost)\s*\);/,
+  "const nextVideoCost = Number(payload?.videoCost);",
+  "dynamic exact video cost"
+);
+
+if (!page.includes('"EverCoin varies/gift"')) {
+  page = replaceRequired(
+    page,
+    /\{\s*icon:\s*Gift,\s*title:\s*t\("gifts"\),\s*body:\s*t\("giftsBody"\),\s*rate:\s*null\s*\},/,
+    `{
       icon: Gift,
       title: language === "EN" ? "Gifts" : t("gifts"),
       body:
@@ -188,46 +131,30 @@ page = replaceRequired(
           ? "EverCoin varies/gift"
           : null
     },`,
-  "gift card"
-);
-
-page = replaceRequired(
-  page,
-  '      rate: `${pageCopy.about} ${videoCost} EverCoin / ${pageCopy.videoUnit}`',
-  '      rate: `${pageCopy.about} ${videoCost} EverCoin/${pageCopy.videoUnit}`',
-  "video rate wording"
-);
-
-const premiumCard = `    },
-    {
-      icon: Sparkles,
-      title: t("premiumCurrency"),
-      body: t("premiumCurrencyBody"),
-      rate: null
-    }
-`;
-
-if (page.includes(premiumCard)) {
-  page = page.replace(premiumCard, `    }
-`);
-} else if (page.includes("icon: Sparkles")) {
-  throw new Error(
-    "Buy EverCoin copy patch could not remove the premium-currency card."
+    "gift card"
   );
 }
 
-page = replaceRequired(
-  page,
+page = page.replace(
+  /`\$\{pageCopy\.about\}\s+\$\{videoCost\}\s+EverCoin\s*\/\s*\$\{pageCopy\.videoUnit\}`/,
+  "`${pageCopy.about} ${videoCost} EverCoin/${pageCopy.videoUnit}`"
+);
+
+page = page.replace(
+  /\s*,?\s*\{\s*icon:\s*Sparkles,\s*title:\s*t\("premiumCurrency"\),\s*body:\s*t\("premiumCurrencyBody"\),\s*rate:\s*null\s*\}/,
+  ""
+);
+
+page = page.replace(
   "md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6",
-  "md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5",
-  "five-card layout"
+  "md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5"
 );
 
 for (const required of [
   "const [videoCost, setVideoCost] = useState(199);",
   "const nextVideoCost = Number(payload?.videoCost);",
   '"EverCoin varies/gift"',
-  "EverCoin/${pageCopy.videoUnit}",
+  "`${pageCopy.about} ${videoCost} EverCoin/${pageCopy.videoUnit}`",
   "2xl:grid-cols-5"
 ]) {
   if (!page.includes(required)) {
@@ -237,9 +164,9 @@ for (const required of [
   }
 }
 
-if (page.includes("Sparkles")) {
+if (/\bSparkles\b/.test(page)) {
   throw new Error(
-    "The obsolete premium-currency card is still present."
+    "The obsolete Premium Currency card or icon remains."
   );
 }
 
