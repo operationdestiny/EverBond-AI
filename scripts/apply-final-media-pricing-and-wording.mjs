@@ -211,7 +211,7 @@ imageRoute = replaceRegexRequired(
       } else {
         let encoded = output.trim();
         const dataUrlMatch = encoded.match(
-          /^data:(image\\/(?:png|jpeg|webp));base64,(.+)$/s
+          /^data:(image\\/(?:png|jpeg|webp));base64,([\\s\\S]+)$/
         );
 
         if (dataUrlMatch) {
