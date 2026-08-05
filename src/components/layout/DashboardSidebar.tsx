@@ -80,17 +80,21 @@ function LinkRow({
   href,
   label,
   icon: Icon,
-  active
+  active,
+  collapsed
 }: {
   href: string;
   label: string;
   icon: React.ComponentType<{ size?: number }>;
   active?: boolean;
+  collapsed?: boolean;
 }) {
   return (
     <Link
       href={href}
-      className={`v18-sidebar-row !h-[52px] ${active ? "active" : ""}`}
+      className={`v18-sidebar-row ${
+        collapsed ? "!h-[55px]" : "!h-[52px]"
+      } ${active ? "active" : ""}`}
       title={label}
     >
       <span className="flex items-center gap-3">
@@ -132,13 +136,20 @@ export function DashboardSidebar({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <nav className="flex min-h-0 flex-[5] flex-col justify-evenly">
+        <nav
+          className={
+            collapsed
+              ? "space-y-1"
+              : "flex min-h-0 flex-[5] flex-col justify-evenly"
+          }
+        >
           {topLinks.map((item) => (
             <LinkRow
               key={item.href}
               href={item.href}
               icon={item.icon}
               active={"active" in item ? item.active : undefined}
+              collapsed={collapsed}
               label={
                 "customLabel" in item
                   ? shopCopy.sidebarLabel
@@ -148,20 +159,37 @@ export function DashboardSidebar({
           ))}
         </nav>
 
-        <div className="my-1 h-px bg-white/10" />
+        <div
+          className={`h-px bg-white/10 ${
+            collapsed ? "my-6" : "my-1"
+          }`}
+        />
 
-        <nav className="flex min-h-0 flex-[3] flex-col justify-evenly">
+        <nav
+          className={
+            collapsed
+              ? "space-y-1"
+              : "flex min-h-0 flex-[3] flex-col justify-evenly"
+          }
+        >
           {infoLinks.map((item) => (
             <LinkRow
               key={item.href}
               href={item.href}
               icon={item.icon}
               label={t(item.labelKey)}
+              collapsed={collapsed}
             />
           ))}
         </nav>
 
-        <div className="v51-sidebar-footer pt-3">
+        <div
+          className={
+            collapsed
+              ? "hidden"
+              : "v51-sidebar-footer pt-3"
+          }
+        >
           <div className="mx-auto flex max-w-[152px] flex-wrap justify-center gap-2 text-bond-muted">
             {socialLinks.map((item) => (
             <a
