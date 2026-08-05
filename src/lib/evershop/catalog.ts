@@ -25,7 +25,22 @@ export type EverShopGift = {
   image: string;
 };
 
-export const EVERSHOP_GIFTS = catalogData as EverShopGift[];
+const sourceGifts = catalogData as EverShopGift[];
+
+function halfEverShopPrice(price: number) {
+  if (!Number.isInteger(price) || price <= 0) {
+    throw new Error(`Invalid EverShop gift price: ${price}`);
+  }
+
+  // EverCoin wallets use whole-number balances. For odd prices, round the
+  // mathematical half down so customers never pay more than half.
+  return Math.max(Math.floor(price / 2), 1);
+}
+
+export const EVERSHOP_GIFTS: EverShopGift[] = sourceGifts.map((gift) => ({
+  ...gift,
+  price: halfEverShopPrice(gift.price)
+}));
 
 const giftById = new Map(
   EVERSHOP_GIFTS.map((gift) => [gift.id, gift] as const)
