@@ -7,14 +7,12 @@ import {
   ImageIcon,
   LoaderCircle,
   MessageCircleMore,
-  Phone,
-  Sparkles
+  Phone
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useSiteLanguage } from "@/lib/site-language";
-import { MEDIA_COPY } from "@/lib/media-language";
 import { EVERCOIN_PAGE_COPY } from "@/lib/evercoin-page-language";
 
 const packages = [
@@ -47,15 +45,15 @@ export default function CoinsPage() {
 }
 
 function CoinsPageContent() {
-  const { t, language } = useSiteLanguage();
-  const copy = MEDIA_COPY[language] ?? MEDIA_COPY.EN;
-  const pageCopy = EVERCOIN_PAGE_COPY[language] ?? EVERCOIN_PAGE_COPY.EN;
+  const { language } = useSiteLanguage();
+  const pageCopy =
+    EVERCOIN_PAGE_COPY[language] ?? EVERCOIN_PAGE_COPY.EN;
   const { session, authReady, openAuthModal } = useAuth();
   const [busyPack, setBusyPack] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [callCost, setCallCost] = useState(35);
-  const [imageCost, setImageCost] = useState(25);
-  const [videoCost, setVideoCost] = useState(40);
+  const [callCost, setCallCost] = useState(30);
+  const [imageCost, setImageCost] = useState(15);
+  const [videoCost, setVideoCost] = useState(199);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,30 +91,30 @@ function CoinsPageContent() {
       body: pageCopy.messagesBody,
       rate: `1 EverCoin / ${pageCopy.messageUnit}`
     },
-    { icon: Gift, title: t("gifts"), body: t("giftsBody"), rate: null },
+    {
+      icon: Gift,
+      title: pageCopy.giftsTitle,
+      body: pageCopy.giftsBody,
+      rate: pageCopy.giftRate
+    },
     {
       icon: ImageIcon,
-      title: t("images"),
-      body: t("imagesBody"),
+      title: pageCopy.imagesTitle,
+      body: pageCopy.imagesBody,
       rate: `${imageCost} EverCoin / ${pageCopy.imageUnit}`
     },
     {
       icon: Clapperboard,
       title: pageCopy.videosTitle,
       body: pageCopy.videosBody,
-      rate: `${videoCost} EverCoin / ${pageCopy.videoUnit}`
+      rate:
+        `${pageCopy.about} ${videoCost} EverCoin / ${pageCopy.videoUnit}`
     },
     {
       icon: Phone,
-      title: t("voiceCalls"),
-      body: t("voiceCallsBody"),
-      rate: `${callCost} EverCoin / ${copy.minute}`
-    },
-    {
-      icon: Sparkles,
-      title: t("premiumCurrency"),
-      body: t("premiumCurrencyBody"),
-      rate: null
+      title: pageCopy.voiceCallsTitle,
+      body: pageCopy.voiceCallsBody,
+      rate: `${callCost} EverCoin / ${pageCopy.minuteUnit}`
     }
   ];
 
@@ -143,7 +141,11 @@ function CoinsPageContent() {
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok || typeof payload?.url !== "string") {
-        throw new Error(payload?.message || payload?.error || pageCopy.checkoutFailed);
+        throw new Error(
+          payload?.message ||
+            payload?.error ||
+            pageCopy.checkoutFailed
+        );
       }
 
       window.location.assign(payload.url);
@@ -196,8 +198,10 @@ function CoinsPageContent() {
                 disabled={!authReady || Boolean(busyPack)}
                 className="bond-pink-button mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-bond-rose/15 px-5 py-3 text-base font-bold text-bond-rose disabled:cursor-not-allowed disabled:opacity-55"
               >
-                {busy && <LoaderCircle size={18} className="animate-spin" />}
-                {t("buyCoins")}
+                {busy && (
+                  <LoaderCircle size={18} className="animate-spin" />
+                )}
+                {pageCopy.buyButton}
               </button>
             </div>
           );
@@ -210,9 +214,10 @@ function CoinsPageContent() {
         </p>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
         {items.map((item) => {
           const Icon = item.icon;
+
           return (
             <div
               key={item.title}
@@ -221,15 +226,15 @@ function CoinsPageContent() {
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-bond-rose/15 text-bond-rose">
                 <Icon size={22} />
               </div>
-              <h3 className="font-display text-xl font-bold">{item.title}</h3>
+              <h3 className="font-display text-xl font-bold">
+                {item.title}
+              </h3>
               <p className="mt-3 text-sm leading-6 text-bond-muted">
                 {item.body}
               </p>
-              {item.rate && (
-                <p className="mt-4 inline-flex rounded-full border border-bond-rose/35 bg-bond-rose/10 px-3 py-1.5 text-sm font-bold text-bond-rose">
-                  {item.rate}
-                </p>
-              )}
+              <p className="mt-4 inline-flex rounded-full border border-bond-rose/35 bg-bond-rose/10 px-3 py-1.5 text-sm font-bold text-bond-rose">
+                {item.rate}
+              </p>
             </div>
           );
         })}
