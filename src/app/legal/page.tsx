@@ -61,9 +61,54 @@ export default function LegalPage() {
                         </p>
                       )
                     )}
+
+                    {section.emailParagraph && (
+                      <p>
+                        {section.emailParagraph.prefix}{" "}
+                        <a
+                          href={`mailto:${section.emailParagraph.email}`}
+                          className="font-semibold text-bond-rose hover:underline"
+                        >
+                          {section.emailParagraph.email}
+                        </a>
+                      </p>
+                    )}
                   </div>
                 </section>
               ))}
+            </div>
+
+            <div className="mt-28 border-t border-bond-rose/30 pt-8">
+              <section className="mx-auto max-w-4xl text-[11px] leading-4 text-white/35">
+                <p className="font-bold uppercase tracking-[0.2em] text-bond-rose/50">
+                  {copy.dmcaAgent.title}
+                </p>
+
+                <div className="mt-3 grid gap-x-8 gap-y-0.5 sm:grid-cols-2">
+                  <p>{copy.dmcaAgent.department}</p>
+                  <p>{copy.dmcaAgent.organization}</p>
+                  <p>{copy.dmcaAgent.addressLine1}</p>
+                  <p>{copy.dmcaAgent.addressLine2}</p>
+                  <p>
+                    {copy.dmcaAgent.phoneLabel}:{" "}
+                    <a
+                      href={`tel:${copy.dmcaAgent.phone.replace(/[^\d+]/g, "")}`}
+                      className="transition hover:text-bond-rose"
+                    >
+                      {copy.dmcaAgent.phone}
+                    </a>
+                  </p>
+                  <p>
+                    {copy.dmcaAgent.emailLabel}:{" "}
+                    <a
+                      href={`mailto:${copy.dmcaAgent.email}`}
+                      className="transition hover:text-bond-rose"
+                    >
+                      {copy.dmcaAgent.email}
+                    </a>
+                  </p>
+                </div>
+              </section>
             </div>
           </div>
         </section>
