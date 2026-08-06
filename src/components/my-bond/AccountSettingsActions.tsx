@@ -18,17 +18,26 @@ import {
 } from "@/lib/site-language";
 
 type Mode = "email" | "password" | "delete" | null;
+type EmailStep =
+  | "verify-current"
+  | "current-sent"
+  | "current-verified"
+  | "new-sent"
+  | "complete";
 
 type Copy = {
   accountActions: string;
   changeEmail: string;
   changeEmailHelp: string;
-  currentPassword: string;
   newEmail: string;
   sendEmailChange: string;
   emailChangeSent: string;
+  currentEmailVerified: string;
+  sendNewEmailVerification: string;
+  newEmailVerificationSent: string;
+  emailChangeComplete: string;
+  emailVerificationFailed: string;
   emailChangeFailed: string;
-  wrongPassword: string;
   changePassword: string;
   changePasswordHelp: string;
   accountEmail: string;
@@ -54,14 +63,20 @@ const COPY: Record<LanguageCode, Copy> = {
     accountActions: "Account actions",
     changeEmail: "Change email",
     changeEmailHelp:
-      "Enter your current password. Verification links will be sent before the new email becomes active.",
-    currentPassword: "Current password",
+      "Verify your current email first. After opening that link, return here to enter and verify your new email.",
     newEmail: "New email",
-    sendEmailChange: "Send verification links",
+    sendEmailChange: "Send verification to current email",
     emailChangeSent:
-      "Verification email sent. Follow the link before using the new address.",
+      "Verification link sent to your current email. Open it to continue.",
+    currentEmailVerified:
+      "Current email verified. Enter the new email you want to use.",
+    sendNewEmailVerification: "Send verification to new email",
+    newEmailVerificationSent:
+      "Verification link sent to your new email. Open it to finish changing your account email.",
+    emailChangeComplete: "Your account email has been changed.",
+    emailVerificationFailed:
+      "The verification link is invalid or has expired. Start the email change again.",
     emailChangeFailed: "The email change could not be started.",
-    wrongPassword: "The current password is incorrect.",
     changePassword: "Change password",
     changePasswordHelp:
       "Enter the email currently connected to this account. A secure password-reset link will be sent.",
@@ -92,14 +107,20 @@ const COPY: Record<LanguageCode, Copy> = {
     accountActions: "Acciones de la cuenta",
     changeEmail: "Cambiar correo",
     changeEmailHelp:
-      "Introduce tu contraseña actual. Se enviarán enlaces de verificación antes de activar el nuevo correo.",
-    currentPassword: "Contraseña actual",
+      "Primero verifica tu correo actual. Después de abrir ese enlace, vuelve aquí para introducir y verificar tu nuevo correo.",
     newEmail: "Nuevo correo",
-    sendEmailChange: "Enviar enlaces de verificación",
+    sendEmailChange: "Enviar verificación al correo actual",
     emailChangeSent:
-      "Correo de verificación enviado. Abre el enlace antes de usar la nueva dirección.",
+      "Se envió un enlace de verificación a tu correo actual. Ábrelo para continuar.",
+    currentEmailVerified:
+      "Correo actual verificado. Introduce el nuevo correo que quieres usar.",
+    sendNewEmailVerification: "Enviar verificación al nuevo correo",
+    newEmailVerificationSent:
+      "Se envió un enlace de verificación a tu nuevo correo. Ábrelo para terminar el cambio.",
+    emailChangeComplete: "El correo de tu cuenta ha sido cambiado.",
+    emailVerificationFailed:
+      "El enlace de verificación no es válido o ha caducado. Inicia de nuevo el cambio de correo.",
     emailChangeFailed: "No se pudo iniciar el cambio de correo.",
-    wrongPassword: "La contraseña actual es incorrecta.",
     changePassword: "Cambiar contraseña",
     changePasswordHelp:
       "Introduce el correo conectado actualmente a esta cuenta. Se enviará un enlace seguro.",
@@ -128,14 +149,20 @@ const COPY: Record<LanguageCode, Copy> = {
     accountActions: "Actions du compte",
     changeEmail: "Changer l’e-mail",
     changeEmailHelp:
-      "Saisissez votre mot de passe actuel. Des liens de vérification seront envoyés avant l’activation.",
-    currentPassword: "Mot de passe actuel",
+      "Vérifiez d’abord votre adresse actuelle. Après avoir ouvert ce lien, revenez ici pour saisir et vérifier la nouvelle adresse.",
     newEmail: "Nouvel e-mail",
-    sendEmailChange: "Envoyer les liens de vérification",
+    sendEmailChange: "Vérifier l’adresse actuelle",
     emailChangeSent:
-      "E-mail de vérification envoyé. Ouvrez le lien avant d’utiliser la nouvelle adresse.",
+      "Un lien de vérification a été envoyé à votre adresse actuelle. Ouvrez-le pour continuer.",
+    currentEmailVerified:
+      "Adresse actuelle vérifiée. Saisissez la nouvelle adresse que vous souhaitez utiliser.",
+    sendNewEmailVerification: "Vérifier la nouvelle adresse",
+    newEmailVerificationSent:
+      "Un lien de vérification a été envoyé à votre nouvelle adresse. Ouvrez-le pour terminer le changement.",
+    emailChangeComplete: "L’adresse e-mail de votre compte a été modifiée.",
+    emailVerificationFailed:
+      "Le lien de vérification est invalide ou expiré. Recommencez le changement d’adresse.",
     emailChangeFailed: "Le changement d’e-mail n’a pas pu démarrer.",
-    wrongPassword: "Le mot de passe actuel est incorrect.",
     changePassword: "Changer le mot de passe",
     changePasswordHelp:
       "Saisissez l’e-mail actuellement lié au compte. Un lien sécurisé sera envoyé.",
@@ -164,14 +191,20 @@ const COPY: Record<LanguageCode, Copy> = {
     accountActions: "Kontoaktionen",
     changeEmail: "E-Mail ändern",
     changeEmailHelp:
-      "Gib dein aktuelles Passwort ein. Vor der Aktivierung werden Bestätigungslinks gesendet.",
-    currentPassword: "Aktuelles Passwort",
+      "Bestätige zuerst deine aktuelle E-Mail-Adresse. Kehre danach hierher zurück, um die neue Adresse einzugeben und zu bestätigen.",
     newEmail: "Neue E-Mail",
-    sendEmailChange: "Bestätigungslinks senden",
+    sendEmailChange: "Aktuelle E-Mail bestätigen",
     emailChangeSent:
-      "Bestätigungs-E-Mail gesendet. Öffne den Link, bevor du die neue Adresse verwendest.",
+      "Ein Bestätigungslink wurde an deine aktuelle E-Mail gesendet. Öffne ihn, um fortzufahren.",
+    currentEmailVerified:
+      "Aktuelle E-Mail bestätigt. Gib die neue E-Mail-Adresse ein.",
+    sendNewEmailVerification: "Neue E-Mail bestätigen",
+    newEmailVerificationSent:
+      "Ein Bestätigungslink wurde an deine neue E-Mail gesendet. Öffne ihn, um die Änderung abzuschließen.",
+    emailChangeComplete: "Die E-Mail-Adresse deines Kontos wurde geändert.",
+    emailVerificationFailed:
+      "Der Bestätigungslink ist ungültig oder abgelaufen. Starte die E-Mail-Änderung erneut.",
     emailChangeFailed: "Die E-Mail-Änderung konnte nicht gestartet werden.",
-    wrongPassword: "Das aktuelle Passwort ist falsch.",
     changePassword: "Passwort ändern",
     changePasswordHelp:
       "Gib die derzeit mit dem Konto verbundene E-Mail ein. Ein sicherer Link wird gesendet.",
@@ -200,14 +233,20 @@ const COPY: Record<LanguageCode, Copy> = {
     accountActions: "アカウント操作",
     changeEmail: "メールアドレスを変更",
     changeEmailHelp:
-      "現在のパスワードを入力してください。新しいメールが有効になる前に確認リンクが送信されます。",
-    currentPassword: "現在のパスワード",
+      "最初に現在のメールアドレスを確認してください。確認リンクを開いた後、ここに戻って新しいメールアドレスを入力し、確認します。",
     newEmail: "新しいメールアドレス",
-    sendEmailChange: "確認リンクを送信",
+    sendEmailChange: "現在のメールに確認リンクを送信",
     emailChangeSent:
-      "確認メールを送信しました。新しいアドレスを使う前にリンクを開いてください。",
+      "現在のメールアドレスに確認リンクを送信しました。リンクを開いて続行してください。",
+    currentEmailVerified:
+      "現在のメールアドレスを確認しました。使用する新しいメールアドレスを入力してください。",
+    sendNewEmailVerification: "新しいメールに確認リンクを送信",
+    newEmailVerificationSent:
+      "新しいメールアドレスに確認リンクを送信しました。リンクを開いて変更を完了してください。",
+    emailChangeComplete: "アカウントのメールアドレスが変更されました。",
+    emailVerificationFailed:
+      "確認リンクが無効または期限切れです。メール変更を最初からやり直してください。",
     emailChangeFailed: "メール変更を開始できませんでした。",
-    wrongPassword: "現在のパスワードが正しくありません。",
     changePassword: "パスワードを変更",
     changePasswordHelp:
       "現在このアカウントに登録されているメールを入力してください。安全なリセットリンクを送信します。",
@@ -235,14 +274,20 @@ const COPY: Record<LanguageCode, Copy> = {
     accountActions: "계정 작업",
     changeEmail: "이메일 변경",
     changeEmailHelp:
-      "현재 비밀번호를 입력하세요. 새 이메일이 활성화되기 전에 확인 링크가 전송됩니다.",
-    currentPassword: "현재 비밀번호",
+      "먼저 현재 이메일을 확인하세요. 확인 링크를 연 뒤 여기로 돌아와 새 이메일을 입력하고 확인하세요.",
     newEmail: "새 이메일",
-    sendEmailChange: "확인 링크 보내기",
+    sendEmailChange: "현재 이메일로 확인 링크 보내기",
     emailChangeSent:
-      "확인 이메일을 보냈습니다. 새 주소를 사용하기 전에 링크를 열어 주세요.",
+      "현재 이메일로 확인 링크를 보냈습니다. 링크를 열어 계속하세요.",
+    currentEmailVerified:
+      "현재 이메일이 확인되었습니다. 사용할 새 이메일을 입력하세요.",
+    sendNewEmailVerification: "새 이메일로 확인 링크 보내기",
+    newEmailVerificationSent:
+      "새 이메일로 확인 링크를 보냈습니다. 링크를 열어 변경을 완료하세요.",
+    emailChangeComplete: "계정 이메일이 변경되었습니다.",
+    emailVerificationFailed:
+      "확인 링크가 유효하지 않거나 만료되었습니다. 이메일 변경을 다시 시작하세요.",
     emailChangeFailed: "이메일 변경을 시작할 수 없습니다.",
-    wrongPassword: "현재 비밀번호가 올바르지 않습니다.",
     changePassword: "비밀번호 변경",
     changePasswordHelp:
       "현재 계정에 연결된 이메일을 입력하세요. 안전한 재설정 링크가 전송됩니다.",
@@ -309,7 +354,8 @@ export function AccountSettingsActions({
 
   const [mode, setMode] = useState<Mode>(null);
   const [newEmail, setNewEmail] = useState("");
-  const [currentPassword, setCurrentPassword] = useState("");
+  const [emailStep, setEmailStep] =
+    useState<EmailStep>("verify-current");
   const [resetEmail, setResetEmail] = useState(currentEmail);
   const [confirmedDelete, setConfirmedDelete] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -319,6 +365,44 @@ export function AccountSettingsActions({
   useEffect(() => {
     setResetEmail(currentEmail);
   }, [currentEmail]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("email-change");
+
+    if (!status) return;
+
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}${window.location.hash}`
+    );
+
+    setMode("email");
+    setError("");
+    setNewEmail("");
+
+    if (status === "current-verified") {
+      setEmailStep("current-verified");
+      setNotice(copy.currentEmailVerified);
+      return;
+    }
+
+    if (status === "complete") {
+      setEmailStep("complete");
+      setNotice(copy.emailChangeComplete);
+      void getSupabaseBrowserClient()?.auth.refreshSession();
+      return;
+    }
+
+    setEmailStep("verify-current");
+    setNotice("");
+    setError(copy.emailVerificationFailed);
+  }, [
+    copy.currentEmailVerified,
+    copy.emailChangeComplete,
+    copy.emailVerificationFailed
+  ]);
 
   useEffect(() => {
     if (!mode) return;
@@ -344,6 +428,11 @@ export function AccountSettingsActions({
     setNotice("");
     setConfirmedDelete(false);
 
+    if (nextMode === "email") {
+      setEmailStep("verify-current");
+      setNewEmail("");
+    }
+
     if (nextMode === "password") {
       setResetEmail(currentEmail);
     }
@@ -354,42 +443,82 @@ export function AccountSettingsActions({
     setMode(null);
     setError("");
     setNotice("");
-    setCurrentPassword("");
+    setEmailStep("verify-current");
     setNewEmail("");
     setConfirmedDelete(false);
   }
 
-  async function changeEmail() {
+  async function sendCurrentEmailVerification() {
     if (loading) return;
     setLoading(true);
     setError("");
     setNotice("");
 
     try {
-      const response = await fetch("/api/account/change-email", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          currentPassword,
-          newEmail
-        })
-      });
+      const response = await fetch(
+        "/api/account/change-email/start",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ language })
+        }
+      );
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        if (payload?.error === "INVALID_PASSWORD") {
-          throw new Error(copy.wrongPassword);
+        throw new Error(copy.emailChangeFailed);
+      }
+
+      setEmailStep("current-sent");
+      setNotice(copy.emailChangeSent);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : copy.emailChangeFailed
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function sendNewEmailVerification() {
+    if (loading) return;
+    setLoading(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        "/api/account/change-email",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            newEmail,
+            language
+          })
+        }
+      );
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        if (payload?.error === "CURRENT_EMAIL_NOT_VERIFIED") {
+          setEmailStep("verify-current");
+          throw new Error(copy.emailVerificationFailed);
         }
 
         throw new Error(copy.emailChangeFailed);
       }
 
-      setNotice(copy.emailChangeSent);
-      setCurrentPassword("");
-      setNewEmail("");
+      setEmailStep("new-sent");
+      setNotice(copy.newEmailVerificationSent);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -575,45 +704,79 @@ export function AccountSettingsActions({
                 <h2 className="pr-10 font-display text-3xl font-bold text-bond-rose">
                   {copy.changeEmail}
                 </h2>
-                <p className="mt-3 text-sm leading-6 text-bond-muted">
-                  {copy.changeEmailHelp}
-                </p>
-                <div className="mt-6 space-y-3">
-                  <input
-                    type="email"
-                    value={newEmail}
-                    onChange={(event) =>
-                      setNewEmail(event.target.value)
-                    }
-                    autoComplete="email"
-                    placeholder={copy.newEmail}
-                    className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-bond-rose/70"
-                  />
-                  <input
-                    type="password"
-                    value={currentPassword}
-                    onChange={(event) =>
-                      setCurrentPassword(event.target.value)
-                    }
-                    autoComplete="current-password"
-                    placeholder={copy.currentPassword}
-                    className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-bond-rose/70"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void changeEmail()}
-                    disabled={
-                      loading ||
-                      !newEmail.trim() ||
-                      !currentPassword
-                    }
-                    className="bond-pink-button w-full rounded-xl bg-bond-rose px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
-                  >
-                    {loading
-                      ? copy.working
-                      : copy.sendEmailChange}
-                  </button>
-                </div>
+
+                {emailStep === "complete" ? (
+                  <p className="mt-5 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+                    {copy.emailChangeComplete}
+                  </p>
+                ) : emailStep === "current-verified" ||
+                  emailStep === "new-sent" ? (
+                  <>
+                    <p className="mt-3 text-sm leading-6 text-bond-muted">
+                      {copy.currentEmailVerified}
+                    </p>
+                    <div className="mt-6 space-y-3">
+                      <input
+                        type="email"
+                        value={newEmail}
+                        onChange={(event) =>
+                          setNewEmail(event.target.value)
+                        }
+                        autoComplete="email"
+                        placeholder={copy.newEmail}
+                        disabled={emailStep === "new-sent"}
+                        className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-bond-rose/70 disabled:opacity-55"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void sendNewEmailVerification()
+                        }
+                        disabled={
+                          loading ||
+                          emailStep === "new-sent" ||
+                          !newEmail.trim()
+                        }
+                        className="bond-pink-button w-full rounded-xl bg-bond-rose px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
+                      >
+                        {loading
+                          ? copy.working
+                          : copy.sendNewEmailVerification}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-3 text-sm leading-6 text-bond-muted">
+                      {copy.changeEmailHelp}
+                    </p>
+                    <div className="mt-6 space-y-3">
+                      <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-3">
+                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-bond-muted">
+                          {copy.accountEmail}
+                        </p>
+                        <p className="mt-1 break-all text-sm font-semibold text-white">
+                          {currentEmail}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void sendCurrentEmailVerification()
+                        }
+                        disabled={
+                          loading ||
+                          emailStep === "current-sent"
+                        }
+                        className="bond-pink-button w-full rounded-xl bg-bond-rose px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
+                      >
+                        {loading
+                          ? copy.working
+                          : copy.sendEmailChange}
+                      </button>
+                    </div>
+                  </>
+                )}
               </>
             )}
 

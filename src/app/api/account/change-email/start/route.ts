@@ -1,24 +1,17 @@
-import {
-  NextRequest,
-  NextResponse
-} from "next/server";
+import { NextResponse } from "next/server";
 import {
   createEmailChangeToken,
-  EMAIL_CHANGE_COOKIE,
+  currentEmailVerificationMessage,
   getEmailChangeBaseUrl,
-  newEmailVerificationMessage,
   normalizeEmail,
-  normalizeEmailChangeLanguage,
-  verifyEmailChangeToken
+  normalizeEmailChangeLanguage
 } from "@/lib/account-email-change";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { sendEmail } from "@/lib/resend";
 
 export const runtime = "nodejs";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const user = await getAuthenticatedUser(request);
 
@@ -29,60 +22,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const grant = verifyEmailChangeToken(
-      request.cookies.get(EMAIL_CHANGE_COOKIE)?.value ?? "",
-      "current_verified"
-    );
-
-    const currentEmail = normalizeEmail(user.email);
-
-    if (
-      !grant ||
-      grant.userId !== user.id ||
-      grant.currentEmail !== currentEmail
-    ) {
-      return NextResponse.json(
-        { error: "CURRENT_EMAIL_NOT_VERIFIED" },
-        { status: 403 }
-      );
-    }
-
     const body = await request.json().catch(() => ({}));
-    const newEmail = normalizeEmail(body?.newEmail);
     const language = normalizeEmailChangeLanguage(
       body?.language
     );
-
-    if (
-      !EMAIL_PATTERN.test(newEmail) ||
-      newEmail === currentEmail
-    ) {
-      return NextResponse.json(
-        { error: "INVALID_REQUEST" },
-        { status: 400 }
-      );
-    }
+    const currentEmail = normalizeEmail(user.email);
 
     const token = createEmailChangeToken({
-      purpose: "verify_new",
+      purpose: "verify_current",
       userId: user.id,
-      currentEmail,
-      newEmail
+      currentEmail
     });
 
     const verifyUrl = new URL(
-      "/api/account/change-email/verify-new",
+      "/api/account/change-email/verify-current",
       getEmailChangeBaseUrl(request)
     );
     verifyUrl.searchParams.set("token", token);
 
-    const message = newEmailVerificationMessage(
+    const message = currentEmailVerificationMessage(
       language,
       verifyUrl.toString()
     );
 
     await sendEmail({
-      to: newEmail,
+      to: currentEmail,
       subject: message.subject,
       html: message.html
     });
@@ -96,7 +60,10 @@ export async function POST(request: NextRequest) {
       }
     );
   } catch (error) {
-    console.error("New email verification failed:", error);
+    console.error(
+      "Current email verification failed:",
+      error
+    );
 
     return NextResponse.json(
       { error: "EMAIL_CHANGE_FAILED" },
