@@ -6,11 +6,11 @@
   "scripts": {
     "predev": "node scripts/apply-my-bond-account-settings.mjs && node scripts/apply-shared-character-auth.mjs && node scripts/apply-evercoin-popup-and-share-links.mjs && node scripts/run-final-media-pricing-and-wording.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/apply-retired-character-removals.mjs && node scripts/apply-emma-smith-opening-scenario-fix.mjs && node scripts/apply-my-bond-account-settings.mjs && node scripts/apply-shared-character-auth.mjs && node scripts/apply-evercoin-popup-and-share-links.mjs && node scripts/run-final-media-pricing-and-wording.mjs",
+    "prebuild": "node scripts/apply-retired-character-removals.mjs && node scripts/apply-emma-smith-opening-scenario-fix.mjs && node scripts/apply-character-placement-swaps.mjs && node scripts/apply-my-bond-account-settings.mjs && node scripts/apply-shared-character-auth.mjs && node scripts/apply-evercoin-popup-and-share-links.mjs && node scripts/run-final-media-pricing-and-wording.mjs",
     "build": "next build",
     "start": "next start",
     "retire:characters": "node scripts/apply-retired-character-removals.mjs",
-    "import:characters": "node scripts/import-characters.mjs && node scripts/apply-retired-character-removals.mjs --remote-only && node scripts/apply-emma-smith-opening-scenario-fix.mjs"
+    "import:characters": "node scripts/import-characters.mjs && node scripts/apply-retired-character-removals.mjs --remote-only && node scripts/apply-emma-smith-opening-scenario-fix.mjs && node scripts/apply-character-placement-swaps.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.3",
