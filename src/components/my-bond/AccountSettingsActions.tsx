@@ -250,7 +250,7 @@ const COPY: Record<LanguageCode, Copy> = {
     sendReset: "비밀번호 재설정 이메일 보내기",
     resetSent:
       "재설정 이메일을 보냈습니다. 링크를 열어 새 비밀번호를 설정하세요.",
-    resetFailed: "재설정 이메일을 보낼 수 없습니다.",
+    resetFailed: "비밀번호 재설정 이메일을 보낼 수 없습니다.",
     emailMismatch: "현재 계정에 연결된 이메일을 입력하세요.",
     deleteAccount: "계정 삭제",
     deleteHelp:
@@ -268,6 +268,34 @@ const COPY: Record<LanguageCode, Copy> = {
   }
 };
 
+const GOOGLE_PASSWORD_TOOLTIP =
+  "Google signup, no password provided";
+
+function isGoogleOnlySession(session: Session) {
+  const providers = new Set<string>();
+  const appMetadata = session.user.app_metadata;
+
+  if (typeof appMetadata?.provider === "string") {
+    providers.add(appMetadata.provider);
+  }
+
+  if (Array.isArray(appMetadata?.providers)) {
+    for (const provider of appMetadata.providers) {
+      if (typeof provider === "string") {
+        providers.add(provider);
+      }
+    }
+  }
+
+  for (const identity of session.user.identities ?? []) {
+    if (typeof identity.provider === "string") {
+      providers.add(identity.provider);
+    }
+  }
+
+  return providers.has("google") && !providers.has("email");
+}
+
 export function AccountSettingsActions({
   session,
   currentEmail
@@ -277,6 +305,8 @@ export function AccountSettingsActions({
 }) {
   const { language } = useSiteLanguage();
   const copy = COPY[language] ?? COPY.EN;
+  const googleOnlyAccount = isGoogleOnlySession(session);
+
   const [mode, setMode] = useState<Mode>(null);
   const [newEmail, setNewEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -305,10 +335,15 @@ export function AccountSettingsActions({
   }, [loading, mode]);
 
   function openModal(nextMode: Exclude<Mode, null>) {
+    if (nextMode === "password" && googleOnlyAccount) {
+      return;
+    }
+
     setMode(nextMode);
     setError("");
     setNotice("");
     setConfirmedDelete(false);
+
     if (nextMode === "password") {
       setResetEmail(currentEmail);
     }
@@ -348,6 +383,7 @@ export function AccountSettingsActions({
         if (payload?.error === "INVALID_PASSWORD") {
           throw new Error(copy.wrongPassword);
         }
+
         throw new Error(copy.emailChangeFailed);
       }
 
@@ -366,7 +402,7 @@ export function AccountSettingsActions({
   }
 
   async function requestPasswordReset() {
-    if (loading) return;
+    if (loading || googleOnlyAccount) return;
     setLoading(true);
     setError("");
     setNotice("");
@@ -389,6 +425,7 @@ export function AccountSettingsActions({
         if (payload?.error === "EMAIL_MISMATCH") {
           throw new Error(copy.emailMismatch);
         }
+
         throw new Error(copy.resetFailed);
       }
 
@@ -445,6 +482,7 @@ export function AccountSettingsActions({
         <p className="text-sm font-bold uppercase tracking-[0.18em] text-bond-rose">
           {copy.accountActions}
         </p>
+
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <button
             type="button"
@@ -456,16 +494,46 @@ export function AccountSettingsActions({
               {copy.changeEmail}
             </span>
           </button>
-          <button
-            type="button"
-            onClick={() => openModal("password")}
-            className="rounded-2xl border border-bond-rose/35 bg-bond-rose/[0.06] p-4 text-left transition hover:bg-bond-rose/[0.12]"
+
+          <div
+            className="group relative outline-none"
+            tabIndex={googleOnlyAccount ? 0 : undefined}
           >
-            <KeyRound size={20} className="text-bond-rose" />
-            <span className="mt-3 block font-bold text-white">
-              {copy.changePassword}
-            </span>
-          </button>
+            <button
+              type="button"
+              onClick={() => openModal("password")}
+              disabled={googleOnlyAccount}
+              aria-describedby={
+                googleOnlyAccount
+                  ? "google-password-disabled-tooltip"
+                  : undefined
+              }
+              className={`h-full w-full rounded-2xl border border-bond-rose/35 bg-bond-rose/[0.06] p-4 text-left transition ${
+                googleOnlyAccount
+                  ? "cursor-not-allowed opacity-45"
+                  : "hover:bg-bond-rose/[0.12]"
+              }`}
+            >
+              <KeyRound
+                size={20}
+                className="text-bond-rose"
+              />
+              <span className="mt-3 block font-bold text-white">
+                {copy.changePassword}
+              </span>
+            </button>
+
+            {googleOnlyAccount && (
+              <span
+                id="google-password-disabled-tooltip"
+                role="tooltip"
+                className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 w-max max-w-[190px] -translate-x-1/2 rounded-md border border-white/10 bg-black/95 px-2 py-1 text-center text-[10px] leading-4 text-white/75 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100"
+              >
+                {GOOGLE_PASSWORD_TOOLTIP}
+              </span>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={() => openModal("delete")}
@@ -635,6 +703,7 @@ export function AccountSettingsActions({
                 {error}
               </p>
             )}
+
             {notice && (
               <p className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
                 {notice}

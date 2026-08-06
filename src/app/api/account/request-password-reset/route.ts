@@ -4,6 +4,40 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 
 export const runtime = "nodejs";
 
+type AuthProviderUser = {
+  app_metadata?: {
+    provider?: unknown;
+    providers?: unknown;
+  };
+  identities?: Array<{
+    provider?: string;
+  }> | null;
+};
+
+function isGoogleOnlyUser(user: AuthProviderUser) {
+  const providers = new Set<string>();
+
+  if (typeof user.app_metadata?.provider === "string") {
+    providers.add(user.app_metadata.provider);
+  }
+
+  if (Array.isArray(user.app_metadata?.providers)) {
+    for (const provider of user.app_metadata.providers) {
+      if (typeof provider === "string") {
+        providers.add(provider);
+      }
+    }
+  }
+
+  for (const identity of user.identities ?? []) {
+    if (typeof identity.provider === "string") {
+      providers.add(identity.provider);
+    }
+  }
+
+  return providers.has("google") && !providers.has("email");
+}
+
 function getAuthClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -40,6 +74,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "SIGNUP_REQUIRED" },
         { status: 401 }
+      );
+    }
+
+    if (isGoogleOnlyUser(user)) {
+      return NextResponse.json(
+        { error: "GOOGLE_ACCOUNT_NO_PASSWORD" },
+        { status: 400 }
       );
     }
 
