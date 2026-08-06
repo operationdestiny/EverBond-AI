@@ -71,6 +71,7 @@ export default function LegalPage() {
                         >
                           {section.emailParagraph.email}
                         </a>
+                        {section.emailParagraph.suffix ?? ""}
                       </p>
                     )}
                   </div>

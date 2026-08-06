@@ -3,6 +3,7 @@ import type { LanguageCode } from "@/lib/site-language";
 export type LegalEmailParagraph = {
   prefix: string;
   email: string;
+  suffix?: string;
 };
 
 export type LegalSection = {
@@ -192,10 +193,12 @@ export const LEGAL_PAGE_COPY: Record<
       {
         "id": "contact",
         "title": "Contact",
-        "paragraphs": [
-          "For support, privacy requests, legal notices, arbitration opt-outs, copyright complaints, impersonation reports, and takedown requests, use the EverBond support email shown in the Help Center.",
-          "Include the account email, a clear subject line, the relevant URL or character link, and enough information to investigate the request. Do not include passwords, full payment-card numbers, or unnecessary sensitive information."
-        ]
+        "paragraphs": [],
+        "emailParagraph": {
+          "prefix": "For all account, support, and legal matters, please contact",
+          "email": "support@everbond.ai",
+          "suffix": "."
+        }
       }
     ],
     "dmcaAgent": {
@@ -365,10 +368,12 @@ export const LEGAL_PAGE_COPY: Record<
       {
         "id": "contact",
         "title": "Contacto",
-        "paragraphs": [
-          "Para soporte, solicitudes de privacidad, avisos legales, exclusiones de arbitraje, reclamaciones de derechos de autor, informes de suplantación y solicitudes de retirada, utiliza el correo electrónico de soporte de EverBond que aparece en el Centro de ayuda.",
-          "Incluye el correo electrónico de la cuenta, un asunto claro, la URL o el enlace del personaje correspondiente y suficiente información para investigar la solicitud. No incluyas contraseñas, números completos de tarjetas de pago ni información sensible innecesaria."
-        ]
+        "paragraphs": [],
+        "emailParagraph": {
+          "prefix": "Para todos los asuntos de cuenta, soporte y asuntos legales, ponte en contacto con",
+          "email": "support@everbond.ai",
+          "suffix": "."
+        }
       }
     ],
     "dmcaAgent": {
@@ -538,10 +543,12 @@ export const LEGAL_PAGE_COPY: Record<
       {
         "id": "contact",
         "title": "Contact",
-        "paragraphs": [
-          "Pour l’assistance, les demandes relatives à la confidentialité, les notifications juridiques, les refus d’arbitrage, les plaintes de droit d’auteur, les signalements d’usurpation et les demandes de retrait, utilisez l’adresse électronique d’assistance EverBond indiquée dans le Centre d’aide.",
-          "Indiquez l’adresse électronique du compte, un objet clair, l’URL ou le lien du personnage concerné et suffisamment d’informations pour enquêter sur la demande. N’incluez pas de mots de passe, de numéros complets de cartes de paiement ni d’informations sensibles inutiles."
-        ]
+        "paragraphs": [],
+        "emailParagraph": {
+          "prefix": "Pour toute question relative au compte, à l’assistance ou aux affaires juridiques, veuillez contacter",
+          "email": "support@everbond.ai",
+          "suffix": "."
+        }
       }
     ],
     "dmcaAgent": {
@@ -711,10 +718,12 @@ export const LEGAL_PAGE_COPY: Record<
       {
         "id": "contact",
         "title": "Kontakt",
-        "paragraphs": [
-          "Für Support, Datenschutzanfragen, rechtliche Mitteilungen, Ablehnungen der Schiedsgerichtsbarkeit, Urheberrechtsbeschwerden, Meldungen wegen Nachahmung und Entfernungsanfragen verwende die im Hilfecenter angegebene EverBond-Support-E-Mail-Adresse.",
-          "Gib die Konto-E-Mail-Adresse, eine klare Betreffzeile, die relevante URL oder den Charakterlink und genügend Informationen zur Untersuchung der Anfrage an. Gib keine Passwörter, vollständigen Zahlungskartennummern oder unnötigen sensiblen Informationen an."
-        ]
+        "paragraphs": [],
+        "emailParagraph": {
+          "prefix": "Wende dich bei allen Konto-, Support- und Rechtsangelegenheiten bitte an",
+          "email": "support@everbond.ai",
+          "suffix": "."
+        }
       }
     ],
     "dmcaAgent": {
@@ -884,10 +893,12 @@ export const LEGAL_PAGE_COPY: Record<
       {
         "id": "contact",
         "title": "連絡先",
-        "paragraphs": [
-          "サポート、プライバシー請求、法的通知、仲裁拒否、著作権申立て、なりすまし報告、削除要求については、ヘルプセンターに表示されるEverBondサポートメールを使用してください。",
-          "アカウントのメールアドレス、明確な件名、関連URLまたはキャラクターリンク、調査に十分な情報を含めてください。パスワード、完全なカード番号、不要な機微情報を含めないでください。"
-        ]
+        "paragraphs": [],
+        "emailParagraph": {
+          "prefix": "アカウント、サポート、法的事項に関するすべてのお問い合わせは、次のメールアドレスまでご連絡ください：",
+          "email": "support@everbond.ai",
+          "suffix": "。"
+        }
       }
     ],
     "dmcaAgent": {
@@ -1057,10 +1068,12 @@ export const LEGAL_PAGE_COPY: Record<
       {
         "id": "contact",
         "title": "연락처",
-        "paragraphs": [
-          "지원, 개인정보 요청, 법적 통지, 중재 거부, 저작권 신고, 사칭 신고 및 삭제 요청에는 도움말 센터에 표시된 EverBond 지원 이메일을 사용하십시오.",
-          "계정 이메일, 명확한 제목, 관련 URL 또는 캐릭터 링크 및 요청을 조사하기에 충분한 정보를 포함하십시오. 비밀번호, 전체 결제 카드 번호 또는 불필요한 민감정보를 포함하지 마십시오."
-        ]
+        "paragraphs": [],
+        "emailParagraph": {
+          "prefix": "모든 계정, 지원 및 법률 관련 문의는 다음 이메일로 연락해 주세요:",
+          "email": "support@everbond.ai",
+          "suffix": "."
+        }
       }
     ],
     "dmcaAgent": {
