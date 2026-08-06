@@ -4,9 +4,9 @@
   "private": true,
   "description": "EverBond AI - Bond forever with truly unrestricted AI companions.",
   "scripts": {
-    "predev": "node scripts/apply-my-bond-account-settings.mjs && node scripts/apply-shared-character-auth.mjs && node scripts/apply-evercoin-popup-and-share-links.mjs && node scripts/apply-final-media-pricing-and-wording.mjs",
+    "predev": "node scripts/apply-my-bond-account-settings.mjs && node scripts/apply-shared-character-auth.mjs && node scripts/apply-evercoin-popup-and-share-links.mjs && node scripts/run-final-media-pricing-and-wording.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/apply-retired-character-removals.mjs && node scripts/apply-emma-smith-opening-scenario-fix.mjs && node scripts/apply-my-bond-account-settings.mjs && node scripts/apply-shared-character-auth.mjs && node scripts/apply-evercoin-popup-and-share-links.mjs && node scripts/apply-final-media-pricing-and-wording.mjs",
+    "prebuild": "node scripts/apply-retired-character-removals.mjs && node scripts/apply-emma-smith-opening-scenario-fix.mjs && node scripts/apply-my-bond-account-settings.mjs && node scripts/apply-shared-character-auth.mjs && node scripts/apply-evercoin-popup-and-share-links.mjs && node scripts/run-final-media-pricing-and-wording.mjs",
     "build": "next build",
     "start": "next start",
     "retire:characters": "node scripts/apply-retired-character-removals.mjs",
