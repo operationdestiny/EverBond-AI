@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { LockKeyhole } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { ChatShell } from "@/components/chat/ChatShell";
+import { isLocalizedCharacterContent } from "@/components/character/useLocalizedCharacter";
 import { useSiteLanguage } from "@/lib/site-language";
 import { MY_BOND_COPY } from "@/lib/my-bond-language";
+import { FINAL_LOCALIZATION_COPY } from "@/lib/final-localization-language";
 import type { Character } from "@/types/character";
 
 export function PrivateChatLoader({
@@ -15,6 +17,8 @@ export function PrivateChatLoader({
 }) {
   const { language } = useSiteLanguage();
   const copy = MY_BOND_COPY[language] ?? MY_BOND_COPY.EN;
+  const finalCopy =
+    FINAL_LOCALIZATION_COPY[language] ?? FINAL_LOCALIZATION_COPY.EN;
   const {
     session,
     authReady,
@@ -36,37 +40,72 @@ export function PrivateChatLoader({
     setCharacter(null);
     setUnavailable(false);
 
-    void fetch(
-      `/api/characters/${encodeURIComponent(
-        slug
-      )}?language=${encodeURIComponent(language)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`
-        },
-        cache: "no-store",
-        signal: controller.signal
-      }
-    )
-      .then(async (response) => {
-        const payload = await response.json().catch(() => ({}));
+    async function loadCharacter() {
+      try {
+        const authorization = {
+          Authorization: `Bearer ${session!.access_token}`
+        };
+        const targetUrl =
+          `/api/characters/${encodeURIComponent(slug)}` +
+          `?language=${encodeURIComponent(language)}`;
+        const targetRequest = fetch(targetUrl, {
+          headers: authorization,
+          cache: "no-store",
+          signal: controller.signal
+        });
+        const baseRequest =
+          language === "EN"
+            ? null
+            : fetch(
+                `/api/characters/${encodeURIComponent(slug)}?language=EN`,
+                {
+                  headers: authorization,
+                  cache: "no-store",
+                  signal: controller.signal
+                }
+              );
 
-        if (!response.ok || !payload?.character) {
+        const [targetResponse, baseResponse] = await Promise.all([
+          targetRequest,
+          baseRequest
+        ]);
+        const targetPayload = await targetResponse.json().catch(() => ({}));
+        const basePayload = baseResponse
+          ? await baseResponse.json().catch(() => ({}))
+          : null;
+
+        if (!targetResponse.ok || !targetPayload?.character) {
           setUnavailable(true);
           return;
         }
 
-        setCharacter(payload.character as Character);
+        const targetCharacter = targetPayload.character as Character;
+
+        if (language !== "EN") {
+          if (!baseResponse?.ok || !basePayload?.character) {
+            setUnavailable(true);
+            return;
+          }
+
+          const baseCharacter = basePayload.character as Character;
+          if (!isLocalizedCharacterContent(baseCharacter, targetCharacter)) {
+            setUnavailable(true);
+            return;
+          }
+        }
+
+        setCharacter(targetCharacter);
         setUnavailable(false);
-      })
-      .catch((error) => {
+      } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
 
         setUnavailable(true);
-      });
+      }
+    }
 
+    void loadCharacter();
     return () => controller.abort();
   }, [authReady, language, session, slug]);
 
@@ -85,7 +124,9 @@ export function PrivateChatLoader({
         <section className="bond-container">
           <div className="mx-auto max-w-2xl rounded-[2rem] border border-bond-rose/40 bg-white/[0.035] p-8 text-center shadow-[0_0_44px_rgba(255,92,168,0.10)]">
             <p className="animate-pulse text-bond-muted">
-              {copy.privateCompanionLoading}
+              {language === "EN"
+                ? copy.privateCompanionLoading
+                : finalCopy.translatingCharacter}
             </p>
           </div>
         </section>
@@ -125,7 +166,9 @@ export function PrivateChatLoader({
             <LockKeyhole size={30} />
           </div>
           <h1 className="mt-6 font-display text-4xl font-bold text-white">
-            {copy.privateCompanionUnavailable}
+            {language === "EN"
+              ? copy.privateCompanionUnavailable
+              : finalCopy.translationUnavailable}
           </h1>
         </div>
       </section>

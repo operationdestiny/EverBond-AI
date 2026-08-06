@@ -14,6 +14,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { InsufficientEverCoinModal } from "@/components/media/InsufficientEverCoinModal";
 import { MEDIA_GALLERY_COPY } from "@/lib/media-gallery-language";
 import { useSiteLanguage } from "@/lib/site-language";
+import { localizedErrorMessage } from "@/lib/final-localization-language";
 
 type GalleryCharacter = {
   id: string;
@@ -130,12 +131,22 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
 
       if (!imageResponse.ok) {
         throw new Error(
-          imagePayload?.message || imagePayload?.error || copy.mediaError
+          localizedErrorMessage(
+            imagePayload?.message ?? imagePayload?.error,
+            language,
+            copy.mediaError,
+            "media"
+          )
         );
       }
       if (!videoResponse.ok) {
         throw new Error(
-          videoPayload?.message || videoPayload?.error || copy.mediaError
+          localizedErrorMessage(
+            videoPayload?.message ?? videoPayload?.error,
+            language,
+            copy.mediaError,
+            "media"
+          )
         );
       }
 
@@ -192,7 +203,12 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
         if (cancelled) return;
 
         if (!response.ok) {
-          throw new Error(payload?.message || payload?.error || copy.mediaError);
+          throw new Error(localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            copy.mediaError,
+            "media"
+          ));
         }
 
         if (payload?.status === "completed" && payload?.video) {
@@ -216,7 +232,12 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
         }
 
         if (payload?.status === "failed") {
-          setVideoError(payload?.message || payload?.error || copy.mediaError);
+          setVideoError(localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            copy.mediaError,
+            "media"
+          ));
           setPendingVideoRequestId(null);
           return;
         }
@@ -281,7 +302,12 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
         return;
       }
       if (!response.ok || !payload?.image) {
-        throw new Error(payload?.message || payload?.error || copy.mediaError);
+        throw new Error(localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            copy.mediaError,
+            "media"
+          ));
       }
 
       const nextImage = payload.image as GalleryImage;
@@ -353,7 +379,12 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
         return;
       }
       if (!response.ok) {
-        throw new Error(payload?.message || payload?.error || copy.mediaError);
+        throw new Error(localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            copy.mediaError,
+            "media"
+          ));
       }
 
       if (payload?.status === "completed" && payload?.video) {
@@ -409,7 +440,12 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
       );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.message || payload?.error || copy.mediaError);
+        throw new Error(localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            copy.mediaError,
+            "media"
+          ));
       }
 
       if (action === "select") {
@@ -485,7 +521,12 @@ export function CharacterGalleryClient({ slug }: { slug: string }) {
       );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.message || payload?.error || copy.mediaError);
+        throw new Error(localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            copy.mediaError,
+            "media"
+          ));
       }
 
       setVideoData((current) =>

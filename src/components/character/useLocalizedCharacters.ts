@@ -12,7 +12,9 @@ export function useLocalizedCharacters(baseCharacters: Character[]) {
   const baseCharactersRef = useRef(baseCharacters);
   baseCharactersRef.current = baseCharacters;
 
-  const [characters, setCharacters] = useState(baseCharacters);
+  const [characters, setCharacters] = useState(
+    language === "EN" ? baseCharacters : []
+  );
   const [loading, setLoading] = useState(language !== "EN");
   const slugsKey = useMemo(
     () => baseCharacters.map((character) => character.slug).join("\u0001"),
@@ -28,7 +30,7 @@ export function useLocalizedCharacters(baseCharacters: Character[]) {
       return;
     }
 
-    setCharacters(currentBaseCharacters);
+    setCharacters([]);
 
     if (!authReady) {
       setLoading(true);
@@ -56,7 +58,7 @@ export function useLocalizedCharacters(baseCharacters: Character[]) {
         }
 
         if (!controller.signal.aborted) {
-          setCharacters(currentBaseCharacters);
+          setCharacters([]);
         }
       })
       .finally(() => {

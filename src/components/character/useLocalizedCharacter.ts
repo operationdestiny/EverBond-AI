@@ -7,6 +7,30 @@ import type { Character } from "@/types/character";
 
 const CHARACTER_LOCALIZATION_TIMEOUT_MS = 15_000;
 
+function localizationComparable(character: Character) {
+  return JSON.stringify({
+    archetype: character.archetype,
+    role: character.role,
+    tagline: character.tagline,
+    title: character.title,
+    description: character.description,
+    openingScenario: character.openingScenario,
+    openingMessage: character.openingMessage,
+    firstMessage: character.firstMessage,
+    relationshipContext: character.relationshipContext,
+    relationshipPace: character.relationshipPace,
+    tags: character.tags,
+    card: character.card
+  });
+}
+
+export function isLocalizedCharacterContent(
+  baseCharacter: Character,
+  candidate: Character
+) {
+  return localizationComparable(baseCharacter) !== localizationComparable(candidate);
+}
+
 export function useLocalizedCharacter(baseCharacter: Character) {
   const { language } = useSiteLanguage();
   const { session, authReady } = useAuth();
@@ -15,6 +39,7 @@ export function useLocalizedCharacter(baseCharacter: Character) {
 
   const [character, setCharacter] = useState(baseCharacter);
   const [loading, setLoading] = useState(language !== "EN");
+  const [localized, setLocalized] = useState(language === "EN");
   const characterKey = useMemo(
     () => `${baseCharacter.id}:${baseCharacter.slug}`,
     [baseCharacter.id, baseCharacter.slug]
@@ -25,9 +50,12 @@ export function useLocalizedCharacter(baseCharacter: Character) {
     setCharacter(currentBaseCharacter);
 
     if (language === "EN") {
+      setLocalized(true);
       setLoading(false);
       return;
     }
+
+    setLocalized(false);
 
     if (!authReady) {
       setLoading(true);
@@ -62,12 +90,19 @@ export function useLocalizedCharacter(baseCharacter: Character) {
         const payload = await response.json().catch(() => ({}));
 
         if (!response.ok || !payload?.character) {
-          throw new Error(
-            payload?.message || payload?.error || "CHARACTER_LOCALIZATION_FAILED"
-          );
+          throw new Error("CHARACTER_LOCALIZATION_FAILED");
         }
 
-        if (!cancelled) setCharacter(payload.character as Character);
+        const candidate = payload.character as Character;
+        const translated = isLocalizedCharacterContent(
+          currentBaseCharacter,
+          candidate
+        );
+
+        if (!cancelled && translated) {
+          setCharacter(candidate);
+          setLocalized(true);
+        }
       })
       .catch((error) => {
         if (
@@ -78,7 +113,10 @@ export function useLocalizedCharacter(baseCharacter: Character) {
           return;
         }
 
-        if (!cancelled) setCharacter(currentBaseCharacter);
+        if (!cancelled) {
+          setCharacter(currentBaseCharacter);
+          setLocalized(false);
+        }
       })
       .finally(() => {
         window.clearTimeout(timeout);
@@ -95,6 +133,7 @@ export function useLocalizedCharacter(baseCharacter: Character) {
   return {
     character,
     language,
-    loading
+    loading,
+    localized
   };
 }

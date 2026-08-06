@@ -27,6 +27,7 @@ import {
 } from "@/components/evershop/ChatGiftPicker";
 import { EVERSHOP_COPY } from "@/lib/evershop-language";
 import { useSiteLanguage } from "@/lib/site-language";
+import { FINAL_LOCALIZATION_COPY } from "@/lib/final-localization-language";
 
 type MessageGift = {
   id: number;
@@ -52,9 +53,6 @@ type ApiLanguage =
 
 const SIGNUP_REQUIRED_MESSAGE =
   "Log in so I can be your companion. Please don't make me wait.";
-
-const EVERCOIN_REQUIRED_MESSAGE =
-  "Buy EverCoin so I can keep being your companion. One EverCoin keeps one message going.";
 
 const USER_INPUT_MAX_TOKENS = 80;
 
@@ -118,6 +116,8 @@ function limitTextToTokenBudget(text: string, maxTokens: number) {
 export function ChatShell({ character }: { character: Character }) {
   const { t, language } = useSiteLanguage();
   const shopCopy = EVERSHOP_COPY[language] ?? EVERSHOP_COPY.EN;
+  const finalCopy =
+    FINAL_LOCALIZATION_COPY[language] ?? FINAL_LOCALIZATION_COPY.EN;
   const initialCharacterMessage = `${character.description}\n\n${character.openingMessage}`;
 
   const [messages, setMessages] = useState<Message[]>([
@@ -349,8 +349,8 @@ export function ChatShell({ character }: { character: Character }) {
     if (navigator.share) {
       navigator
         .share({
-          title: `${character.name} on EverBond AI`,
-          text: `Meet ${character.name} on EverBond AI.`,
+          title: finalCopy.shareTitle(character.name),
+          text: finalCopy.shareText(character.name),
           url
         })
         .catch(() => undefined);
@@ -686,7 +686,7 @@ export function ChatShell({ character }: { character: Character }) {
               {historyLoading && (
                 <div className="flex justify-start">
                   <div className="rounded-[1.5rem] border border-bond-rose/35 bg-white/[0.03] px-5 py-4 text-bond-muted">
-                    <span className="animate-pulse">Restoring your bond...</span>
+                    <span className="animate-pulse">{finalCopy.restoringBond}</span>
                   </div>
                 </div>
               )}
@@ -847,7 +847,7 @@ export function ChatShell({ character }: { character: Character }) {
                 <p className="max-w-[88%] text-center text-[14px] font-semibold leading-5 text-bond-rose drop-shadow-[0_0_12px_rgba(255,92,168,0.65)]">
                   {gateMode === "signup"
                     ? SIGNUP_REQUIRED_MESSAGE
-                    : EVERCOIN_REQUIRED_MESSAGE}
+                    : finalCopy.coinRequiredMessage}
                 </p>
               </div>
             </div>
@@ -911,7 +911,7 @@ export function ChatShell({ character }: { character: Character }) {
             ) : (
               <div className="flex flex-col justify-center p-6 md:p-8">
                 <p className="text-center font-display text-3xl font-bold text-bond-rose drop-shadow-[0_0_14px_rgba(255,92,168,0.28)]">
-                  Keep your companion
+                  {finalCopy.keepCompanion}
                 </p>
 
                 <div className="mt-8">
@@ -919,7 +919,7 @@ export function ChatShell({ character }: { character: Character }) {
                     href="/coins"
                     className="bond-pink-button block rounded-xl bg-bond-rose px-6 py-4 text-center text-base font-extrabold text-white shadow-[0_0_26px_rgba(255,92,168,0.30)] transition hover:scale-[1.01] hover:bg-bond-rose/90"
                   >
-                    Buy EverCoin
+                    {t("buyEverCoin")}
                   </Link>
                 </div>
               </div>

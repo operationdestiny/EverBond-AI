@@ -22,6 +22,7 @@ import { CreatorLink } from "@/components/character/CreatorLink";
 import { MyCompanionActions, type UpdatedCompanion } from "@/components/my-bond/MyCompanionActions";
 import { useSiteLanguage } from "@/lib/site-language";
 import { MY_BOND_COPY } from "@/lib/my-bond-language";
+import { localizedErrorMessage } from "@/lib/final-localization-language";
 
 type CompanionSummary = {
   id: string;
@@ -117,9 +118,12 @@ export function MyBondDashboard({
 
       if (!response.ok) {
         throw new Error(
-          typeof payload?.error === "string"
-            ? payload.error
-            : copy.loadError
+          localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            copy.loadError,
+            "loadBond"
+          )
         );
       }
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Coins, X } from "lucide-react";
 import { useSiteLanguage } from "@/lib/site-language";
 import { MEDIA_COPY } from "@/lib/media-language";
+import { FINAL_LOCALIZATION_COPY } from "@/lib/final-localization-language";
 
 export function InsufficientEverCoinModal({
   open,
@@ -14,6 +15,8 @@ export function InsufficientEverCoinModal({
 }) {
   const { language } = useSiteLanguage();
   const copy = MEDIA_COPY[language] ?? MEDIA_COPY.EN;
+  const finalCopy =
+    FINAL_LOCALIZATION_COPY[language] ?? FINAL_LOCALIZATION_COPY.EN;
 
   if (!open) return null;
 
@@ -29,7 +32,7 @@ export function InsufficientEverCoinModal({
           type="button"
           onClick={onClose}
           className="absolute right-4 top-4 rounded-full bg-white/[0.05] p-2 text-bond-muted hover:text-white"
-          aria-label="Close"
+          aria-label={finalCopy.close}
         >
           <X size={18} />
         </button>

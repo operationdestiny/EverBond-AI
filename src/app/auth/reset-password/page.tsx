@@ -10,8 +10,18 @@ import { AppShell } from "@/components/layout/AppShell";
 import {
   getSupabaseBrowserClient
 } from "@/lib/supabase/browser";
+import { useSiteLanguage } from "@/lib/site-language";
+import {
+  FINAL_LOCALIZATION_COPY,
+  localizedErrorMessage
+} from "@/lib/final-localization-language";
 
 export default function ResetPasswordPage() {
+  const { language } = useSiteLanguage();
+  const copy =
+    FINAL_LOCALIZATION_COPY[language] ?? FINAL_LOCALIZATION_COPY.EN;
+  const resetCopy = copy.reset;
+
   const [recoveryReady, setRecoveryReady] =
     useState(false);
   const [checking, setChecking] = useState(true);
@@ -26,7 +36,7 @@ export default function ResetPasswordPage() {
     const supabase = getSupabaseBrowserClient();
 
     if (!supabase) {
-      setError("Password reset is not configured.");
+      setError(resetCopy.notConfigured);
       setChecking(false);
       return;
     }
@@ -65,29 +75,25 @@ export default function ResetPasswordPage() {
       window.clearTimeout(timeout);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [resetCopy.notConfigured]);
 
   async function savePassword() {
     if (saving) return;
 
     if (password.length < 8) {
-      setError(
-        "Use a password with at least 8 characters."
-      );
+      setError(resetCopy.minimumLength);
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("The passwords do not match.");
+      setError(resetCopy.mismatch);
       return;
     }
 
     const supabase = getSupabaseBrowserClient();
 
     if (!supabase || !recoveryReady) {
-      setError(
-        "Open the password-reset link from your email first."
-      );
+      setError(resetCopy.openEmailFirst);
       return;
     }
 
@@ -108,9 +114,14 @@ export default function ResetPasswordPage() {
       setConfirmPassword("");
     } catch (updateError) {
       setError(
-        updateError instanceof Error
-          ? updateError.message
-          : "The password could not be updated."
+        localizedErrorMessage(
+          updateError instanceof Error
+            ? updateError.message
+            : updateError,
+          language,
+          resetCopy.updateFailed,
+          "password"
+        )
       );
     } finally {
       setSaving(false);
@@ -132,26 +143,25 @@ export default function ResetPasswordPage() {
 
             <h1 className="mt-6 font-display text-4xl font-bold text-bond-rose">
               {complete
-                ? "Password updated"
-                : "Choose a new password"}
+                ? resetCopy.completeTitle
+                : resetCopy.chooseTitle}
             </h1>
 
             {complete ? (
               <>
                 <p className="mt-4 leading-7 text-bond-muted">
-                  Your new password is active. You can return
-                  to My Bond and continue using your account.
+                  {resetCopy.completeBody}
                 </p>
                 <Link
                   href="/my-bond"
                   className="bond-pink-button mt-7 inline-flex rounded-full bg-bond-rose px-6 py-3 text-sm font-bold text-white"
                 >
-                  Return to My Bond
+                  {resetCopy.returnToBond}
                 </Link>
               </>
             ) : checking ? (
               <p className="mt-6 animate-pulse text-bond-muted">
-                Verifying your reset link...
+                {resetCopy.verifying}
               </p>
             ) : recoveryReady ? (
               <div className="mt-7 space-y-3">
@@ -162,7 +172,8 @@ export default function ResetPasswordPage() {
                     setPassword(event.target.value)
                   }
                   autoComplete="new-password"
-                  placeholder="New password"
+                  placeholder={resetCopy.newPassword}
+                  aria-label={resetCopy.newPassword}
                   className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-bond-rose/70"
                 />
                 <input
@@ -172,7 +183,8 @@ export default function ResetPasswordPage() {
                     setConfirmPassword(event.target.value)
                   }
                   autoComplete="new-password"
-                  placeholder="Confirm new password"
+                  placeholder={resetCopy.confirmPassword}
+                  aria-label={resetCopy.confirmPassword}
                   className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-bond-rose/70"
                 />
                 <button
@@ -186,14 +198,13 @@ export default function ResetPasswordPage() {
                   className="bond-pink-button w-full rounded-xl bg-bond-rose px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
                 >
                   {saving
-                    ? "One moment..."
-                    : "Update password"}
+                    ? resetCopy.working
+                    : resetCopy.updateButton}
                 </button>
               </div>
             ) : (
               <p className="mt-6 leading-7 text-bond-muted">
-                Open the password-reset link from your email
-                to continue.
+                {resetCopy.openEmailBody}
               </p>
             )}
 

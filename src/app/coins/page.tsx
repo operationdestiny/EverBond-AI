@@ -14,6 +14,10 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useSiteLanguage } from "@/lib/site-language";
 import { EVERCOIN_PAGE_COPY } from "@/lib/evercoin-page-language";
+import {
+  LOCALE_BY_LANGUAGE,
+  localizedErrorMessage
+} from "@/lib/final-localization-language";
 
 const packages = [
   {
@@ -48,6 +52,7 @@ function CoinsPageContent() {
   const { language } = useSiteLanguage();
   const pageCopy =
     EVERCOIN_PAGE_COPY[language] ?? EVERCOIN_PAGE_COPY.EN;
+  const locale = LOCALE_BY_LANGUAGE[language] ?? LOCALE_BY_LANGUAGE.EN;
   const { session, authReady, openAuthModal } = useAuth();
   const [busyPack, setBusyPack] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -142,9 +147,12 @@ function CoinsPageContent() {
 
       if (!response.ok || typeof payload?.url !== "string") {
         throw new Error(
-          payload?.message ||
-            payload?.error ||
-            pageCopy.checkoutFailed
+          localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            pageCopy.checkoutFailed,
+            "checkout"
+          )
         );
       }
 
@@ -179,13 +187,13 @@ function CoinsPageContent() {
               <div className="overflow-hidden rounded-[1.55rem] border border-bond-rose/45 bg-black">
                 <img
                   src={pack.image}
-                  alt={`${pack.amount.toLocaleString("en-US")} EverCoin`}
+                  alt={`${pack.amount.toLocaleString(locale)} EverCoin`}
                   className="h-80 w-full object-cover"
                 />
               </div>
 
               <p className="mt-5 font-display text-5xl font-bold text-bond-rose drop-shadow-[0_0_18px_rgba(255,92,168,0.55)]">
-                {pack.amount.toLocaleString("en-US")}
+                {pack.amount.toLocaleString(locale)}
               </p>
               <p className="mt-2 text-lg text-white">EverCoin</p>
               <p className="mt-2 text-2xl font-bold text-white">

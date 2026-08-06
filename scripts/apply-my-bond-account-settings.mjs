@@ -137,6 +137,119 @@ if (!dashboard.includes("<AccountSettingsActions")) {
 
 write(dashboardPath, dashboard);
 
+const companionActionsPath =
+  "src/components/my-bond/MyCompanionActions.tsx";
+let companionActions = read(companionActionsPath);
+
+if (!companionActions.includes("localizedErrorMessage")) {
+  companionActions = requireReplace(
+    companionActions,
+    'import { CHARACTER_TOOLS_COPY } from "@/lib/character-tools-language";',
+    'import { CHARACTER_TOOLS_COPY } from "@/lib/character-tools-language";\nimport { FINAL_LOCALIZATION_COPY, localizedErrorMessage } from "@/lib/final-localization-language";',
+    "companion action localized error import"
+  );
+}
+
+if (!companionActions.includes("const finalCopy =")) {
+  companionActions = requireReplace(
+    companionActions,
+    `  const sharing =
+    CHARACTER_SHARING_COPY[language] ?? CHARACTER_SHARING_COPY.EN;`,
+    `  const sharing =
+    CHARACTER_SHARING_COPY[language] ?? CHARACTER_SHARING_COPY.EN;
+  const finalCopy =
+    FINAL_LOCALIZATION_COPY[language] ?? FINAL_LOCALIZATION_COPY.EN;`,
+    "companion action final localization copy"
+  );
+}
+
+companionActions = companionActions.replace(
+  `<input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        setReplacementImage(file);
+                        setReplacementPreview(
+                          file ? URL.createObjectURL(file) : ""
+                        );
+                      }}
+                      className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-bond-muted file:mr-3 file:rounded-full file:border-0 file:bg-bond-rose file:px-4 file:py-2 file:text-sm file:font-bold file:text-white"
+                    />`,
+  `<div className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/30 px-4 py-3">
+                      <input
+                        id={\`replacement-image-\${companion.id}\`}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] ?? null;
+                          setReplacementImage(file);
+                          setReplacementPreview(
+                            file ? URL.createObjectURL(file) : ""
+                          );
+                        }}
+                        className="sr-only"
+                      />
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label
+                          htmlFor={\`replacement-image-\${companion.id}\`}
+                          className="cursor-pointer rounded-full bg-bond-rose px-4 py-2 text-sm font-bold text-white"
+                        >
+                          {finalCopy.chooseImage}
+                        </label>
+                        <span className="min-w-0 flex-1 truncate text-sm text-bond-muted">
+                          {replacementImage?.name || finalCopy.noImageSelected}
+                        </span>
+                      </div>
+                    </div>`
+);
+
+companionActions = companionActions.replace(
+  `throw new Error(
+          typeof payload?.message === "string"
+            ? payload.message
+            : copy.companionUpdateFailed
+        );`,
+  `throw new Error(
+          localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            copy.companionUpdateFailed,
+            "updateCharacter"
+          )
+        );`
+);
+
+companionActions = companionActions.replace(
+  `throw new Error(
+          typeof payload?.message === "string"
+            ? payload.message
+            : copy.companionDeleteFailed
+        );`,
+  `throw new Error(
+          localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            copy.companionDeleteFailed,
+            "deleteCharacter"
+          )
+        );`
+);
+
+if (
+  !companionActions.includes("localizedErrorMessage") ||
+  !companionActions.includes("finalCopy.chooseImage") ||
+  companionActions.includes(
+    'typeof payload?.message === "string"'
+  )
+) {
+  throw new Error(
+    "My Bond patch could not localize companion action errors."
+  );
+}
+
+write(companionActionsPath, companionActions);
+
 console.log(
   "My Bond layout and account-management source patch complete."
 );

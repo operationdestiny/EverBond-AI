@@ -1,9 +1,31 @@
 import type { LanguageCode } from "@/lib/site-language";
+import { FINAL_LOCALIZATION_COPY } from "@/lib/final-localization-language";
 import type { Character } from "@/types/character";
 
 const CLIENT_BATCH_SIZE = 8;
 const CLIENT_CONCURRENCY = 2;
 const CLIENT_REQUEST_TIMEOUT_MS = 15_000;
+
+function localizationComparable(character: Character) {
+  return JSON.stringify({
+    archetype: character.archetype,
+    role: character.role,
+    tagline: character.tagline,
+    title: character.title,
+    description: character.description,
+    openingScenario: character.openingScenario,
+    openingMessage: character.openingMessage,
+    firstMessage: character.firstMessage,
+    relationshipContext: character.relationshipContext,
+    relationshipPace: character.relationshipPace,
+    tags: character.tags,
+    card: character.card
+  });
+}
+
+function hasLocalizedContent(source: Character, candidate: Character) {
+  return localizationComparable(source) !== localizationComparable(candidate);
+}
 
 function chunksOf<T>(items: T[], size: number) {
   const chunks: T[][] = [];
@@ -13,6 +35,39 @@ function chunksOf<T>(items: T[], size: number) {
   }
 
   return chunks;
+}
+
+export function localizedCharacterFallback(
+  character: Character,
+  language: Exclude<LanguageCode, "EN">
+): Character {
+  const placeholder = FINAL_LOCALIZATION_COPY[language].translationUnavailable;
+
+  return {
+    ...character,
+    archetype: placeholder,
+    role: placeholder,
+    tagline: placeholder,
+    title: placeholder,
+    description: placeholder,
+    openingScenario: placeholder,
+    openingMessage: placeholder,
+    firstMessage: placeholder,
+    relationshipContext: placeholder,
+    relationshipPace: placeholder,
+    tags: character.tags.includes("Ever Memory™") ? ["Ever Memory™"] : [],
+    card: {
+      ...character.card,
+      personality: placeholder,
+      tone: placeholder,
+      speechStyle: placeholder,
+      motivations: placeholder,
+      boundaries: placeholder,
+      relationshipStyle: placeholder,
+      worldContext: placeholder,
+      exampleDialogue: []
+    }
+  };
 }
 
 async function fetchBatch(
@@ -65,7 +120,17 @@ async function fetchBatch(
       );
     }
 
-    return payload.characters as Character[];
+    const returned = payload.characters as Character[];
+    const returnedById = new Map(
+      returned.map((character) => [character.id, character])
+    );
+
+    return characters.map((source) => {
+      const candidate = returnedById.get(source.id);
+      return candidate && hasLocalizedContent(source, candidate)
+        ? candidate
+        : localizedCharacterFallback(source, language);
+    });
   } catch (error) {
     if (timedOut && !options.signal?.aborted) {
       throw new Error("CHARACTER_LOCALIZATION_TIMEOUT");
@@ -116,18 +181,25 @@ export async function localizeCharactersProgressively(options: {
       }
 
       for (const character of group[groupIndex] ?? []) {
-        localizedById.set(character.id, character);
+        localizedById.set(
+          character.id,
+          localizedCharacterFallback(character, options.language)
+        );
       }
     });
 
     options.onProgress(
       options.characters.map(
-        (character) => localizedById.get(character.id) ?? character
+        (character) =>
+          localizedById.get(character.id) ??
+          localizedCharacterFallback(character, options.language)
       )
     );
   }
 
   return options.characters.map(
-    (character) => localizedById.get(character.id) ?? character
+    (character) =>
+      localizedById.get(character.id) ??
+      localizedCharacterFallback(character, options.language)
   );
 }

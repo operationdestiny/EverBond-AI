@@ -6,6 +6,7 @@ import { AuthProvider } from "@/components/auth/AuthProvider";
 import { ChatLayoutCleanup } from "@/components/chat/ChatLayoutCleanup";
 import { ChatMediaBridge } from "@/components/media/ChatMediaBridge";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { LocalizedDocumentMetadata } from "@/components/layout/LocalizedDocumentMetadata";
 import { NavBar } from "@/components/layout/NavBar";
 
 export function AppShell({
@@ -17,6 +18,7 @@ export function AppShell({
 
   return (
     <AuthProvider>
+      <LocalizedDocumentMetadata />
       <ChatLayoutCleanup />
       <ChatMediaBridge />
       <div

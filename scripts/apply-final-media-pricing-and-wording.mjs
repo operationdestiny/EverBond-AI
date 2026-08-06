@@ -74,6 +74,75 @@ const voiceModalPath =
   "src/components/media/VoiceCallModal.tsx";
 let voiceModal = read(voiceModalPath);
 
+if (!voiceModal.includes('import { localizedErrorMessage } from "@/lib/final-localization-language";')) {
+  voiceModal = replaceRequired(
+    voiceModal,
+    'import { MEDIA_COPY } from "@/lib/media-language";',
+    'import { MEDIA_COPY } from "@/lib/media-language";\nimport { localizedErrorMessage } from "@/lib/final-localization-language";',
+    "voice-call localized error import"
+  );
+}
+
+voiceModal = replaceAll(
+  voiceModal,
+  'setError(payload?.message || payload?.error || copy.mediaError);',
+  `setError(
+          localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            copy.mediaError,
+            "voice"
+          )
+        );`
+);
+
+voiceModal = replaceAll(
+  voiceModal,
+  `setError(
+          connectError instanceof Error
+            ? connectError.message
+            : copy.microphoneDenied
+        );`,
+  `setError(
+          localizedErrorMessage(
+            connectError instanceof Error
+              ? connectError.message
+              : connectError,
+            language,
+            copy.microphoneDenied,
+            "voice"
+          )
+        );`
+);
+
+voiceModal = replaceAll(
+  voiceModal,
+  'throw new Error(payload?.message || payload?.error || copy.mediaError);',
+  `throw new Error(
+          localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            copy.mediaError,
+            "voice"
+          )
+        );`
+);
+
+voiceModal = replaceAll(
+  voiceModal,
+  `setError(
+        callError instanceof Error ? callError.message : copy.mediaError
+      );`,
+  `setError(
+        localizedErrorMessage(
+          callError instanceof Error ? callError.message : callError,
+          language,
+          copy.mediaError,
+          "voice"
+        )
+      );`
+);
+
 voiceModal = replaceAll(
   voiceModal,
   "const [costPerMinute, setCostPerMinute] = useState(35);",
@@ -92,6 +161,17 @@ if (
 ) {
   throw new Error(
     "Final media pricing patch could not set the voice-call display price."
+  );
+}
+
+if (
+  !voiceModal.includes("localizedErrorMessage") ||
+  voiceModal.includes(
+    "payload?.message || payload?.error || copy.mediaError"
+  )
+) {
+  throw new Error(
+    "Final media pricing patch could not localize voice-call errors."
   );
 }
 

@@ -40,17 +40,12 @@ function removeRequiredBlock(source, startMarker, endMarker, label) {
 
 let source = fs.readFileSync(filePath, "utf8");
 
-if (
+const chatAlreadyPatched =
   source.includes("openCharacterAuthModal") &&
   !source.includes('type GateMode = "signup"') &&
-  !source.includes("handleEmailContinue")
-) {
-  console.log(
-    "Character chat already uses the shared login and recovery modal."
-  );
-  process.exit(0);
-}
+  !source.includes("handleEmailContinue");
 
+if (!chatAlreadyPatched) {
 source = replaceRequired(
   source,
   'import { LanguageSelector } from "@/components/layout/LanguageSelector";',
@@ -244,14 +239,14 @@ const upgradeGate = `      {gateMode === "upgrade" && (
 
           <div className="absolute bottom-0 left-0 right-0 flex justify-center bg-gradient-to-t from-black/85 via-black/45 to-transparent px-5 pb-5 pt-16">
             <p className="max-w-[88%] text-center text-[14px] font-semibold leading-5 text-bond-rose drop-shadow-[0_0_12px_rgba(255,92,168,0.65)]">
-              {EVERCOIN_REQUIRED_MESSAGE}
+              {finalCopy.coinRequiredMessage}
             </p>
           </div>
         </div>
 
         <div className="flex flex-col justify-center p-6 md:p-8">
           <p className="text-center font-display text-3xl font-bold text-bond-rose drop-shadow-[0_0_14px_rgba(255,92,168,0.28)]">
-            Keep your companion
+            {finalCopy.keepCompanion}
           </p>
 
           <div className="mt-8">
@@ -259,7 +254,7 @@ const upgradeGate = `      {gateMode === "upgrade" && (
               href="/coins"
               className="bond-pink-button block rounded-xl bg-bond-rose px-6 py-4 text-center text-base font-extrabold text-white shadow-[0_0_26px_rgba(255,92,168,0.30)] transition hover:scale-[1.01] hover:bg-bond-rose/90"
             >
-              Buy EverCoin
+              {t("buyEverCoin")}
             </Link>
           </div>
         </div>
@@ -313,7 +308,95 @@ for (const value of required) {
 }
 
 fs.writeFileSync(filePath, source, "utf8");
+}
+
+const profileRelativePath =
+  "src/components/character/CharacterProfileShell.tsx";
+const profilePath = path.join(root, profileRelativePath);
+let profileSource = fs.readFileSync(profilePath, "utf8");
+
+if (!profileSource.includes("FINAL_LOCALIZATION_COPY")) {
+  profileSource = replaceRequired(
+    profileSource,
+    'import { CHARACTER_TOOLS_COPY } from "@/lib/character-tools-language";',
+    'import { CHARACTER_TOOLS_COPY } from "@/lib/character-tools-language";\nimport { FINAL_LOCALIZATION_COPY } from "@/lib/final-localization-language";',
+    "character profile localization import"
+  );
+}
+
+if (!profileSource.includes("const finalCopy =")) {
+  profileSource = replaceRequired(
+    profileSource,
+    `  const copy =
+    CHARACTER_TOOLS_COPY[language] ?? CHARACTER_TOOLS_COPY.EN;`,
+    `  const copy =
+    CHARACTER_TOOLS_COPY[language] ?? CHARACTER_TOOLS_COPY.EN;
+  const finalCopy =
+    FINAL_LOCALIZATION_COPY[language] ?? FINAL_LOCALIZATION_COPY.EN;`,
+    "character profile localization copy"
+  );
+}
+
+profileSource = profileSource.replace(
+  'title: `${character.name} on EverBond AI`,',
+  'title: finalCopy.shareTitle(character.name),'
+);
+
+if (!profileSource.includes("finalCopy.shareTitle(character.name)")) {
+  throw new Error(
+    "Shared character auth patch could not localize character sharing."
+  );
+}
+
+fs.writeFileSync(profilePath, profileSource, "utf8");
+
+const browserRelativePath =
+  "src/components/character/useCharacterBrowser.ts";
+const browserPath = path.join(root, browserRelativePath);
+let browserSource = fs.readFileSync(browserPath, "utf8");
+
+browserSource = replaceRequired(
+  browserSource,
+  `  const [characters, setCharacters] = useState(
+    storedSnapshot?.characters ?? (requiresInitialReverseLoad ? [] : initial)
+  );`,
+  `  const [characters, setCharacters] = useState(
+    language === "EN"
+      ? storedSnapshot?.characters ??
+        (requiresInitialReverseLoad ? [] : initial)
+      : storedSnapshot?.characters ?? []
+  );`,
+  "non-English character browser initial state"
+);
+
+browserSource = replaceRequired(
+  browserSource,
+  `      setCharacters(combined);
+
+      if (language !== "EN" && fetchedCharacters.length > 0) {`,
+  `      if (language === "EN") {
+        setCharacters(combined);
+      }
+
+      if (language !== "EN" && fetchedCharacters.length > 0) {`,
+  "non-English character browser loading state"
+);
+
+if (
+  !browserSource.includes('language === "EN"') ||
+  browserSource.includes(
+    `      setCharacters(combined);
+
+      if (language !== "EN"`
+  )
+) {
+  throw new Error(
+    "Shared character auth patch could not prevent English character flashes."
+  );
+}
+
+fs.writeFileSync(browserPath, browserSource, "utf8");
 
 console.log(
-  "Character chat now uses the shared email, Google, and password-recovery modal."
+  "Character chat, sharing, and non-English loading states are finalized."
 );

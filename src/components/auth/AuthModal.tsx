@@ -11,6 +11,7 @@ import {
 } from "@/lib/site-language";
 import { MY_BOND_COPY } from "@/lib/my-bond-language";
 import { CHARACTER_TOOLS_COPY } from "@/lib/character-tools-language";
+import { localizedErrorMessage } from "@/lib/final-localization-language";
 
 type AuthModalProps = {
   open: boolean;
@@ -316,7 +317,14 @@ export function AuthModal({
       });
 
       if (signUp.error) {
-        setError(signUp.error.message);
+        setError(
+          localizedErrorMessage(
+            signUp.error.message,
+            language,
+            undefined,
+            "signup"
+          )
+        );
         return;
       }
 
@@ -357,7 +365,14 @@ export function AuthModal({
         });
 
       if (oauthError) {
-        setError(oauthError.message || extra.googleFailed);
+        setError(
+          localizedErrorMessage(
+            oauthError.message,
+            language,
+            extra.googleFailed,
+            "google"
+          )
+        );
         setLoading(false);
       }
     } catch {

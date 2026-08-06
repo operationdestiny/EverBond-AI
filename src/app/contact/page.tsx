@@ -3,9 +3,12 @@
 import { Briefcase, Bug, Lightbulb, Mail, MessageSquare } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { useSiteLanguage } from "@/lib/site-language";
+import { FINAL_LOCALIZATION_COPY } from "@/lib/final-localization-language";
 
 export default function ContactPage() {
-  const { t } = useSiteLanguage();
+  const { t, language } = useSiteLanguage();
+  const finalCopy =
+    FINAL_LOCALIZATION_COPY[language] ?? FINAL_LOCALIZATION_COPY.EN;
 
   const supportItems = [
     { icon: MessageSquare, title: t("generalSupportTitle"), body: t("generalSupportBody") },
@@ -25,7 +28,8 @@ export default function ContactPage() {
               <p className="text-sm font-bold uppercase tracking-[0.35em] text-bond-rose">{t("contact")}</p>
               <h1 className="mt-5 max-w-xl font-display text-5xl font-bold leading-tight tracking-tight text-white md:text-6xl lg:text-7xl">
                 {t("getInTouch")}<br />
-                with <span className="text-bond-rose">Ever</span><span className="text-white">Bond</span>.
+                {finalCopy.contactWith && <>{finalCopy.contactWith}{" "}</>}
+                <span className="text-bond-rose">Ever</span><span className="text-white">Bond</span>.
               </h1>
 
               <p className="mt-7 max-w-lg text-lg leading-8 text-bond-muted md:text-xl">
@@ -67,7 +71,7 @@ export default function ContactPage() {
               <div className="absolute h-[660px] w-[660px] rounded-full bg-bond-rose/10 blur-3xl" />
               <img
                 src="/assets/everbond-contact-art.png"
-                alt="EverBond contact support"
+                alt={finalCopy.contactImageAlt}
                 className="relative z-10 w-full max-w-[660px] object-contain drop-shadow-[0_0_60px_rgba(255,92,168,0.18)]"
               />
             </div>
@@ -75,7 +79,7 @@ export default function ContactPage() {
             <div className="relative flex justify-center lg:hidden">
               <img
                 src="/assets/everbond-contact-art.png"
-                alt="EverBond contact support"
+                alt={finalCopy.contactImageAlt}
                 className="w-full max-w-[520px] object-contain"
               />
             </div>

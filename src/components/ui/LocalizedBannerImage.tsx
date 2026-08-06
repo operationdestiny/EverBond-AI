@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSiteLanguage, type LanguageCode } from "@/lib/site-language";
+import { FINAL_LOCALIZATION_COPY } from "@/lib/final-localization-language";
 
 type BannerKind = "discover" | "pricing" | "create";
 type DiscoverBannerPair = readonly [string, string];
@@ -117,6 +118,9 @@ export function LocalizedBannerImage({
   draggable
 }: LocalizedBannerImageProps) {
   const { language } = useSiteLanguage();
+  const copy =
+    FINAL_LOCALIZATION_COPY[language] ?? FINAL_LOCALIZATION_COPY.EN;
+  const localizedAlt = copy.bannerAlt[banner] || alt;
 
   if (banner === "discover") {
     const sources =
@@ -126,7 +130,7 @@ export function LocalizedBannerImage({
       <DiscoverBannerRotation
         key={language}
         sources={sources}
-        alt={alt}
+        alt={localizedAlt}
         className={className}
         draggable={draggable}
       />
@@ -138,7 +142,7 @@ export function LocalizedBannerImage({
   return (
     <img
       src={src}
-      alt={alt}
+      alt={localizedAlt}
       className={className}
       draggable={draggable}
     />

@@ -16,6 +16,10 @@ import {
   useSiteLanguage,
   type LanguageCode
 } from "@/lib/site-language";
+import {
+  FINAL_LOCALIZATION_COPY,
+  localizedErrorMessage
+} from "@/lib/final-localization-language";
 
 type Mode = "email" | "password" | "delete" | null;
 type EmailStep =
@@ -313,9 +317,6 @@ const COPY: Record<LanguageCode, Copy> = {
   }
 };
 
-const GOOGLE_PASSWORD_TOOLTIP =
-  "Google signup, no password provided";
-
 function isGoogleOnlySession(session: Session) {
   const providers = new Set<string>();
   const appMetadata = session.user.app_metadata;
@@ -350,6 +351,8 @@ export function AccountSettingsActions({
 }) {
   const { language } = useSiteLanguage();
   const copy = COPY[language] ?? COPY.EN;
+  const finalCopy =
+    FINAL_LOCALIZATION_COPY[language] ?? FINAL_LOCALIZATION_COPY.EN;
   const googleOnlyAccount = isGoogleOnlySession(session);
 
   const [mode, setMode] = useState<Mode>(null);
@@ -587,9 +590,12 @@ export function AccountSettingsActions({
 
       if (!response.ok) {
         throw new Error(
-          typeof payload?.message === "string"
-            ? payload.message
-            : copy.deleteFailed
+          localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            copy.deleteFailed,
+            "accountDelete"
+          )
         );
       }
 
@@ -658,7 +664,7 @@ export function AccountSettingsActions({
                 role="tooltip"
                 className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 w-max max-w-[190px] -translate-x-1/2 rounded-md border border-white/10 bg-black/95 px-2 py-1 text-center text-[10px] leading-4 text-white/75 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100"
               >
-                {GOOGLE_PASSWORD_TOOLTIP}
+                {finalCopy.googlePasswordTooltip}
               </span>
             )}
           </div>

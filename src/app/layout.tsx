@@ -26,9 +26,20 @@ export const metadata: Metadata = {
   }
 };
 
+const INITIAL_LANGUAGE_SCRIPT = `
+try {
+  var code = localStorage.getItem("everbond-language") || "EN";
+  var languages = { EN: "en", ES: "es", FR: "fr", DE: "de", JA: "ja", KO: "ko" };
+  document.documentElement.lang = languages[code] || "en";
+} catch (_) {}
+`;
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${space.variable}`}>
+    <html lang="en" className={`${inter.variable} ${space.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: INITIAL_LANGUAGE_SCRIPT }} />
+      </head>
       <body>{children}</body>
     </html>
   );
