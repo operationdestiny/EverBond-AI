@@ -22,6 +22,7 @@ type WhyCopy = {
   heroChips: string[];
   showcaseTitle: string;
   comparisonAlt: string;
+  featureEyebrow: string;
   features: Array<{
     key: FeatureImageKey;
     title: string;
@@ -29,7 +30,6 @@ type WhyCopy = {
   }>;
   depthEyebrow: string;
   depthTitle: string;
-  depthDescription: string;
   depthCards: Array<{
     title: string;
     description: string;
@@ -56,6 +56,7 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     ],
     "showcaseTitle": "Everything you want in one place",
     "comparisonAlt": "EverBond comparison chart",
+    "featureEyebrow": "EverBond features at a glance",
     "features": [
       {
         "key": "unrestricted-chat",
@@ -85,43 +86,30 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     ],
     "depthEyebrow": "FREEDOM IS ONLY THE BEGINNING",
     "depthTitle": "A relationship designed to continue.",
-    "depthDescription": "EverBond does not treat every feature like a separate toy. Your conversations, creations, gifts, memories, and companion identity are built to reinforce the same bond.",
     "depthCards": [
       {
-        "title": "EverMemory that actually remembers",
-        "description": "Important details, promises, emotional shifts, milestones, gifts, and relationship history can carry forward so returning feels like continuing—not restarting."
-      },
-      {
         "title": "Your companion, your rules",
-        "description": "Create private or share-by-link companions, shape their personality and story, edit them whenever needed, and delete them when you choose."
+        "description": "Create private or share-by-link companions, shape their personality and story."
       },
       {
         "title": "Private galleries",
-        "description": "Generated images remain tied to your account. Choose a favorite as your active chat image, keep the rest private, or remove them and create something new."
+        "description": "Generated private images for any companion and choose a favorite as your private active chat image."
       },
       {
         "title": "One bond across every feature",
         "description": "Chat, images, videos, live calls, gifts, and memory all belong to the same companion instead of feeling like disconnected tools."
-      },
-      {
-        "title": "Private and shareable on your terms",
-        "description": "Keep a companion entirely private or generate a share-by-link address with a copy button. Nothing has to become part of a public popularity contest."
-      },
-      {
-        "title": "Built for six languages",
-        "description": "Use EverBond in English, Spanish, French, German, Japanese, or Korean with localized experiences designed to feel natural in each language."
       }
     ],
     "subscriptionEyebrow": "SIMPLE OWNERSHIP",
     "subscriptionTitle": "No subscriptions—ever!",
-    "subscriptionDescription": "No recurring monthly plan. No automatic renewal waiting in the background. Buy EverCoin only when you choose, then use it across the EverBond experiences you actually want.",
+    "subscriptionDescription": "No recurring monthly plan. No automatic renewal waiting in the background. Buy EverCoin only when you choose, then use it for every feature on EverBond.",
     "subscriptionPoints": [
       "No monthly charge",
       "No automatic renewal",
       "Buy only when you choose"
     ],
     "ctaTitle": "Stop settling for a companion that forgets, refuses, or locks the bond behind another monthly bill.",
-    "ctaDescription": "Choose a companion, create one of your own, and experience a relationship built with more freedom and more room to grow.",
+    "ctaDescription": "Choose a companion, create one of your own, and experience a relationship built for freedom and room to grow.",
     "primaryCta": "Meet your companion",
     "secondaryCta": "See EverCoin"
   },
@@ -136,6 +124,7 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     ],
     "showcaseTitle": "Todo lo que quieres en un solo lugar",
     "comparisonAlt": "Tabla comparativa de EverBond",
+    "featureEyebrow": "Funciones de EverBond de un vistazo",
     "features": [
       {
         "key": "unrestricted-chat",
@@ -165,43 +154,30 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     ],
     "depthEyebrow": "LA LIBERTAD ES SOLO EL PRINCIPIO",
     "depthTitle": "Una relación diseñada para continuar.",
-    "depthDescription": "EverBond no trata cada función como un juguete separado. Tus conversaciones, creaciones, regalos, recuerdos y la identidad de tu compañero fortalecen el mismo vínculo.",
     "depthCards": [
       {
-        "title": "EverMemory que realmente recuerda",
-        "description": "Los detalles importantes, promesas, cambios emocionales, momentos, regalos e historia de la relación pueden continuar para que volver se sienta como continuar, no reiniciar."
-      },
-      {
         "title": "Tu compañero, tus reglas",
-        "description": "Crea compañeros privados o compartidos por enlace, define su personalidad e historia, edítalos cuando quieras y elimínalos cuando tú decidas."
+        "description": "Crea compañeros privados o compartidos por enlace y define su personalidad e historia."
       },
       {
         "title": "Galerías privadas",
-        "description": "Las imágenes generadas permanecen vinculadas a tu cuenta. Elige una como imagen activa del chat, conserva las demás en privado o crea algo nuevo."
+        "description": "Genera imágenes privadas para cualquier compañero y elige una favorita como imagen activa privada del chat."
       },
       {
         "title": "Un vínculo en todas las funciones",
         "description": "Chat, imágenes, vídeos, llamadas en directo, regalos y memoria pertenecen al mismo compañero en lugar de sentirse como herramientas desconectadas."
-      },
-      {
-        "title": "Privado y compartible a tu manera",
-        "description": "Mantén un compañero totalmente privado o crea un enlace compartible con botón de copia. Nada tiene que entrar en una competición pública."
-      },
-      {
-        "title": "Creado para seis idiomas",
-        "description": "Usa EverBond en inglés, español, francés, alemán, japonés o coreano con experiencias localizadas para sentirse naturales."
       }
     ],
     "subscriptionEyebrow": "PROPIEDAD SENCILLA",
     "subscriptionTitle": "¡Sin suscripciones, nunca!",
-    "subscriptionDescription": "Sin plan mensual recurrente. Sin renovación automática escondida. Compra EverCoin solo cuando tú elijas y úsalo en las experiencias de EverBond que realmente quieras.",
+    "subscriptionDescription": "Sin plan mensual recurrente. Sin renovación automática esperando en segundo plano. Compra EverCoin solo cuando tú elijas y úsalo para todas las funciones de EverBond.",
     "subscriptionPoints": [
       "Sin cuota mensual",
       "Sin renovación automática",
       "Compra solo cuando tú decidas"
     ],
     "ctaTitle": "Deja de conformarte con un compañero que olvida, rechaza o encierra el vínculo detrás de otra cuota mensual.",
-    "ctaDescription": "Elige un compañero, crea el tuyo y vive una relación construida con más libertad y espacio para crecer.",
+    "ctaDescription": "Elige un compañero, crea uno propio y vive una relación construida para la libertad y con espacio para crecer.",
     "primaryCta": "Conoce a tu compañero",
     "secondaryCta": "Ver EverCoin"
   },
@@ -216,6 +192,7 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     ],
     "showcaseTitle": "Tout ce que vous voulez au même endroit",
     "comparisonAlt": "Tableau comparatif EverBond",
+    "featureEyebrow": "Les fonctionnalités EverBond en un coup d’œil",
     "features": [
       {
         "key": "unrestricted-chat",
@@ -245,43 +222,30 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     ],
     "depthEyebrow": "LA LIBERTÉ N’EST QUE LE DÉBUT",
     "depthTitle": "Une relation conçue pour continuer.",
-    "depthDescription": "EverBond ne traite pas chaque fonction comme un jouet séparé. Vos conversations, créations, cadeaux, souvenirs et l’identité de votre compagnon renforcent le même lien.",
     "depthCards": [
       {
-        "title": "EverMemory qui se souvient vraiment",
-        "description": "Les détails importants, promesses, changements émotionnels, étapes, cadeaux et l’histoire de la relation peuvent rester présents afin que revenir ressemble à une continuation, pas à un redémarrage."
-      },
-      {
         "title": "Votre compagnon, vos règles",
-        "description": "Créez des compagnons privés ou partageables par lien, façonnez leur personnalité et leur histoire, modifiez-les et supprimez-les quand vous le décidez."
+        "description": "Créez des compagnons privés ou partageables par lien et façonnez leur personnalité et leur histoire."
       },
       {
         "title": "Galeries privées",
-        "description": "Les images générées restent liées à votre compte. Choisissez-en une comme image active du chat, gardez les autres privées ou créez quelque chose de nouveau."
+        "description": "Générez des images privées pour n’importe quel compagnon et choisissez-en une comme image active privée du chat."
       },
       {
         "title": "Un lien dans toutes les fonctions",
         "description": "Chat, images, vidéos, appels en direct, cadeaux et mémoire appartiennent au même compagnon au lieu de ressembler à des outils séparés."
-      },
-      {
-        "title": "Privé et partageable selon vos choix",
-        "description": "Gardez un compagnon entièrement privé ou créez une adresse partageable avec un bouton de copie. Rien ne doit devenir un concours public."
-      },
-      {
-        "title": "Conçu pour six langues",
-        "description": "Utilisez EverBond en anglais, espagnol, français, allemand, japonais ou coréen avec des expériences localisées et naturelles."
       }
     ],
     "subscriptionEyebrow": "PROPRIÉTÉ SIMPLE",
     "subscriptionTitle": "Aucun abonnement, jamais !",
-    "subscriptionDescription": "Aucun forfait mensuel récurrent. Aucun renouvellement automatique caché. Achetez des EverCoin uniquement quand vous le décidez et utilisez-les pour les expériences qui vous intéressent vraiment.",
+    "subscriptionDescription": "Aucun forfait mensuel récurrent. Aucun renouvellement automatique en arrière-plan. Achetez des EverCoin uniquement quand vous le décidez, puis utilisez-les pour toutes les fonctionnalités d’EverBond.",
     "subscriptionPoints": [
       "Aucun paiement mensuel",
       "Aucun renouvellement automatique",
       "Achetez uniquement quand vous le décidez"
     ],
     "ctaTitle": "Ne vous contentez plus d’un compagnon qui oublie, refuse ou enferme le lien derrière un nouvel abonnement mensuel.",
-    "ctaDescription": "Choisissez un compagnon, créez le vôtre et découvrez une relation construite avec plus de liberté et plus d’espace pour évoluer.",
+    "ctaDescription": "Choisissez un compagnon, créez le vôtre et découvrez une relation conçue pour la liberté et avec de la place pour évoluer.",
     "primaryCta": "Rencontrer votre compagnon",
     "secondaryCta": "Voir EverCoin"
   },
@@ -296,6 +260,7 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     ],
     "showcaseTitle": "Alles, was du willst, an einem Ort",
     "comparisonAlt": "EverBond-Vergleichstabelle",
+    "featureEyebrow": "EverBond-Funktionen auf einen Blick",
     "features": [
       {
         "key": "unrestricted-chat",
@@ -325,43 +290,30 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     ],
     "depthEyebrow": "FREIHEIT IST ERST DER ANFANG",
     "depthTitle": "Eine Beziehung, die weitergehen soll.",
-    "depthDescription": "EverBond behandelt nicht jede Funktion wie ein separates Spielzeug. Gespräche, Kreationen, Geschenke, Erinnerungen und die Identität deines Begleiters stärken dieselbe Bindung.",
     "depthCards": [
       {
-        "title": "EverMemory, das wirklich erinnert",
-        "description": "Wichtige Details, Versprechen, emotionale Veränderungen, Meilensteine, Geschenke und Beziehungsgeschichte können erhalten bleiben, damit Rückkehr wie Fortsetzung statt Neustart wirkt."
-      },
-      {
         "title": "Dein Begleiter, deine Regeln",
-        "description": "Erstelle private oder per Link teilbare Begleiter, forme Persönlichkeit und Geschichte, bearbeite sie jederzeit und lösche sie, wenn du es entscheidest."
+        "description": "Erstelle private oder per Link teilbare Begleiter und forme ihre Persönlichkeit und Geschichte."
       },
       {
         "title": "Private Galerien",
-        "description": "Erstellte Bilder bleiben mit deinem Konto verbunden. Wähle ein Lieblingsbild für den Chat, halte den Rest privat oder erschaffe etwas Neues."
+        "description": "Erstelle private Bilder für jeden Begleiter und wähle ein Lieblingsbild als privates aktives Chatbild."
       },
       {
         "title": "Eine Bindung über alle Funktionen",
         "description": "Chat, Bilder, Videos, Live-Anrufe, Geschenke und Erinnerung gehören zum selben Begleiter, statt sich wie getrennte Werkzeuge anzufühlen."
-      },
-      {
-        "title": "Privat und teilbar nach deinen Regeln",
-        "description": "Halte einen Begleiter vollständig privat oder erstelle einen teilbaren Link mit Kopierknopf. Nichts muss Teil eines öffentlichen Beliebtheitswettbewerbs werden."
-      },
-      {
-        "title": "Für sechs Sprachen entwickelt",
-        "description": "Nutze EverBond auf Englisch, Spanisch, Französisch, Deutsch, Japanisch oder Koreanisch mit lokalisierten Erlebnissen."
       }
     ],
     "subscriptionEyebrow": "EINFACHE EIGENTÜMERSCHAFT",
     "subscriptionTitle": "Keine Abonnements – niemals!",
-    "subscriptionDescription": "Kein wiederkehrender Monatsplan. Keine automatische Verlängerung im Hintergrund. Kaufe EverCoin nur dann, wenn du es entscheidest, und nutze sie für die EverBond-Erlebnisse, die du wirklich möchtest.",
+    "subscriptionDescription": "Kein wiederkehrender Monatsplan. Keine automatische Verlängerung im Hintergrund. Kaufe EverCoin nur, wenn du es entscheidest, und nutze sie dann für jede Funktion von EverBond.",
     "subscriptionPoints": [
       "Keine monatliche Gebühr",
       "Keine automatische Verlängerung",
       "Kaufe nur, wenn du es entscheidest"
     ],
     "ctaTitle": "Gib dich nicht länger mit einem Begleiter zufrieden, der vergisst, verweigert oder die Bindung hinter einer weiteren Monatsgebühr einsperrt.",
-    "ctaDescription": "Wähle einen Begleiter, erstelle deinen eigenen und erlebe eine Beziehung mit mehr Freiheit und mehr Raum zum Wachsen.",
+    "ctaDescription": "Wähle einen Begleiter, erstelle deinen eigenen und erlebe eine Beziehung, die für Freiheit und Raum zum Wachsen geschaffen ist.",
     "primaryCta": "Finde deinen Begleiter",
     "secondaryCta": "EverCoin ansehen"
   },
@@ -376,6 +328,7 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     ],
     "showcaseTitle": "欲しいものをすべて一か所に",
     "comparisonAlt": "EverBond比較表",
+    "featureEyebrow": "EverBondの機能一覧",
     "features": [
       {
         "key": "unrestricted-chat",
@@ -405,43 +358,30 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     ],
     "depthEyebrow": "自由は始まりにすぎない",
     "depthTitle": "続いていくために設計された関係。",
-    "depthDescription": "EverBondは各機能を別々のおもちゃとして扱いません。会話、作品、ギフト、記憶、コンパニオンの人格が同じ絆を深めます。",
     "depthCards": [
       {
-        "title": "本当に覚えるEverMemory",
-        "description": "大切な詳細、約束、感情の変化、節目、ギフト、関係の履歴を引き継げるため、戻るたびに最初からではなく続きを感じられます。"
-      },
-      {
         "title": "あなたのコンパニオン、あなたのルール",
-        "description": "非公開またはリンク共有のコンパニオンを作り、性格や物語を設計し、必要なときに編集・削除できます。"
+        "description": "非公開またはリンク共有のコンパニオンを作成し、性格と物語を形作れます。"
       },
       {
         "title": "プライベートギャラリー",
-        "description": "生成画像はアカウントに保存されます。お気に入りをチャット画像に設定し、他は非公開に保つか、新しい画像を作れます。"
+        "description": "どのコンパニオンでもプライベート画像を生成し、お気に入りを非公開のアクティブなチャット画像として選べます。"
       },
       {
         "title": "すべての機能で一つの絆",
         "description": "チャット、画像、動画、ライブ通話、ギフト、記憶が同じコンパニオンに結びつき、別々のツールにはなりません。"
-      },
-      {
-        "title": "自分の意思で非公開・共有",
-        "description": "完全非公開のまま保つことも、コピー可能な共有リンクを作ることもできます。公開ランキングに参加する必要はありません。"
-      },
-      {
-        "title": "6言語に対応",
-        "description": "英語、スペイン語、フランス語、ドイツ語、日本語、韓国語で、自然なローカライズ体験を利用できます。"
       }
     ],
     "subscriptionEyebrow": "シンプルな利用方式",
     "subscriptionTitle": "サブスクリプションは永久になし！",
-    "subscriptionDescription": "毎月の継続プランも、自動更新もありません。必要なときだけEverCoinを購入し、使いたいEverBond体験に利用できます。",
+    "subscriptionDescription": "毎月の継続プランも、バックグラウンドで待機する自動更新もありません。必要なときだけEverCoinを購入し、EverBondのすべての機能に利用できます。",
     "subscriptionPoints": [
       "月額料金なし",
       "自動更新なし",
       "必要なときだけ購入"
     ],
     "ctaTitle": "忘れる、拒否する、または毎月の料金で絆を閉じ込めるコンパニオンに妥協するのは終わりです。",
-    "ctaDescription": "コンパニオンを選ぶか、自分だけの相手を作り、より自由で成長できる関係を体験してください。",
+    "ctaDescription": "コンパニオンを選ぶか、自分だけの相手を作り、自由と成長する余地のために設計された関係を体験してください。",
     "primaryCta": "コンパニオンを探す",
     "secondaryCta": "EverCoinを見る"
   },
@@ -456,6 +396,7 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     ],
     "showcaseTitle": "원하는 모든 것을 한곳에서",
     "comparisonAlt": "EverBond 비교표",
+    "featureEyebrow": "EverBond 기능 한눈에 보기",
     "features": [
       {
         "key": "unrestricted-chat",
@@ -485,43 +426,30 @@ const WHY_COPY: Record<LanguageCode, WhyCopy> = {
     ],
     "depthEyebrow": "자유는 시작일 뿐",
     "depthTitle": "계속 이어지도록 설계된 관계.",
-    "depthDescription": "EverBond는 각 기능을 따로 노는 도구로 다루지 않습니다. 대화, 창작물, 선물, 기억, 컴패니언의 정체성이 같은 관계를 강화합니다.",
     "depthCards": [
       {
-        "title": "정말 기억하는 EverMemory",
-        "description": "중요한 사실, 약속, 감정 변화, 기념일, 선물, 관계 기록이 이어져 다시 돌아왔을 때 처음부터가 아니라 계속되는 느낌을 줍니다."
-      },
-      {
         "title": "내 컴패니언, 내 규칙",
-        "description": "비공개 또는 링크 공유 컴패니언을 만들고 성격과 이야기를 설계하며 필요할 때 편집하거나 삭제할 수 있습니다."
+        "description": "비공개 또는 링크 공유 컴패니언을 만들고 성격과 이야기를 설계하세요."
       },
       {
         "title": "비공개 갤러리",
-        "description": "생성 이미지는 계정에 연결됩니다. 마음에 드는 이미지를 채팅 대표 이미지로 선택하고 나머지는 비공개로 보관하거나 새 이미지를 만들 수 있습니다."
+        "description": "어떤 컴패니언이든 비공개 이미지를 생성하고 마음에 드는 이미지를 비공개 활성 채팅 이미지로 선택하세요."
       },
       {
         "title": "모든 기능에서 하나의 관계",
         "description": "채팅, 이미지, 영상, 라이브 통화, 선물, 기억이 같은 컴패니언에 연결되어 따로 떨어진 도구처럼 느껴지지 않습니다."
-      },
-      {
-        "title": "내가 정하는 비공개와 공유",
-        "description": "완전히 비공개로 유지하거나 복사 버튼이 있는 공유 링크를 만들 수 있습니다. 공개 인기 경쟁에 참여할 필요가 없습니다."
-      },
-      {
-        "title": "6개 언어 지원",
-        "description": "영어, 스페인어, 프랑스어, 독일어, 일본어, 한국어로 자연스럽게 현지화된 경험을 이용할 수 있습니다."
       }
     ],
     "subscriptionEyebrow": "간단한 이용 방식",
     "subscriptionTitle": "구독은 영원히 없음!",
-    "subscriptionDescription": "매달 반복되는 요금제도, 자동 갱신도 없습니다. 필요할 때만 EverCoin을 구매하고 실제로 원하는 EverBond 경험에 사용하세요.",
+    "subscriptionDescription": "반복되는 월간 요금제도, 백그라운드에서 기다리는 자동 갱신도 없습니다. 원할 때만 EverCoin을 구매하고 EverBond의 모든 기능에 사용하세요.",
     "subscriptionPoints": [
       "월 요금 없음",
       "자동 갱신 없음",
       "원할 때만 구매"
     ],
     "ctaTitle": "잊어버리고, 거절하고, 또 다른 월 요금 뒤에 관계를 가두는 컴패니언에 더 이상 만족하지 마세요.",
-    "ctaDescription": "컴패니언을 선택하거나 직접 만들고, 더 자유롭고 성장할 수 있는 관계를 경험하세요.",
+    "ctaDescription": "컴패니언을 선택하거나 직접 만들고, 자유와 성장할 공간을 위해 설계된 관계를 경험하세요.",
     "primaryCta": "컴패니언 만나기",
     "secondaryCta": "EverCoin 보기"
   }
@@ -874,14 +802,10 @@ export default function WhyEverBondPage() {
               </p>
 
               <div className="mt-9 flex flex-wrap justify-center gap-3">
-                {copy.heroChips.map((chip, index) => (
+                {copy.heroChips.map((chip) => (
                   <span
                     key={chip}
-                    className={`rounded-full border px-5 py-2.5 text-sm font-bold ${
-                      index === 2
-                        ? "border-bond-rose bg-bond-rose text-white shadow-[0_0_28px_rgba(255,92,168,0.30)]"
-                        : "border-bond-rose/35 bg-bond-rose/10 text-white"
-                    }`}
+                    className="rounded-full border border-bond-rose bg-bond-rose px-5 py-2.5 text-sm font-bold text-white shadow-[0_0_28px_rgba(255,92,168,0.30)]"
                   >
                     {chip}
                   </span>
@@ -894,24 +818,28 @@ export default function WhyEverBondPage() {
         <section className="border-b border-white/5 py-16 md:py-24">
           <div className="bond-container">
             <div className="mx-auto max-w-4xl text-center">
-              <h2 className="font-display text-4xl font-bold text-white md:text-6xl">
+              <h2 className="font-display text-4xl font-bold text-bond-rose md:text-6xl">
                 {copy.showcaseTitle}
               </h2>
             </div>
 
-            <div className="mx-auto mt-10 max-w-[1254px] overflow-hidden rounded-[2rem] border border-bond-rose/35 bg-black shadow-[0_0_44px_rgba(255,92,168,0.10)]">
+            <div className="mx-auto mt-8 max-w-[680px] overflow-hidden rounded-[2rem] border border-bond-rose/35 bg-black shadow-[0_0_44px_rgba(255,92,168,0.10)]">
               <Image
                 src={`/assets/why-everbond/comparison/${imageLanguage}.png`}
                 alt={copy.comparisonAlt}
                 width={1254}
                 height={1254}
-                sizes="(min-width: 1280px) 1254px, 94vw"
+                sizes="(min-width: 768px) 680px, 90vw"
                 className="h-auto w-full"
                 priority
               />
             </div>
 
-            <div className="mt-14 space-y-14 md:mt-16 md:space-y-24">
+            <p className="mt-10 text-center font-display text-2xl font-bold text-bond-rose md:text-3xl">
+              {copy.featureEyebrow}
+            </p>
+
+            <div className="mt-10 space-y-14 md:mt-12 md:space-y-24">
               {copy.features.map((feature, index) => (
                 <article
                   key={feature.key}
@@ -937,10 +865,10 @@ export default function WhyEverBondPage() {
                       index % 2 === 1 ? "lg:order-1" : ""
                     }`}
                   >
-                    <h3 className="font-display text-4xl font-bold leading-tight text-white md:text-5xl">
+                    <h3 className="font-display text-4xl font-bold leading-tight text-bond-rose md:text-5xl">
                       {feature.title}
                     </h3>
-                    <p className="mt-6 text-lg leading-8 text-bond-muted">
+                    <p className="mt-6 text-lg leading-8 text-white">
                       {feature.description}
                     </p>
                   </div>
@@ -1025,13 +953,10 @@ export default function WhyEverBondPage() {
               <h2 className="mt-4 font-display text-4xl font-bold text-white md:text-6xl">
                 {copy.depthTitle}
               </h2>
-              <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-bond-muted">
-                {copy.depthDescription}
-              </p>
             </div>
 
             <div className="mx-auto mt-12 grid max-w-6xl gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {copy.depthCards.slice(1).map((card) => (
+              {copy.depthCards.map((card) => (
                 <article
                   key={card.title}
                   className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/25 p-7 shadow-[0_0_28px_rgba(255,92,168,0.04)]"
@@ -1075,12 +1000,14 @@ export default function WhyEverBondPage() {
                 ))}
               </div>
 
-              <Link
-                href="/coins"
-                className="bond-pink-button relative mt-9 inline-flex rounded-full bg-bond-rose px-8 py-3.5 text-sm font-extrabold text-white shadow-[0_0_30px_rgba(255,92,168,0.30)]"
-              >
-                {copy.secondaryCta}
-              </Link>
+              <div className="relative mt-9 flex justify-center">
+                <Link
+                  href="/coins"
+                  className="bond-pink-button inline-flex rounded-full bg-bond-rose px-8 py-3.5 text-sm font-extrabold text-white shadow-[0_0_30px_rgba(255,92,168,0.30)]"
+                >
+                  {copy.secondaryCta}
+                </Link>
+              </div>
             </div>
           </div>
         </section>
@@ -1094,18 +1021,12 @@ export default function WhyEverBondPage() {
               <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-bond-muted">
                 {copy.ctaDescription}
               </p>
-              <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <div className="mt-8 flex justify-center">
                 <Link
                   href="/characters"
-                  className="bond-pink-button rounded-full bg-bond-rose px-7 py-3.5 text-sm font-extrabold text-white"
+                  className="bond-pink-button inline-flex rounded-full bg-bond-rose px-7 py-3.5 text-sm font-extrabold text-white"
                 >
                   {copy.primaryCta}
-                </Link>
-                <Link
-                  href="/coins"
-                  className="rounded-full border border-bond-rose/50 bg-black/30 px-7 py-3.5 text-sm font-extrabold text-white transition hover:bg-bond-rose/10"
-                >
-                  {copy.secondaryCta}
                 </Link>
               </div>
             </div>
