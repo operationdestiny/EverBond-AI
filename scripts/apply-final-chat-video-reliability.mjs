@@ -132,9 +132,7 @@ videoRoute = replaceRequired(
           {
             frontal_image_url: referenceImage
           }
-        ],
-        negative_prompt:
-          "identity drift, different person, face distortion, low resolution, blur, watermark, text, duplicate body parts"`,
+        ]`,
   "Kling O3 identity element request"
 );
 
@@ -142,8 +140,11 @@ if (
   !videoRoute.includes("const VIDEO_DURATIONS = [8] as const;") ||
   !videoRoute.includes("@Element1 is the exact fictional adult character") ||
   !videoRoute.includes("frontal_image_url: referenceImage") ||
+  !videoRoute.includes('aspect_ratio: "9:16"') ||
+  !videoRoute.includes("audio: false") ||
   videoRoute.includes("reference_image_urls: [referenceImage]") ||
-  videoRoute.includes("resolution: pricing.resolution")
+  videoRoute.includes("resolution: pricing.resolution") ||
+  videoRoute.includes("negative_prompt:")
 ) {
   throw new Error("Kling O3 video route validation failed.");
 }
@@ -162,76 +163,6 @@ galleryClient = replaceRequired(
 );
 
 write(galleryClientPath, galleryClient);
-
-// ===========================================================================
-// CHAT PROVIDER RELIABILITY
-//
-// A provider request must not be allowed to hang indefinitely. Main replies
-// get 25 seconds per provider attempt; the secondary memory extraction gets
-// 10 seconds and is already best-effort in voice-chat.ts.
-// ===========================================================================
-
-const providerPath = "src/lib/ai/provider.ts";
-let provider = read(providerPath);
-
-provider = replaceRequired(
-  provider,
-  `async function postChatCompletion(
-  endpoint: string,
-  apiKey: string,
-  body: Record<string, unknown>
-) {
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: \`Bearer \${apiKey}\`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });`,
-  `async function postChatCompletion(
-  endpoint: string,
-  apiKey: string,
-  body: Record<string, unknown>,
-  timeoutMs = 25_000
-) {
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: \`Bearer \${apiKey}\`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs)
-  });`,
-  "provider request timeout"
-);
-
-provider = replaceRequired(
-  provider,
-  `  const data: any = await postChatCompletion(
-    endpoint,
-    config.apiKey,
-    requestBody
-  );`,
-  `  const data: any = await postChatCompletion(
-    endpoint,
-    config.apiKey,
-    requestBody,
-    10_000
-  );`,
-  "memory-model timeout"
-);
-
-if (
-  !provider.includes("timeoutMs = 25_000") ||
-  !provider.includes("signal: AbortSignal.timeout(timeoutMs)") ||
-  !provider.includes("requestBody,\n    10_000")
-) {
-  throw new Error("Chat provider reliability validation failed.");
-}
-
-write(providerPath, provider);
 
 // ===========================================================================
 // TEXT CHAT: reject an empty provider reply so the route can retry/refund
@@ -262,7 +193,7 @@ write(voiceChatPath, voiceChat);
 
 // ===========================================================================
 // CHAT API
-// - Retry empty/time-out replies.
+// - Retry empty replies through the existing retry path.
 // - Add a real DELETE reset endpoint.
 // - Reset clears message history and pending request locks for this character,
 //   but preserves relationship_states / ever_memory and conversation memory.
@@ -272,8 +203,6 @@ const chatRoutePath = "src/app/api/chat/route.ts";
 let chatRoute = read(chatRoutePath);
 
 if (!chatRoute.includes('export const runtime = "nodejs";')) {
-  const importEndMarker =
-    'import {\\n  beginGiftSend,\\n  completeGiftSend,\\n  failGiftSend\\n} from "@/lib/evershop/server";\\n';
   const actualMarker = `import {
   beginGiftSend,
   completeGiftSend,
@@ -281,29 +210,14 @@ if (!chatRoute.includes('export const runtime = "nodejs";')) {
 } from "@/lib/evershop/server";
 `;
 
-  chatRoute = insertBeforeRequired(
+  chatRoute = replaceRequired(
     chatRoute,
     actualMarker,
     actualMarker +
-      '\nexport const runtime = "nodejs";\nexport const maxDuration = 60;\n\n',
-    'export const runtime = "nodejs";',
+      `\nexport const runtime = "nodejs";\nexport const maxDuration = 60;\n`,
     "chat runtime configuration"
-  ).replace(actualMarker + actualMarker, actualMarker);
+  );
 }
-
-chatRoute = replaceRequired(
-  chatRoute,
-  `  for (let attempt = 1; attempt <= 3; attempt += 1) {`,
-  `  for (let attempt = 1; attempt <= 2; attempt += 1) {`,
-  "chat retry attempt count"
-);
-
-chatRoute = replaceRequired(
-  chatRoute,
-  `      if (attempt === 3 || !isRetryableCharacterTurnError(error)) {`,
-  `      if (attempt === 2 || !isRetryableCharacterTurnError(error)) {`,
-  "chat retry terminal attempt"
-);
 
 chatRoute = replaceRequired(
   chatRoute,
@@ -426,7 +340,6 @@ chatRoute = insertBeforeRequired(
 if (
   !chatRoute.includes("export async function DELETE(request: Request)") ||
   !chatRoute.includes('errorCode: "CHAT_RESET"') ||
-  !chatRoute.includes("attempt <= 2") ||
   !chatRoute.includes("empty_text_reply")
 ) {
   throw new Error("Chat route reliability validation failed.");
@@ -436,45 +349,76 @@ write(chatRoutePath, chatRoute);
 
 // ===========================================================================
 // CHAT CLIENT
-// - Refresh Chat now calls the server reset.
-// - It can abort a stuck in-flight chat request.
-// - Chat failures are visible instead of silently disappearing.
+//
+// Patch by stable anchors instead of one large exact state block. Earlier
+// prebuild scripts can insert additional ChatShell state, so large multiline
+// replacements are intentionally avoided here.
 // ===========================================================================
 
 const chatShellPath = "src/components/chat/ChatShell.tsx";
 let chatShell = read(chatShellPath);
 
-chatShell = replaceRequired(
-  chatShell,
-  `  const [giftError, setGiftError] = useState("");
+// Add reliability state directly after the existing gift-error state.
+if (!chatShell.includes('const [chatError, setChatError] = useState("");')) {
+  const stateMarker =
+    '  const [giftError, setGiftError] = useState("");';
 
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const sendInFlightRef = useRef(false);`,
-  `  const [giftError, setGiftError] = useState("");
-  const [chatError, setChatError] = useState("");
-  const [refreshingChat, setRefreshingChat] = useState(false);
+  const stateIndex = chatShell.indexOf(stateMarker);
+  if (stateIndex < 0) {
+    throw new Error(
+      "Final chat/video reliability patch could not find: giftError state anchor"
+    );
+  }
 
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const sendInFlightRef = useRef(false);
-  const chatAbortRef = useRef<AbortController | null>(null);
-  const chatGenerationRef = useRef(0);`,
-  "chat reliability state"
-);
+  const stateInsertAt = stateIndex + stateMarker.length;
+  chatShell =
+    chatShell.slice(0, stateInsertAt) +
+    '\n  const [chatError, setChatError] = useState("");' +
+    '\n  const [refreshingChat, setRefreshingChat] = useState(false);' +
+    chatShell.slice(stateInsertAt);
+}
 
-chatShell = replaceRequired(
-  chatShell,
-  `  function resetConversation() {
-    if (sendInFlightRef.current) return;
+// Add abort/generation refs directly after the existing in-flight ref.
+if (
+  !chatShell.includes(
+    "const chatAbortRef = useRef<AbortController | null>(null);"
+  )
+) {
+  const refMarker =
+    "  const sendInFlightRef = useRef(false);";
 
-    setMessages([{ role: "character", content: initialCharacterMessage }]);
-    setInput("");
-    setIsTyping(false);
-    setGiftError("");
-    focusChatInput();
-  }`,
-  `  async function resetConversation() {
+  const refIndex = chatShell.indexOf(refMarker);
+  if (refIndex < 0) {
+    throw new Error(
+      "Final chat/video reliability patch could not find: sendInFlightRef anchor"
+    );
+  }
+
+  const refInsertAt = refIndex + refMarker.length;
+  chatShell =
+    chatShell.slice(0, refInsertAt) +
+    "\n  const chatAbortRef = useRef<AbortController | null>(null);" +
+    "\n  const chatGenerationRef = useRef(0);" +
+    chatShell.slice(refInsertAt);
+}
+
+// Replace the complete reset function by function-name anchors.
+if (!chatShell.includes("async function resetConversation()")) {
+  const resetStart = chatShell.indexOf(
+    "  function resetConversation() {"
+  );
+  const shareStart = chatShell.indexOf(
+    "  function shareCompanion() {",
+    resetStart
+  );
+
+  if (resetStart < 0 || shareStart < 0 || shareStart <= resetStart) {
+    throw new Error(
+      "Final chat/video reliability patch could not find: resetConversation anchors"
+    );
+  }
+
+  const fixedReset = `  async function resetConversation() {
     if (refreshingChat) return;
 
     chatGenerationRef.current += 1;
@@ -490,7 +434,9 @@ chatShell = replaceRequired(
     try {
       if (session?.access_token) {
         const response = await fetch(
-          \`/api/chat?characterSlug=\${encodeURIComponent(character.slug)}\`,
+          \`/api/chat?characterSlug=\${encodeURIComponent(
+            character.slug
+          )}\`,
           {
             method: "DELETE",
             headers: {
@@ -498,23 +444,36 @@ chatShell = replaceRequired(
             }
           }
         );
-        const data = await response.json().catch(() => ({}));
+
+        const data = await response
+          .json()
+          .catch(() => ({}));
 
         if (!response.ok) {
-          throw new Error(data?.error || "CHAT_RESET_FAILED");
+          throw new Error(
+            data?.error || "CHAT_RESET_FAILED"
+          );
         }
 
-        setConversationId(data.conversationId ?? null);
+        setConversationId(
+          data.conversationId ?? null
+        );
       } else {
         setConversationId(null);
       }
 
       if (typeof window !== "undefined") {
-        window.sessionStorage.removeItem(pendingMessageStorageKey);
+        window.sessionStorage.removeItem(
+          pendingMessageStorageKey
+        );
       }
+
       setPendingMessage("");
       setMessages([
-        { role: "character", content: initialCharacterMessage }
+        {
+          role: "character",
+          content: initialCharacterMessage
+        }
       ]);
       setInput("");
     } catch (error) {
@@ -524,114 +483,183 @@ chatShell = replaceRequired(
       setRefreshingChat(false);
       focusChatInput();
     }
-  }`,
-  "real chat reset"
+  }
+
+`;
+
+  chatShell =
+    chatShell.slice(0, resetStart) +
+    fixedReset +
+    chatShell.slice(shareStart);
+}
+
+// Work only inside sendMessage so similarly named fetch/data blocks elsewhere
+// in the component cannot be patched accidentally.
+const sendStart = chatShell.indexOf(
+  "  async function sendMessage("
+);
+const sendEnd = chatShell.indexOf(
+  "  const displayTags = character.tags",
+  sendStart
 );
 
-chatShell = replaceRequired(
-  chatShell,
-  `    sendInFlightRef.current = true;
-    setGiftError("");
-    if (gift) setSendingGiftId(gift.id);
+if (sendStart < 0 || sendEnd < 0 || sendEnd <= sendStart) {
+  throw new Error(
+    "Final chat/video reliability patch could not locate sendMessage."
+  );
+}
 
-    const requestId = crypto.randomUUID();`,
-  `    sendInFlightRef.current = true;
-    setGiftError("");
-    setChatError("");
-    if (gift) setSendingGiftId(gift.id);
+let sendBlock = chatShell.slice(sendStart, sendEnd);
+
+// Clear any previous chat error when a new request starts.
+if (!sendBlock.includes('    setChatError("");')) {
+  const startMarker = `    sendInFlightRef.current = true;
+    setGiftError("");`;
+
+  if (!sendBlock.includes(startMarker)) {
+    throw new Error(
+      "Final chat/video reliability patch could not find: send start anchor"
+    );
+  }
+
+  sendBlock = sendBlock.replace(
+    startMarker,
+    `${startMarker}
+    setChatError("");`
+  );
+}
+
+// Create one AbortController/generation token per outgoing chat request.
+if (!sendBlock.includes("const sendGeneration = chatGenerationRef.current;")) {
+  const requestMarker = `    if (gift) setSendingGiftId(gift.id);
+
+    const requestId = crypto.randomUUID();`;
+
+  if (!sendBlock.includes(requestMarker)) {
+    throw new Error(
+      "Final chat/video reliability patch could not find: requestId anchor"
+    );
+  }
+
+  sendBlock = sendBlock.replace(
+    requestMarker,
+    `    if (gift) setSendingGiftId(gift.id);
 
     const sendGeneration = chatGenerationRef.current;
     const controller = new AbortController();
     chatAbortRef.current = controller;
-    const requestId = crypto.randomUUID();`,
-  "chat abort controller setup"
-);
+    const requestId = crypto.randomUUID();`
+  );
+}
 
-chatShell = replaceRequired(
-  chatShell,
-  `          body: JSON.stringify({
-            requestId,
-            characterSlug: character.slug,
-            language: getApiLanguage(language),
-            conversationId: conversationId ?? undefined,
-            giftId: gift?.id,
-            messages: [
-              {
-                role: "user",
-                content: trimmed
-              }
-            ]
-          })
-        }
-      );
-      const data = await response.json().catch(() => ({}));`,
-  `          body: JSON.stringify({
-            requestId,
-            characterSlug: character.slug,
-            language: getApiLanguage(language),
-            conversationId: conversationId ?? undefined,
-            giftId: gift?.id,
-            messages: [
-              {
-                role: "user",
-                content: trimmed
-              }
-            ]
-          }),
-          signal: controller.signal
-        }
-      );
-      const data = await response.json().catch(() => ({}));
+// Attach the abort signal only to the POST /api/chat fetch.
+if (!sendBlock.includes("signal: controller.signal")) {
+  const postFetchStart = sendBlock.indexOf(
+    '      const response = await fetch("/api/chat", {'
+  );
+  const postFetchEnd = sendBlock.indexOf(
+    "\n      });",
+    postFetchStart
+  );
+
+  if (postFetchStart < 0 || postFetchEnd < 0) {
+    throw new Error(
+      "Final chat/video reliability patch could not find: POST /api/chat fetch"
+    );
+  }
+
+  const fetchBlock = sendBlock.slice(
+    postFetchStart,
+    postFetchEnd
+  );
+
+  const bodyClose = fetchBlock.lastIndexOf(
+    "\n        })"
+  );
+
+  if (bodyClose < 0) {
+    throw new Error(
+      "Final chat/video reliability patch could not find: chat JSON body close"
+    );
+  }
+
+  const bodyCloseAbsolute =
+    postFetchStart + bodyClose;
+
+  sendBlock =
+    sendBlock.slice(0, bodyCloseAbsolute) +
+    "\n        }),\n        signal: controller.signal" +
+    sendBlock.slice(
+      bodyCloseAbsolute + "\n        })".length
+    );
+}
+
+// Ignore a response from a request that Refresh Chat has already invalidated.
+if (
+  !sendBlock.includes(
+    "sendGeneration !== chatGenerationRef.current"
+  )
+) {
+  const dataMarker =
+    "      const data = await response.json().catch(() => ({}));";
+
+  if (!sendBlock.includes(dataMarker)) {
+    throw new Error(
+      "Final chat/video reliability patch could not find: chat response JSON anchor"
+    );
+  }
+
+  sendBlock = sendBlock.replace(
+    dataMarker,
+    `${dataMarker}
 
       if (sendGeneration !== chatGenerationRef.current) {
         return;
-      }`,
-  "chat fetch abort signal"
-);
+      }`
+  );
+}
 
-chatShell = replaceRequired(
-  chatShell,
-  `      setConversationId(data.conversationId ?? conversationId);
-      setGiftPickerOpen(false);
+// Never accept HTTP 200 with an empty assistant reply.
+if (!sendBlock.includes('throw new Error("EMPTY_CHAT_REPLY");')) {
+  const conversationMarker =
+    "      setConversationId(data.conversationId ?? conversationId);";
 
-      setMessages((current) => [
-        ...current,
-        { role: "character", content: data.reply }
-      ]);`,
-  `      if (typeof data.reply !== "string" || !data.reply.trim()) {
+  if (!sendBlock.includes(conversationMarker)) {
+    throw new Error(
+      "Final chat/video reliability patch could not find: conversationId success anchor"
+    );
+  }
+
+  sendBlock = sendBlock.replace(
+    conversationMarker,
+    `      if (
+        typeof data.reply !== "string" ||
+        !data.reply.trim()
+      ) {
         throw new Error("EMPTY_CHAT_REPLY");
       }
 
-      setConversationId(data.conversationId ?? conversationId);
-      setGiftPickerOpen(false);
       setChatError("");
+${conversationMarker}`
+  );
+}
 
-      setMessages((current) => [
-        ...current,
-        { role: "character", content: data.reply }
-      ]);`,
-  "client empty reply guard"
+// Replace the sendMessage catch/finally tail as one bounded section.
+const catchStart = sendBlock.lastIndexOf(
+  "    } catch (error) {"
 );
 
-chatShell = replaceRequired(
-  chatShell,
-  `    } catch (error) {
-      console.error("Chat request failed:", error);
-      setMessages(previousMessages);
-      setInput(trimmed);
+if (catchStart < 0) {
+  throw new Error(
+    "Final chat/video reliability patch could not find: sendMessage catch"
+  );
+}
 
-      if (gift) {
-        setGiftError(shopCopy.noGiftsToSend);
-        setGiftPickerOpen(true);
-      }
-    } finally {
-      sendInFlightRef.current = false;
-      setSendingGiftId(null);
-      setIsTyping(false);
-      focusChatInput();
-    }`,
-  `    } catch (error) {
-      if (sendGeneration !== chatGenerationRef.current) {
+const fixedCatchTail = `    } catch (error) {
+      if (
+        sendGeneration !==
+        chatGenerationRef.current
+      ) {
         return;
       }
 
@@ -645,72 +673,94 @@ chatShell = replaceRequired(
         setGiftPickerOpen(true);
       }
     } finally {
-      if (sendGeneration === chatGenerationRef.current) {
+      if (
+        sendGeneration ===
+        chatGenerationRef.current
+      ) {
         sendInFlightRef.current = false;
         chatAbortRef.current = null;
         setSendingGiftId(null);
         setIsTyping(false);
         focusChatInput();
       }
-    }`,
-  "visible chat failure handling"
-);
+    }
+  }
 
-chatShell = replaceRequired(
-  chatShell,
-  `            <button
-              onClick={resetConversation}
-              className="bond-pink-button flex h-8.5 w-8.5 items-center justify-center rounded-full border border-white/15 bg-white/[0.035] text-white"
-              aria-label={t("refresh")}
-            >
-              <RefreshCcw size={15} />
-            </button>`,
-  `            <button
-              onClick={() => void resetConversation()}
-              disabled={refreshingChat}
-              className="bond-pink-button flex h-8.5 w-8.5 items-center justify-center rounded-full border border-white/15 bg-white/[0.035] text-white disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label={t("refresh")}
-            >
-              <RefreshCcw
-                size={15}
-                className={refreshingChat ? "animate-spin" : ""}
-              />
-            </button>`,
-  "refresh button behavior"
-);
+`;
 
-chatShell = replaceRequired(
-  chatShell,
-  `            {giftError && (
+sendBlock =
+  sendBlock.slice(0, catchStart) +
+  fixedCatchTail;
+
+chatShell =
+  chatShell.slice(0, sendStart) +
+  sendBlock +
+  chatShell.slice(sendEnd);
+
+// Make the existing Refresh button call the async server reset.
+// Keep its existing visual styling so this change is minimally invasive.
+if (!chatShell.includes("onClick={() => void resetConversation()}")) {
+  if (!chatShell.includes("onClick={resetConversation}")) {
+    throw new Error(
+      "Final chat/video reliability patch could not find: Refresh button"
+    );
+  }
+
+  chatShell = chatShell.replace(
+    "onClick={resetConversation}",
+    "onClick={() => void resetConversation()}"
+  );
+}
+
+// Show chat failures above the composer instead of silently rolling back.
+if (!chatShell.includes("{chatError && (")) {
+  const composerMarker =
+    '            <div className="mx-auto flex max-w-4xl items-center gap-2 rounded-full bg-white/[0.04] p-1.5 bond-chat-input">';
+
+  const composerIndex = chatShell.indexOf(
+    composerMarker
+  );
+
+  if (composerIndex < 0) {
+    throw new Error(
+      "Final chat/video reliability patch could not find: chat composer anchor"
+    );
+  }
+
+  const chatErrorUi = `            {chatError && (
               <div className="mx-auto mb-2 flex max-w-4xl justify-end">
-                <p className="line-clamp-1 text-xs text-red-200">{giftError}</p>
+                <p className="text-xs text-red-200">
+                  {chatError}
+                </p>
               </div>
             )}
 
-            <div className="mx-auto flex max-w-4xl items-center gap-2 rounded-full bg-white/[0.04] p-1.5 bond-chat-input">`,
-  `            {giftError && (
-              <div className="mx-auto mb-2 flex max-w-4xl justify-end">
-                <p className="line-clamp-1 text-xs text-red-200">{giftError}</p>
-              </div>
-            )}
+`;
 
-            {chatError && (
-              <div className="mx-auto mb-2 flex max-w-4xl justify-end">
-                <p className="text-xs text-red-200">{chatError}</p>
-              </div>
-            )}
-
-            <div className="mx-auto flex max-w-4xl items-center gap-2 rounded-full bg-white/[0.04] p-1.5 bond-chat-input">`,
-  "visible chat error"
-);
+  chatShell =
+    chatShell.slice(0, composerIndex) +
+    chatErrorUi +
+    chatShell.slice(composerIndex);
+}
 
 if (
-  !chatShell.includes("const chatAbortRef = useRef<AbortController | null>(null);") ||
+  !chatShell.includes(
+    'const [chatError, setChatError] = useState("");'
+  ) ||
+  !chatShell.includes(
+    "const chatAbortRef = useRef<AbortController | null>(null);"
+  ) ||
+  !chatShell.includes(
+    "async function resetConversation()"
+  ) ||
   !chatShell.includes('method: "DELETE"') ||
+  !chatShell.includes("signal: controller.signal") ||
   !chatShell.includes("EMPTY_CHAT_REPLY") ||
   !chatShell.includes("finalCopy.errors.chat")
 ) {
-  throw new Error("Chat client reliability validation failed.");
+  throw new Error(
+    "Chat client reliability validation failed."
+  );
 }
 
 write(chatShellPath, chatShell);
