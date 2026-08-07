@@ -190,7 +190,7 @@ Respond naturally in \${language}. Do not switch languages unless the user clear
 \${recentContext}
 Continue from the user's newest words or action through \${character.name}. Keep the reply alive, character-specific, aware of the scene, and willing to take the next natural beat.
 \`.trim();
-}`.replaceAll("\\${", "${");
+}`.replaceAll("\\`", "`").replaceAll("\\${", "${");
 
 prompts = replaceRegexRequired(
   prompts,
