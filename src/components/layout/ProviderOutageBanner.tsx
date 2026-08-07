@@ -308,8 +308,7 @@ export function ProviderOutageBanner() {
 
   useEffect(() => {
     let cancelled = false;
-    let timer: ReturnType<typeof window.setTimeout> | null =
-      null;
+    let timer: number | null = null;
 
     const originalFetch = window.fetch.bind(window);
 
