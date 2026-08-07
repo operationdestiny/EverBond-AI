@@ -15,13 +15,16 @@ function write(relativePath, content) {
 }
 
 function replaceRequired(source, from, to, label) {
-  if (source.includes(to)) return source;
-
-  if (!source.includes(from)) {
-    throw new Error(`Identity-reference media fix could not find: ${label}`);
+  // Check the OLD block first. Some replacements intentionally remove
+  // trailing fields, so the new text can already be a substring of the old
+  // text. Checking `to` first would falsely treat that old block as patched.
+  if (source.includes(from)) {
+    return source.replace(from, to);
   }
 
-  return source.replace(from, to);
+  if (source.includes(to)) return source;
+
+  throw new Error(`Identity-reference media fix could not find: ${label}`);
 }
 
 // ===========================================================================
