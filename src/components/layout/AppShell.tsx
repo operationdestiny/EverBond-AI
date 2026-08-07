@@ -8,6 +8,7 @@ import { ChatMediaBridge } from "@/components/media/ChatMediaBridge";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { LocalizedDocumentMetadata } from "@/components/layout/LocalizedDocumentMetadata";
 import { NavBar } from "@/components/layout/NavBar";
+import { ProviderOutageBanner } from "@/components/layout/ProviderOutageBanner";
 
 export function AppShell({
   children
@@ -31,6 +32,7 @@ export function AppShell({
           onToggle={() => setCollapsed((value) => !value)}
         />
         <NavBar />
+        <ProviderOutageBanner />
         <div className="v18-main">{children}</div>
       </div>
     </AuthProvider>
