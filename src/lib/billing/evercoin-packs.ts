@@ -55,7 +55,8 @@ export async function createEverCoinCheckout(values: {
 }) {
   const apiKey = process.env.PADDLE_API_KEY;
   const priceId = getEverCoinPackPriceId(values.pack);
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
   if (!apiKey || !priceId) {
     throw new Error("EverCoin checkout is not configured.");
@@ -70,7 +71,7 @@ export async function createEverCoinCheckout(values: {
     body: JSON.stringify({
       items: [{ price_id: priceId, quantity: 1 }],
       customer: values.email ? { email: values.email } : undefined,
-      checkout: { url: `${siteUrl}/coins?checkout=success` },
+      checkout: { url: `${siteUrl}/coins` },
       custom_data: {
         kind: "evercoin",
         user_id: values.userId,
@@ -83,13 +84,18 @@ export async function createEverCoinCheckout(values: {
 
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 500);
-    throw new Error(`Paddle checkout failed: ${response.status} ${detail}`);
+    throw new Error(
+      `Paddle checkout failed: ${response.status} ${detail}`
+    );
   }
 
   const payload = await response.json();
   const checkoutUrl = payload?.data?.checkout?.url;
 
-  if (typeof checkoutUrl !== "string" || !checkoutUrl.startsWith("https://")) {
+  if (
+    typeof checkoutUrl !== "string" ||
+    !checkoutUrl.startsWith("https://")
+  ) {
     throw new Error("Paddle did not return a checkout URL.");
   }
 

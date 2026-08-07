@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { PaddleCheckoutBridge } from "@/components/billing/PaddleCheckoutBridge";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useSiteLanguage } from "@/lib/site-language";
 import { EVERCOIN_PAGE_COPY } from "@/lib/evercoin-page-language";
@@ -43,6 +44,7 @@ const packages = [
 export default function CoinsPage() {
   return (
     <AppShell>
+      <PaddleCheckoutBridge />
       <CoinsPageContent />
     </AppShell>
   );
