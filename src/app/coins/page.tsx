@@ -128,6 +128,16 @@ function CoinsPageContent() {
   async function buyPack(pack: (typeof packages)[number]) {
     if (!authReady || busyPack) return;
 
+    const paddleClientToken =
+      process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN?.trim() ?? "";
+
+    if (!paddleClientToken) {
+      setError(
+        "PADDLE_CONFIG: NEXT_PUBLIC_PADDLE_CLIENT_TOKEN is missing from this deployment."
+      );
+      return;
+    }
+
     if (!session?.access_token) {
       openAuthModal();
       return;
@@ -148,13 +158,23 @@ function CoinsPageContent() {
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok || typeof payload?.url !== "string") {
-        throw new Error(
-          localizedErrorMessage(
-            payload?.message ?? payload?.error,
-            language,
-            pageCopy.checkoutFailed,
-            "checkout"
+        const sandboxDetail =
+          typeof payload?.message === "string" &&
+          (
+            payload.message.startsWith("PADDLE_") ||
+            payload.message.startsWith("PADDLE_CONFIG:")
           )
+            ? payload.message
+            : "";
+
+        throw new Error(
+          sandboxDetail ||
+            localizedErrorMessage(
+              payload?.message ?? payload?.error,
+              language,
+              pageCopy.checkoutFailed,
+              "checkout"
+            )
         );
       }
 

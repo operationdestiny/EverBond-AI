@@ -48,18 +48,41 @@ export function getEverCoinPackByPriceId(priceId: string) {
   );
 }
 
+function safePaddleError(payload: any, status: number) {
+  const code =
+    typeof payload?.error?.code === "string"
+      ? payload.error.code.trim()
+      : "unknown_error";
+
+  const detail =
+    typeof payload?.error?.detail === "string"
+      ? payload.error.detail.trim()
+      : "Paddle rejected the checkout request.";
+
+  return `PADDLE_${status}_${code}: ${detail}`;
+}
+
 export async function createEverCoinCheckout(values: {
   pack: EverCoinPack;
   userId: string;
-  email?: string | null;
 }) {
-  const apiKey = process.env.PADDLE_API_KEY;
+  const apiKey = process.env.PADDLE_API_KEY?.trim();
   const priceId = getEverCoinPackPriceId(values.pack);
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
-  if (!apiKey || !priceId) {
-    throw new Error("EverCoin checkout is not configured.");
+  if (!apiKey) {
+    throw new Error("PADDLE_CONFIG: PADDLE_API_KEY is missing.");
+  }
+
+  if (!priceId) {
+    throw new Error(
+      `PADDLE_CONFIG: ${values.pack.priceEnv} is missing.`
+    );
+  }
+
+  if (!priceId.startsWith("pri_")) {
+    throw new Error(
+      `PADDLE_CONFIG: ${values.pack.priceEnv} is not a Paddle price ID.`
+    );
   }
 
   const response = await fetch(`${getPaddleApiBase()}/transactions`, {
@@ -70,8 +93,7 @@ export async function createEverCoinCheckout(values: {
     },
     body: JSON.stringify({
       items: [{ price_id: priceId, quantity: 1 }],
-      customer: values.email ? { email: values.email } : undefined,
-      checkout: { url: `${siteUrl}/coins` },
+      collection_mode: "automatic",
       custom_data: {
         kind: "evercoin",
         user_id: values.userId,
@@ -79,24 +101,25 @@ export async function createEverCoinCheckout(values: {
         coins: values.pack.coins
       }
     }),
+    cache: "no-store",
     signal: AbortSignal.timeout(20_000)
   });
 
+  const payload = await response.json().catch(() => null);
+
   if (!response.ok) {
-    const detail = (await response.text()).slice(0, 500);
-    throw new Error(
-      `Paddle checkout failed: ${response.status} ${detail}`
-    );
+    throw new Error(safePaddleError(payload, response.status));
   }
 
-  const payload = await response.json();
   const checkoutUrl = payload?.data?.checkout?.url;
 
   if (
     typeof checkoutUrl !== "string" ||
     !checkoutUrl.startsWith("https://")
   ) {
-    throw new Error("Paddle did not return a checkout URL.");
+    throw new Error(
+      "PADDLE_CHECKOUT_URL_MISSING: Paddle created the transaction but did not return checkout.url."
+    );
   }
 
   return checkoutUrl;
