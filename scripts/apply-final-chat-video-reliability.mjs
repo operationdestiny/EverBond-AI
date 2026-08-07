@@ -468,7 +468,6 @@ if (!chatShell.includes("async function resetConversation()")) {
         );
       }
 
-      setPendingMessage("");
       setMessages([
         {
           role: "character",
