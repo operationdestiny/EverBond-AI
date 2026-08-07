@@ -71,14 +71,14 @@ let prompts = read(promptsPath);
 
 prompts = replaceRequired(
   prompts,
-  `User facts: ${
+  `User facts: \${
     compactList(memory.user_facts, 5, 10) || "None yet."
   }
 Permanent identity:`,
-  `User facts: ${
+  `User facts: \${
     compactList(memory.user_facts, 5, 10) || "None yet."
   }
-Character self facts: ${
+Character self facts: \${
     compactList(memory.character_facts, 6, 10) || "None yet."
   }
 Permanent identity:`,
@@ -211,7 +211,7 @@ prompts = replaceRequired(
   `Keep it compact and merge it with previous memory. Do not invent facts. Store only lasting user facts, preferences, boundaries, promises, relationship or emotional changes, important events, and unresolved threads. Remove resolved threads and duplicates. Do not store routine dialogue or temporary sexual actions unless they establish a lasting preference, boundary, promise, or major event.`,
   `Keep it compact and merge it with previous memory. Do not invent facts. Store lasting user facts, preferences, boundaries, promises, relationship or emotional changes, important events, unresolved threads, and stable character self-details that the character actually established in dialogue. Remove resolved threads and duplicates. Do not store routine dialogue or temporary intimate actions unless they establish a lasting preference, boundary, promise, or major event.
 
-character_facts is only for stable self-details about ${character.name} that were actually established in the transcript and are not already contradicted by the character schema: age, hometown, occupation, family facts, history, favorites, dislikes, habits, preferences, opinions, or similar identity details. Preserve previous character_facts unless the transcript explicitly corrects one. Never invent a character_fact during extraction.`,
+character_facts is only for stable self-details about \${character.name} that were actually established in the transcript and are not already contradicted by the character schema: age, hometown, occupation, family facts, history, favorites, dislikes, habits, preferences, opinions, or similar identity details. Preserve previous character_facts unless the transcript explicitly corrects one. Never invent a character_fact during extraction.`,
   "memory extraction character facts rules"
 );
 
@@ -394,6 +394,9 @@ const combined = [
 for (const required of [
   "character_facts?: string[];",
   "SHARED LEAD:",
+  "ANTI-STALLING:",
+  "RELATIONAL BALANCE:",
+  "OWN WILL AND DESIRE:",
   "CHARACTER SELF-KNOWLEDGE:",
   "A clear real-time refusal or stop to sexual activity",
   "Simple moments: 10-24 visible tokens.",
