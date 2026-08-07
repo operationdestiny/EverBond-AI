@@ -106,7 +106,8 @@ const fixedImageBlock = `    const model = "seedream-v5-pro-edit";
         \`User request: \${parsed.data.prompt}\`,
       aspect_ratio: "auto",
       resolution: "1K",
-      output_format: "png"
+      output_format: "png",
+      safe_mode: false
     };
 
     let providerResponse = await fetch(
@@ -272,6 +273,7 @@ if (
   !imageRoute.includes('image: imageInput') ||
   !imageRoute.includes('resolution: "1K"') ||
   !imageRoute.includes('aspect_ratio: "auto"') ||
+  !imageRoute.includes('safe_mode: false') ||
   imageRoute.includes('style_references: [')
 ) {
   throw new Error(
