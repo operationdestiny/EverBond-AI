@@ -3,7 +3,6 @@ import { MemoryState } from "@/types/memory";
 export const defaultMemory: MemoryState = {
   story_summary: "",
   user_facts: [],
-  character_facts: [],
   relationship_state: "New bond",
   emotional_state: "",
   open_threads: [],
