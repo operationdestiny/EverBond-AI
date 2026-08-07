@@ -16,33 +16,33 @@ function write(relativePath, content) {
 
 function replaceRequired(source, from, to, label) {
   if (source.includes(to)) return source;
+
   if (!source.includes(from)) {
-    throw new Error(`Final media generation fix could not find: ${label}`);
+    throw new Error(`Identity-reference media fix could not find: ${label}`);
   }
+
   return source.replace(from, to);
 }
 
-// ---------------------------------------------------------------------------
-// IMAGE GENERATION
+// ===========================================================================
+// IMAGE: identity-preserving image generation using the actual character image
+// as the source reference via seedream-v5-pro-edit.
 //
-// Use Venice's NATIVE generation endpoint, not the OpenAI-compatible endpoint.
-// The character image is a REFERENCE for identity/appearance guidance, while
-// Seedream V5 Pro creates a completely new composition from the user's prompt.
-//
-// Native Venice generation supports:
-// - model
-// - prompt
-// - aspect_ratio
-// - resolution
-// - format
-// - return_binary
-// - variants
-// - safe_mode
-// - style_references
-// ---------------------------------------------------------------------------
+// This keeps the real character image as the identity anchor, while the user
+// prompt controls the new pose, outfit, framing, scene, body visibility, etc.
+// ===========================================================================
 
 const imagePath = "src/app/api/character-gallery/[slug]/route.ts";
 let imageRoute = read(imagePath);
+
+if (!imageRoute.includes('from "@/lib/character-media-reference"')) {
+  imageRoute = replaceRequired(
+    imageRoute,
+    'import { getSupabaseServiceClient } from "@/lib/supabase/server";',
+    'import { getSupabaseServiceClient } from "@/lib/supabase/server";\nimport { activeCharacterReferenceDataUrl } from "@/lib/character-media-reference";',
+    "image reference import"
+  );
+}
 
 if (imageRoute.includes('export const maxDuration = 60;')) {
   imageRoute = imageRoute.replace(
@@ -53,29 +53,29 @@ if (imageRoute.includes('export const maxDuration = 60;')) {
 
 const imageStartMarkers = [
   '    const model = "seedream-v5-pro";',
-  '    const model = process.env.VENICE_IMAGE_MODEL || "seedream-v5-pro-edit";',
-  '    const model = "seedream-v5-pro-edit";'
+  '    const model = "seedream-v5-pro-edit";',
+  '    const model = process.env.VENICE_IMAGE_MODEL || "seedream-v5-pro-edit";'
 ];
 
-let start = -1;
+let imageStart = -1;
 for (const marker of imageStartMarkers) {
-  const index = imageRoute.indexOf(marker);
-  if (index >= 0) {
-    start = index;
+  const idx = imageRoute.indexOf(marker);
+  if (idx >= 0) {
+    imageStart = idx;
     break;
   }
 }
 
-const endMarker = '    const imageId = crypto.randomUUID();';
-const end = imageRoute.indexOf(endMarker, Math.max(start, 0));
+const imageEndMarker = '    const imageId = crypto.randomUUID();';
+const imageEnd = imageRoute.indexOf(imageEndMarker, Math.max(imageStart, 0));
 
-if (start < 0 || end < 0 || end <= start) {
+if (imageStart < 0 || imageEnd < 0 || imageEnd <= imageStart) {
   throw new Error(
-    "Final media generation fix could not locate the image provider block."
+    "Identity-reference media fix could not locate the image provider block."
   );
 }
 
-const fixedImageBlock = `    const model = "seedream-v5-pro";
+const fixedImageBlock = `    const model = "seedream-v5-pro-edit";
     const referenceImage =
       await activeCharacterReferenceDataUrl({
         request,
@@ -84,39 +84,37 @@ const fixedImageBlock = `    const model = "seedream-v5-pro";
         fallbackImage: character.image
       });
 
-    const generationPayload = {
+    const referenceMatch = referenceImage.match(
+      /^data:image\\/(?:png|jpeg|webp);base64,([\\s\\S]+)$/i
+    );
+    const imageInput = referenceMatch?.[1] ?? referenceImage;
+
+    const imagePayload = {
       model,
+      image: imageInput,
       prompt:
-        \`The supplied reference image represents the exact fictional adult character \${character.name}. \` +
-        "Use the same recognizable person, face, adult age, defining facial features, hair, build, and overall visual identity, but generate a completely new image rather than copying the original composition. " +
-        "The user's request controls the new pose, expression, camera angle, framing, clothing, body visibility, action, environment, lighting, and background. " +
-        "Do not preserve the original pose, clothing, framing, or background unless the user asks for them. " +
-        "When the user requests full body, show the character clearly from head to feet. " +
-        "Keep anatomy natural and the character consistently recognizable. " +
+        \`Use the supplied source image as the exact identity reference for the fictional adult character \${character.name}. \` +
+        "Preserve the same recognizable face, adult age, body, skin tone, hair, and overall appearance. " +
+        "Create a new image based on the user's request rather than preserving the same composition. " +
+        "The user's request controls the pose, expression, camera angle, framing, outfit, body visibility, action, environment, lighting, and background. " +
+        "You may change the composition completely while keeping the same person recognizable. " +
+        "When the user requests a full-body image, show the character clearly from head to feet. " +
+        "Keep anatomy coherent and preserve identity strongly. " +
         \`User request: \${parsed.data.prompt}\`,
-      aspect_ratio: "3:4",
+      aspect_ratio: "auto",
       resolution: "1K",
-      format: "png",
-      return_binary: false,
-      variants: 1,
-      safe_mode: false,
-      style_references: [
-        {
-          image: referenceImage,
-          strength: 1
-        }
-      ]
+      output_format: "png"
     };
 
     let providerResponse = await fetch(
-      veniceApiUrl("image/generate"),
+      veniceApiUrl("image/edit"),
       {
         method: "POST",
         headers: {
           Authorization: \`Bearer \${apiKey}\`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(generationPayload),
+        body: JSON.stringify(imagePayload),
         signal: AbortSignal.timeout(150_000)
       }
     );
@@ -136,14 +134,14 @@ const fixedImageBlock = `    const model = "seedream-v5-pro";
       await new Promise((resolve) => setTimeout(resolve, retryDelay));
 
       providerResponse = await fetch(
-        veniceApiUrl("image/generate"),
+        veniceApiUrl("image/edit"),
         {
           method: "POST",
           headers: {
             Authorization: \`Bearer \${apiKey}\`,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify(generationPayload),
+          body: JSON.stringify(imagePayload),
           signal: AbortSignal.timeout(150_000)
         }
       );
@@ -261,32 +259,132 @@ const fixedImageBlock = `    const model = "seedream-v5-pro";
 `;
 
 imageRoute =
-  imageRoute.slice(0, start) +
+  imageRoute.slice(0, imageStart) +
   fixedImageBlock +
-  imageRoute.slice(end);
+  imageRoute.slice(imageEnd);
 
 if (
-  !imageRoute.includes('const model = "seedream-v5-pro";') ||
-  !imageRoute.includes('veniceApiUrl("image/generate")') ||
+  !imageRoute.includes('const model = "seedream-v5-pro-edit";') ||
+  !imageRoute.includes('veniceApiUrl("image/edit")') ||
+  !imageRoute.includes('image: imageInput') ||
   !imageRoute.includes('resolution: "1K"') ||
-  !imageRoute.includes('aspect_ratio: "3:4"') ||
-  !imageRoute.includes("style_references: [") ||
-  imageRoute.includes('veniceApiUrl("images/generations")') ||
-  imageRoute.includes('veniceApiUrl("image/edit")') ||
-  imageRoute.includes('"seedream-v5-pro-edit"')
+  !imageRoute.includes('aspect_ratio: "auto"') ||
+  imageRoute.includes('style_references: [')
 ) {
-  throw new Error("Final native Seedream V5 Pro validation failed.");
+  throw new Error(
+    "Identity-reference image validation failed."
+  );
 }
 
 write(imagePath, imageRoute);
 
-// ---------------------------------------------------------------------------
-// VIDEO
-//
-// Leave the current video implementation alone. The separate existing media
-// patch already handles dynamic video pricing/model settings.
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// VIDEO: keep the actual character image as the reference image, while
+// adjusting request fields to what Venice accepted in the logs.
+// ===========================================================================
+
+const pricingPath = "src/lib/video-pricing.ts";
+let videoPricing = read(pricingPath);
+
+videoPricing = replaceRequired(
+  videoPricing,
+  "const DEFAULT_DURATION_SECONDS = 8;",
+  "const DEFAULT_DURATION_SECONDS = 10;",
+  "video default duration"
+);
+
+videoPricing = replaceRequired(
+  videoPricing,
+  `        resolution: inputs.resolution,
+        aspect_ratio: inputs.aspectRatio,
+        audio: inputs.audio`,
+  `        duration: inputs.duration === 10 ? "10s" : "5s",
+        resolution: inputs.resolution`,
+  "video quote supported fields"
+);
+
+// If the quote block was already partly patched, normalize it.
+videoPricing = videoPricing.replace(
+  `        resolution: inputs.resolution`,
+  `        duration: inputs.duration === 10 ? "10s" : "5s",
+        resolution: inputs.resolution`
+);
+
+if (
+  !videoPricing.includes("const DEFAULT_DURATION_SECONDS = 10;") ||
+  !videoPricing.includes(`duration: inputs.duration === 10 ? "10s" : "5s"`) ||
+  videoPricing.includes("aspect_ratio: inputs.aspectRatio") ||
+  videoPricing.includes("audio: inputs.audio")
+) {
+  throw new Error(
+    "Identity-reference video quote validation failed."
+  );
+}
+
+write(pricingPath, videoPricing);
+
+const videoPath =
+  "src/app/api/character-video-gallery/[slug]/route.ts";
+let videoRoute = read(videoPath);
+
+videoRoute = replaceRequired(
+  videoRoute,
+  "const VIDEO_DURATIONS = [8] as const;",
+  "const VIDEO_DURATIONS = [10] as const;",
+  "video duration option"
+);
+
+videoRoute = replaceRequired(
+  videoRoute,
+  `        duration: pricing.duration,
+        resolution: pricing.resolution,
+        aspect_ratio: pricing.aspectRatio,
+        audio: pricing.audio,
+        reference_image_urls: [referenceImage],`,
+  `        duration: pricing.duration === 10 ? "10s" : "5s",
+        resolution: pricing.resolution,
+        reference_image_urls: [referenceImage],`,
+  "video queue supported fields"
+);
+
+// If already partly patched, normalize duration string form.
+videoRoute = videoRoute.replace(
+  `        duration: pricing.duration,
+        resolution: pricing.resolution,
+        reference_image_urls: [referenceImage],`,
+  `        duration: pricing.duration === 10 ? "10s" : "5s",
+        resolution: pricing.resolution,
+        reference_image_urls: [referenceImage],`
+);
+
+if (
+  !videoRoute.includes("const VIDEO_DURATIONS = [10] as const;") ||
+  !videoRoute.includes(`duration: pricing.duration === 10 ? "10s" : "5s"`) ||
+  !videoRoute.includes("reference_image_urls: [referenceImage]") ||
+  videoRoute.includes("aspect_ratio: pricing.aspectRatio") ||
+  videoRoute.includes("audio: pricing.audio")
+) {
+  throw new Error(
+    "Identity-reference video queue validation failed."
+  );
+}
+
+write(videoPath, videoRoute);
+
+// Keep the browser default aligned.
+const galleryClientPath =
+  "src/components/media/CharacterGalleryClient.tsx";
+let galleryClient = read(galleryClientPath);
+
+galleryClient = replaceRequired(
+  galleryClient,
+  "const [videoDuration, setVideoDuration] = useState(8);",
+  "const [videoDuration, setVideoDuration] = useState(10);",
+  "video client duration"
+);
+
+write(galleryClientPath, galleryClient);
 
 console.log(
-  "EverBond native Seedream V5 Pro reference-generation fix applied."
+  "EverBond identity-reference image/video fix applied."
 );
