@@ -9,6 +9,18 @@ const DEFAULT_BASELINE_QUOTE_USD = 1.12;
 const DEFAULT_BASELINE_EVERCOIN = 199;
 const DISPLAY_ROUNDING_INCREMENT = 10;
 
+// Margin protection:
+// - The largest EverCoin pack is the lowest-value coin pack.
+// - At $84.99 / 10,000 EverCoin and Paddle's standard 5% + $0.50 fee,
+//   125 EverCoin recovers about $1.00 of provider cost after checkout fees.
+// - 59 additional EverCoin preserves roughly the old ~$0.48 contribution
+//   from the $1.12 -> 199 EverCoin baseline.
+// - The existing proportional formula is still kept as a second floor, so
+//   provider-cost increases cannot reduce the old markup relationship.
+const VIDEO_PROVIDER_COST_RECOVERY_EVERCOIN_PER_USD = 125;
+const VIDEO_TARGET_CONTRIBUTION_EVERCOIN = 59;
+const VIDEO_CHARGE_ROUNDING_INCREMENT = 5;
+
 function positiveNumberEnv(name: string, fallback: number) {
   const value = Number(process.env[name]);
   return Number.isFinite(value) && value > 0 ? value : fallback;
@@ -73,12 +85,27 @@ export function everCoinVideoCostFromQuote(quoteUsd: number) {
       ? quoteUsd
       : baselineQuoteUsd;
 
-  return Math.max(
+  const proportionalCost = Math.ceil(
+    (normalizedQuote * baselineEverCoin) /
+      baselineQuoteUsd
+  );
+
+  const contributionProtectedCost =
     Math.ceil(
-      (normalizedQuote * baselineEverCoin) /
-        baselineQuoteUsd
-    ),
+      normalizedQuote *
+        VIDEO_PROVIDER_COST_RECOVERY_EVERCOIN_PER_USD
+    ) + VIDEO_TARGET_CONTRIBUTION_EVERCOIN;
+
+  const protectedCost = Math.max(
+    proportionalCost,
+    contributionProtectedCost,
     1
+  );
+
+  return (
+    Math.ceil(
+      protectedCost / VIDEO_CHARGE_ROUNDING_INCREMENT
+    ) * VIDEO_CHARGE_ROUNDING_INCREMENT
   );
 }
 
