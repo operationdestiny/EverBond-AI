@@ -295,24 +295,18 @@ videoPricing = replaceRequired(
 
 videoPricing = replaceRequired(
   videoPricing,
-  `        resolution: inputs.resolution,
+  `        duration: inputs.duration,
+        resolution: inputs.resolution,
         aspect_ratio: inputs.aspectRatio,
         audio: inputs.audio`,
-  `        duration: inputs.duration === 10 ? "10s" : "5s",
+  `        duration: inputs.duration,
         resolution: inputs.resolution`,
   "video quote supported fields"
 );
 
-// If the quote block was already partly patched, normalize it.
-videoPricing = videoPricing.replace(
-  `        resolution: inputs.resolution`,
-  `        duration: inputs.duration === 10 ? "10s" : "5s",
-        resolution: inputs.resolution`
-);
-
 if (
   !videoPricing.includes("const DEFAULT_DURATION_SECONDS = 10;") ||
-  !videoPricing.includes(`duration: inputs.duration === 10 ? "10s" : "5s"`) ||
+  !videoPricing.includes("duration: inputs.duration") ||
   videoPricing.includes("aspect_ratio: inputs.aspectRatio") ||
   videoPricing.includes("audio: inputs.audio")
 ) {
@@ -341,25 +335,15 @@ videoRoute = replaceRequired(
         aspect_ratio: pricing.aspectRatio,
         audio: pricing.audio,
         reference_image_urls: [referenceImage],`,
-  `        duration: pricing.duration === 10 ? "10s" : "5s",
+  `        duration: pricing.duration,
         resolution: pricing.resolution,
         reference_image_urls: [referenceImage],`,
   "video queue supported fields"
 );
 
-// If already partly patched, normalize duration string form.
-videoRoute = videoRoute.replace(
-  `        duration: pricing.duration,
-        resolution: pricing.resolution,
-        reference_image_urls: [referenceImage],`,
-  `        duration: pricing.duration === 10 ? "10s" : "5s",
-        resolution: pricing.resolution,
-        reference_image_urls: [referenceImage],`
-);
-
 if (
   !videoRoute.includes("const VIDEO_DURATIONS = [10] as const;") ||
-  !videoRoute.includes(`duration: pricing.duration === 10 ? "10s" : "5s"`) ||
+  !videoRoute.includes("duration: pricing.duration") ||
   !videoRoute.includes("reference_image_urls: [referenceImage]") ||
   videoRoute.includes("aspect_ratio: pricing.aspectRatio") ||
   videoRoute.includes("audio: pricing.audio")
