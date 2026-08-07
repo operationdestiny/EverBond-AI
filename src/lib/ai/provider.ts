@@ -73,7 +73,7 @@ function splitTokens(text: string) {
 }
 
 function endsWithCompleteSentence(text: string) {
-  return /[.!?。！？]["')\]”’」』）]*\s*$/.test(text.trim());
+  return /(?:[.!?。！？]["')\]”’」』）]*|\*)\s*$/.test(text.trim());
 }
 
 function findLastSentenceEnd(text: string) {
@@ -136,7 +136,8 @@ function cleanModelContent(content: unknown, finishReason?: string) {
     )
     .replace(/\bsomething\s*(?:\.{3}|…)/gi, "something")
     .replace(/([—–-]\s*){2,}/g, "—")
-    .replace(/\s+/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
     .trim();
 
   text = limitToCompleteReply(text, finishReason);
@@ -285,8 +286,8 @@ export async function callEverBondModel(
   const config = getProviderConfig();
 
   const maxTokens = 110;
-  const temperature = getNumberEnv("AI_TEMPERATURE", 0.85);
-  const topP = getNumberEnv("AI_TOP_P", 0.9);
+  const temperature = getNumberEnv("AI_TEMPERATURE", 0.9);
+  const topP = getNumberEnv("AI_TOP_P", 0.92);
   const frequencyPenalty = getNumberEnv(
     "AI_FREQUENCY_PENALTY",
     0.12
@@ -402,35 +403,47 @@ export async function callEverBondMemoryModel(
   prompt: string
 ): Promise<EverBondModelResult> {
   const config = getProviderConfig();
+  const memoryModel =
+    config.provider === "venice"
+      ? process.env.VENICE_MEMORY_MODEL ||
+        "venice-uncensored-1-2"
+      : process.env.AI_MEMORY_MODEL_ID || config.model;
+  const memoryMaxTokens = Math.max(
+    260,
+    Math.min(
+      500,
+      Math.round(getNumberEnv("AI_MEMORY_MAX_TOKENS", 420))
+    )
+  );
 
   if (
     !config.apiBaseUrl ||
     !config.apiKey ||
-    !config.model ||
-    config.model === "everbond-model-not-configured"
+    !memoryModel ||
+    memoryModel === "everbond-model-not-configured"
   ) {
     return {
       content: "",
       inputTokens: 0,
       outputTokens: 0,
       provider: "dev_fallback",
-      model: config.model
+      model: memoryModel
     };
   }
 
   const endpoint = buildChatCompletionsEndpoint(config.apiBaseUrl);
 
   const requestBody: Record<string, unknown> = {
-    model: config.model,
+    model: memoryModel,
     messages: [
       {
         role: "system",
         content: prompt
       }
     ],
-    max_tokens: 600,
-    temperature: 0.1,
-    top_p: 0.95
+    max_tokens: memoryMaxTokens,
+    temperature: 0.08,
+    top_p: 0.9
   };
 
   if (config.useVeniceParameters) {
@@ -456,6 +469,6 @@ export async function callEverBondMemoryModel(
     inputTokens: data.usage?.prompt_tokens ?? 0,
     outputTokens: data.usage?.completion_tokens ?? 0,
     provider: config.provider,
-    model: config.model
+    model: memoryModel
   };
 }

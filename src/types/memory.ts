@@ -16,6 +16,7 @@ export type SceneState = {
 export type MemoryState = {
   story_summary: string;
   user_facts: string[];
+  character_facts?: string[];
   relationship_state: string;
   emotional_state: string;
   open_threads: string[];

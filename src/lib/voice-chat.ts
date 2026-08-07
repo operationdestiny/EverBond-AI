@@ -24,6 +24,7 @@ const MemoryExtractionSchema = z
   .object({
     story_summary: z.string(),
     user_facts: z.array(z.string()).max(12),
+    character_facts: z.array(z.string()).max(12).default([]),
     relationship_state: z.string(),
     emotional_state: z.string(),
     open_threads: z.array(z.string()).max(12),
@@ -243,6 +244,13 @@ function mergeExtractedMemory(
     story_summary:
       cleanMemoryText(extraction.story_summary, 1200) || currentMemory.story_summary,
     user_facts: cleanMemoryList(extraction.user_facts, 12, 300),
+    character_facts: cleanMemoryList(
+      extraction.character_facts?.length
+        ? extraction.character_facts
+        : currentMemory.character_facts ?? [],
+      12,
+      220
+    ),
     relationship_state:
       cleanMemoryText(extraction.relationship_state, 120) ||
       currentMemory.relationship_state,
