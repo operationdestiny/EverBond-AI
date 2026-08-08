@@ -8,6 +8,7 @@ export const VIDEO_ASPECT_RATIO = "9:16";
 
 const DEFAULT_BASELINE_QUOTE_USD = 1.12;
 const DEFAULT_BASELINE_EVERCOIN = 199;
+export const ADVERTISED_VIDEO_EVERCOIN = 155;
 
 export type VideoPricingSource = "venice" | "unavailable";
 
@@ -58,8 +59,13 @@ export function everCoinVideoCostFromQuote(quoteUsd: number) {
   );
 }
 
+export function advertisedVideoEverCoinCost() {
+  return ADVERTISED_VIDEO_EVERCOIN;
+}
+
 export function roundedVideoDisplayCost(everCoinCost: number) {
-  // Show the live calculated price instead of rounding up to a ceiling.
+  // Internal/live calculations stay exact. The public button uses the
+  // separate ~155 EC advertised estimate.
   return Number.isFinite(everCoinCost) && everCoinCost > 0
     ? Math.trunc(everCoinCost)
     : 0;

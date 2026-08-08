@@ -6,20 +6,15 @@ import {
   everCoinPerDollar
 } from "@/lib/evercoin";
 import {
-  PRIMARY_VIDEO_MODEL,
   VIDEO_DURATION_SECONDS,
-  quoteEverCoinVideoCost
+  advertisedVideoEverCoinCost
 } from "@/lib/video-pricing";
 
 export async function GET() {
-  const videoPricing = await quoteEverCoinVideoCost(
-    PRIMARY_VIDEO_MODEL,
-    VIDEO_DURATION_SECONDS
+  const videoCost = advertisedVideoEverCoinCost();
+  const videoPricingConfigured = Boolean(
+    process.env.VENICE_API_KEY?.trim()
   );
-
-  const videoPricingConfigured =
-    videoPricing.source === "venice" &&
-    videoPricing.everCoinCost > 0;
 
   return NextResponse.json(
     {
@@ -27,14 +22,10 @@ export async function GET() {
       callCostPerMinute: everCoinCallCostPerMinute(),
       imageCost: everCoinImageCost(),
 
-      // Public UI shows the live Grok-first price only.
-      // Wan is never exposed as a worst-case button price.
-      videoCost: videoPricingConfigured
-        ? videoPricing.everCoinCost
-        : null,
-      videoDisplayCost: videoPricingConfigured
-        ? videoPricing.displayCost
-        : null,
+      // This is deliberately an advertised estimate. Generation itself uses
+      // a fresh Grok quote, and a fresh Wan quote if automatic fallback occurs.
+      videoCost,
+      videoDisplayCost: videoCost,
 
       videoDurationSeconds: VIDEO_DURATION_SECONDS,
       videoAudioEnabled: false,

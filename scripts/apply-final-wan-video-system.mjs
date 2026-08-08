@@ -145,15 +145,14 @@ client = client.replace(
   "const [videoDuration, setVideoDuration] = useState(10);"
 );
 
-// The Generate button should show the current Grok-first live quote, not a
-// permanent high ceiling. Remove any stale approximate marker inserted by an
-// older business-pricing patch.
+// The Generate button advertises the approximate product price. The exact
+// charge is calculated server-side from a fresh live quote at Generate time.
 client = client
   .split(
-    "`${copy.generateVideo} · ~${videoData.videoCost} EverCoin`"
+    "`${copy.generateVideo} · ${videoData.videoCost} EverCoin`"
   )
   .join(
-    "`${copy.generateVideo} · ${videoData.videoCost} EverCoin`"
+    "`${copy.generateVideo} · ~${videoData.videoCost} EverCoin`"
   );
 
 write(clientPath, client);
@@ -163,7 +162,8 @@ for (const required of [
   "wan-2-7-reference-to-video",
   'VIDEO_RESOLUTION = "720p"',
   "beginCharacterVideoFallback",
-  "fallbackToWan"
+  "fallbackToWan",
+  "ADVERTISED_VIDEO_EVERCOIN = 155"
 ]) {
   const combined =
     read("src/lib/video-pricing.ts") +
@@ -177,5 +177,5 @@ for (const required of [
 }
 
 console.log(
-  "EVERBOND_VIDEO_FINAL primary=grok-imagine-reference-to-video fallback=wan-2-7-reference-to-video duration=10s resolution=720p pricing=live-proportional-1.12-to-199 display=primary-live-price fallback=automatic-on-any-primary-failure"
+  "EVERBOND_VIDEO_FINAL primary=grok-imagine-reference-to-video fallback=wan-2-7-reference-to-video duration=10s resolution=720p pricing=live-proportional-1.12-to-199 display=approx-155 fallback=automatic-on-any-primary-failure"
 );

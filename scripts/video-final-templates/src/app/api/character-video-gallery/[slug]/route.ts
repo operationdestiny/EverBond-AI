@@ -15,6 +15,7 @@ import {
   FALLBACK_VIDEO_MODEL,
   PRIMARY_VIDEO_MODEL,
   VIDEO_DURATION_SECONDS,
+  advertisedVideoEverCoinCost,
   quoteEverCoinVideoCost
 } from "@/lib/video-pricing";
 import {
@@ -645,7 +646,7 @@ export async function GET(
     }
 
     const supabase = getSupabaseServiceClient();
-    const [videosResult, pendingResult, pricing] =
+    const [videosResult, pendingResult] =
       await Promise.all([
         supabase
           .from("character_gallery_videos")
@@ -663,11 +664,7 @@ export async function GET(
           .eq("status", "processing")
           .order("created_at", { ascending: false })
           .limit(1)
-          .maybeSingle(),
-        quoteEverCoinVideoCost(
-          PRIMARY_VIDEO_MODEL,
-          VIDEO_DURATION_SECONDS
-        )
+          .maybeSingle()
       ]);
 
     if (videosResult.error) throw videosResult.error;
@@ -685,9 +682,10 @@ export async function GET(
       )
     );
 
-    const pricingConfigured =
-      pricing.source === "venice" &&
-      pricing.everCoinCost > 0;
+    const advertisedCost = advertisedVideoEverCoinCost();
+    const pricingConfigured = Boolean(
+      process.env.VENICE_API_KEY?.trim()
+    );
 
     return NextResponse.json(
       {
@@ -700,14 +698,10 @@ export async function GET(
         videos,
         limit: VIDEO_LIMIT,
 
-        // The button shows only the live Grok-first price.
-        // It never shows the more expensive backup as a worst-case ceiling.
-        videoCost: pricingConfigured
-          ? pricing.everCoinCost
-          : null,
-        videoDisplayCost: pricingConfigured
-          ? pricing.displayCost
-          : null,
+        // Public UI advertises ~155 EC. The exact amount is intentionally
+        // calculated only when Generate is pressed from a fresh provider quote.
+        videoCost: advertisedCost,
+        videoDisplayCost: advertisedCost,
         pricingConfigured,
 
         pendingRequestId:
