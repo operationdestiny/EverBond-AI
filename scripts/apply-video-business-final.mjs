@@ -24,11 +24,22 @@ function replaceRegexRequired(source, pattern, replacement, present, label) {
 
 // ---------------------------------------------------------------------------
 // PRICING
-// Current previous finalizer already locks H3 Enhanced R2V to 8s / 768p.
-// This finalizer changes only the business economics and user-facing estimate.
+// The previous finalizer locks H3 Enhanced R2V to 8 seconds and 768-class output.
+// Venice MiniMax H3 requires the exact resolution enum token "768P" (capital P).
+// This finalizer normalizes that provider token, then applies the business economics.
 // ---------------------------------------------------------------------------
 const pricingPath = "src/lib/video-pricing.ts";
 let pricing = read(pricingPath);
+
+// MiniMax H3's Venice schema is case-sensitive:
+// accepted: "768P" | "2K"
+// rejected: "768p"
+pricing = replaceRequired(
+  pricing,
+  'const DEFAULT_RESOLUTION = "768p";',
+  'const DEFAULT_RESOLUTION = "768P";',
+  "MiniMax H3 exact 768P resolution enum"
+);
 
 pricing = replaceRequired(
   pricing,
@@ -90,7 +101,7 @@ pricing = replaceRegexRequired(
 
 if (
   !pricing.includes('const DEFAULT_VIDEO_MODEL = "minimax-h3-enhanced-reference-to-video";') ||
-  !pricing.includes('const DEFAULT_RESOLUTION = "768p";') ||
+  !pricing.includes('const DEFAULT_RESOLUTION = "768P";') ||
   !pricing.includes("resolution: inputs.resolution") ||
   !pricing.includes("ADVERTISED_VIDEO_EVERCOIN = 155") ||
   !pricing.includes("MAX_VIDEO_EVERCOIN = 199")
@@ -349,5 +360,5 @@ for (const [from, to] of replacements) copy = copy.split(from).join(to);
 write(copyPath, copy);
 
 console.log(
-  "EverBond video fully wired: H3 Enhanced R2V, 8s 768p, active reference image + user prompt, ~155 EC advertised, exact live quote charge, 199 EC ceiling, existing atomic refunds preserved."
+  "EverBond video fully wired: H3 Enhanced R2V, 8s 768P, active reference image + user prompt, ~155 EC advertised, exact live quote charge, 199 EC ceiling, existing atomic refunds preserved."
 );
