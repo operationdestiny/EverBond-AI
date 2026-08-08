@@ -771,6 +771,283 @@ if (
 write(voiceTurnPath, fastVoiceTurn);
 
 
+
+// ===========================================================================
+// VIDEO: PROVIDER POLICY FIX
+//
+// The live Venice retrieve result proved Kling O3 accepted the queue job and
+// then its upstream provider rejected all seven jobs for content policy, with
+// Venice refunding the provider credits and recommending:
+//   minimax-h3-enhanced-reference-to-video
+//
+// Switch the FINAL deployed video model to that Venice-recommended R2V model.
+// Keep the existing character reference, 8-second product semantics, 9:16,
+// async retrieval/storage, stale recovery, EverCoin reservation/refund logic,
+// and dynamic Venice quote-based margin protection.
+// ===========================================================================
+
+const h3PricingPath = "src/lib/video-pricing.ts";
+let h3Pricing = read(h3PricingPath);
+
+h3Pricing = replaceRequired(
+  h3Pricing,
+  'const DEFAULT_VIDEO_MODEL = "kling-o3-standard-reference-to-video";',
+  'const DEFAULT_VIDEO_MODEL = "minimax-h3-enhanced-reference-to-video";',
+  "MiniMax H3 Enhanced R2V pricing model"
+);
+
+// If Venice's quote endpoint is temporarily unavailable, fail expensive rather
+// than accidentally selling a new premium model at the old Kling fallback.
+// Normal operation still uses the exact live Venice quote.
+h3Pricing = replaceRequired(
+  h3Pricing,
+  `  const fallbackQuoteUsd = positiveNumberEnv(
+    "VENICE_VIDEO_FALLBACK_QUOTE_USD",
+    DEFAULT_BASELINE_QUOTE_USD
+  );`,
+  `  const fallbackQuoteUsd = positiveNumberEnv(
+    "VENICE_VIDEO_FALLBACK_QUOTE_USD",
+    2.5
+  );`,
+  "H3 profitable quote fallback"
+);
+
+if (
+  !h3Pricing.includes(
+    'const DEFAULT_VIDEO_MODEL = "minimax-h3-enhanced-reference-to-video";'
+  ) ||
+  !h3Pricing.includes(
+    '"VENICE_VIDEO_FALLBACK_QUOTE_USD",\n    2.5'
+  ) ||
+  !h3Pricing.includes("everCoinVideoCostFromQuote")
+) {
+  throw new Error(
+    "MiniMax H3 video pricing validation failed."
+  );
+}
+
+write(h3PricingPath, h3Pricing);
+
+const h3VideoRoutePath =
+  "src/app/api/character-video-gallery/[slug]/route.ts";
+let h3VideoRoute = read(h3VideoRoutePath);
+
+const klingQueueStartMarker =
+  "    // VIDEO_KLING_QUEUE_RECOVERY";
+const queueAssignmentMarker =
+  "    queuedModel =";
+
+if (
+  !h3VideoRoute.includes("VIDEO_H3_QUEUE_RECOVERY")
+) {
+  const queueStart =
+    h3VideoRoute.indexOf(klingQueueStartMarker);
+  const queueEnd =
+    h3VideoRoute.indexOf(
+      queueAssignmentMarker,
+      Math.max(queueStart, 0)
+    );
+
+  if (
+    queueStart < 0 ||
+    queueEnd < 0 ||
+    queueEnd <= queueStart
+  ) {
+    throw new Error(
+      "Final video provider fix could not find the deployed Kling queue block."
+    );
+  }
+
+  const h3QueueBlock = `    // VIDEO_H3_QUEUE_RECOVERY
+    // MiniMax H3 uses Venice's generic reference-image input rather than
+    // Kling's structured @Element payload.
+    const queueDurationVariants = [
+      \`\${parsed.data.durationSeconds}s\`,
+      String(parsed.data.durationSeconds)
+    ];
+
+    let payload: Record<string, any> | null = null;
+    let lastQueueError = "";
+
+    for (
+      let referenceIndex = 0;
+      referenceIndex < referenceImages.length && !payload;
+      referenceIndex += 1
+    ) {
+      const queueReference =
+        referenceImages[referenceIndex];
+
+      for (
+        let durationIndex = 0;
+        durationIndex < queueDurationVariants.length && !payload;
+        durationIndex += 1
+      ) {
+        const queueDuration =
+          queueDurationVariants[durationIndex];
+
+        let tryNextReference = false;
+
+        for (
+          let attempt = 0;
+          attempt < 2 && !payload;
+          attempt += 1
+        ) {
+          const providerResponse = await fetch(
+            veniceApiUrl("video/queue"),
+            {
+              method: "POST",
+              headers: providerHeaders(apiKey),
+              body: JSON.stringify({
+                model,
+                prompt:
+                  \`@Image1 is the exact fictional adult character \${character.name}. \` +
+                  "Preserve @Image1's recognizable face, identity, adult age, body, skin tone, hair, and defining appearance throughout the video. " +
+                  "Use the reference only to preserve character identity. The user's request controls the action, pose, expression, clothing, scene, framing, and camera movement. " +
+                  parsed.data.prompt,
+                duration: queueDuration,
+                aspect_ratio: "9:16",
+                audio: false,
+                reference_image_urls: [
+                  queueReference
+                ]
+              }),
+              signal: AbortSignal.timeout(60_000)
+            }
+          );
+
+          if (providerResponse.ok) {
+            payload =
+              (await providerResponse.json()) as Record<
+                string,
+                any
+              >;
+            break;
+          }
+
+          const detail = (
+            await providerResponse.text()
+          ).slice(0, 700);
+
+          lastQueueError =
+            \`VIDEO_PROVIDER_QUEUE_FAILED:\${providerResponse.status}:\${detail}\`;
+
+          const durationRejected =
+            [400, 422].includes(
+              providerResponse.status
+            ) &&
+            /duration/i.test(detail);
+
+          if (
+            durationRejected &&
+            durationIndex === 0
+          ) {
+            break;
+          }
+
+          const referenceRejected =
+            [400, 422].includes(
+              providerResponse.status
+            ) &&
+            /reference|image|url/i.test(
+              detail
+            );
+
+          if (
+            referenceRejected &&
+            referenceIndex <
+              referenceImages.length - 1
+          ) {
+            tryNextReference = true;
+            break;
+          }
+
+          const transient = [
+            429,
+            500,
+            502,
+            503,
+            504
+          ].includes(providerResponse.status);
+
+          if (
+            transient &&
+            attempt === 0
+          ) {
+            await new Promise((resolve) =>
+              setTimeout(
+                resolve,
+                providerResponse.status === 429
+                  ? 1800
+                  : 1200
+              )
+            );
+            continue;
+          }
+
+          throw new Error(lastQueueError);
+        }
+
+        if (tryNextReference) {
+          break;
+        }
+      }
+    }
+
+    if (!payload) {
+      throw new Error(
+        lastQueueError ||
+          "VIDEO_PROVIDER_QUEUE_FAILED"
+      );
+    }
+
+`;
+
+  h3VideoRoute =
+    h3VideoRoute.slice(0, queueStart) +
+    h3QueueBlock +
+    h3VideoRoute.slice(queueEnd);
+}
+
+// Replace any generated validation wording/markers that still require Kling.
+h3VideoRoute = h3VideoRoute
+  .split("VIDEO_KLING_QUEUE_RECOVERY")
+  .join("VIDEO_H3_QUEUE_RECOVERY");
+
+// This route must no longer send the Kling-only element payload.
+if (
+  !h3VideoRoute.includes(
+    "VIDEO_H3_QUEUE_RECOVERY"
+  ) ||
+  !h3VideoRoute.includes(
+    "reference_image_urls:"
+  ) ||
+  !h3VideoRoute.includes(
+    "@Image1 is the exact fictional adult character"
+  ) ||
+  !h3VideoRoute.includes(
+    'aspect_ratio: "9:16"'
+  ) ||
+  !h3VideoRoute.includes(
+    "audio: false"
+  ) ||
+  h3VideoRoute.includes(
+    "@Element1 is the exact fictional adult character"
+  ) ||
+  h3VideoRoute.includes(
+    "frontal_image_url:"
+  )
+) {
+  throw new Error(
+    "MiniMax H3 final video route validation failed."
+  );
+}
+
+write(h3VideoRoutePath, h3VideoRoute);
+
 console.log(
-  "EverBond fast voice critical path applied (STT preserved); video remains unchanged for diagnosis."
+  "EverBond video provider switched from policy-blocked Kling O3 to Venice-recommended MiniMax H3 Enhanced R2V."
+);
+
+console.log(
+  "EverBond fast voice critical path applied (STT preserved)."
 );
