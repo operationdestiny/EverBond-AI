@@ -14,7 +14,7 @@ function write(relativePath, content) {
   fs.writeFileSync(target, content, "utf8");
 }
 
-function requireReplace(source, from, to, label) {
+function replaceRequired(source, from, to, label) {
   if (source.includes(to)) return source;
   if (!source.includes(from)) {
     throw new Error(`WAN_FINALIZER_MISSING:${label}`);
@@ -23,19 +23,21 @@ function requireReplace(source, from, to, label) {
 }
 
 // ============================================================================
-// ONE FINAL VIDEO SOURCE OF TRUTH
+// EVERBOND FINAL VIDEO SOURCE OF TRUTH
 // ============================================================================
+// Provider: Venice
+// Model: wan-2-7-reference-to-video
+// Duration: 10s
+// Resolution: 720p
 //
-// EverBond production video:
-//   model      wan-2-7-reference-to-video
-//   duration   10s
-//   resolution 720p
-//   aspect     9:16
-//   audio      false
+// IMPORTANT:
+// The live Venice API for this model rejected BOTH `aspect_ratio` and `audio`
+// on /video/queue. They are intentionally omitted from BOTH quote and queue.
 //
-// The older build scripts still contain unrelated chat/voice/recovery work.
-// This file runs LAST and replaces every video-provider value they may have
-// produced, so H3/Kling/768P cannot be the deployed configuration.
+// User price:
+// exact live Venice provider cost + approximately $0.50 contribution,
+// conservatively calculated against EverBond's lowest-value EverCoin pack
+// after the assumed Paddle 5% + $0.50 checkout fee.
 // ============================================================================
 
 const pricingPath = "src/lib/video-pricing.ts";
@@ -47,30 +49,31 @@ write(
 const VIDEO_MODEL = "wan-2-7-reference-to-video";
 const VIDEO_DURATION_SECONDS = 10;
 const VIDEO_RESOLUTION = "720p";
-const VIDEO_ASPECT_RATIO = "9:16";
-const VIDEO_AUDIO_ENABLED = false;
 
-const DEFAULT_BASELINE_QUOTE_USD = 1.12;
-const DEFAULT_BASELINE_EVERCOIN = 199;
-const DISPLAY_ROUNDING_INCREMENT = 10;
+// Conservative EverCoin economics use the 10,000 EC pack because it gives
+// users the most EverCoin per dollar and therefore produces EverBond's lowest
+// net dollar value per redeemed coin.
+const WORST_CASE_PACK_PRICE_USD = 84.99;
+const WORST_CASE_PACK_EVERCOIN = 10_000;
+const PADDLE_PERCENT_FEE = 0.05;
+const PADDLE_FIXED_FEE_USD = 0.50;
+const TARGET_VIDEO_CONTRIBUTION_USD = 0.50;
+
+const NET_PACK_REVENUE_USD =
+  WORST_CASE_PACK_PRICE_USD * (1 - PADDLE_PERCENT_FEE) -
+  PADDLE_FIXED_FEE_USD;
+
+const NET_USD_PER_EVERCOIN =
+  NET_PACK_REVENUE_USD / WORST_CASE_PACK_EVERCOIN;
 
 export function videoPricingInputs(
-  durationSeconds = VIDEO_DURATION_SECONDS
+  _durationSeconds = VIDEO_DURATION_SECONDS
 ) {
-  // EverBond intentionally offers only Wan's 10-second product.
-  // Do not accept stale 8-second values from older builds/clients.
-  const durationSecondsFinal =
-    Math.trunc(durationSeconds) === VIDEO_DURATION_SECONDS
-      ? VIDEO_DURATION_SECONDS
-      : VIDEO_DURATION_SECONDS;
-
   return {
     model: VIDEO_MODEL,
-    durationSeconds: durationSecondsFinal,
-    duration: \`\${durationSecondsFinal}s\`,
-    resolution: VIDEO_RESOLUTION,
-    aspectRatio: VIDEO_ASPECT_RATIO,
-    audio: VIDEO_AUDIO_ENABLED
+    durationSeconds: VIDEO_DURATION_SECONDS,
+    duration: \`\${VIDEO_DURATION_SECONDS}s\`,
+    resolution: VIDEO_RESOLUTION
   };
 }
 
@@ -79,28 +82,23 @@ export function everCoinVideoCostFromQuote(quoteUsd: number) {
     return 0;
   }
 
-  // Original EverBond proportional relationship:
-  // $1.12 live provider quote -> 199 EverCoin.
+  // Recover the live provider cost and retain about $0.50 after allocating
+  // Paddle's fee against the lowest-value EverCoin pack.
   return Math.max(
     Math.ceil(
-      (quoteUsd * DEFAULT_BASELINE_EVERCOIN) /
-        DEFAULT_BASELINE_QUOTE_USD
+      (quoteUsd + TARGET_VIDEO_CONTRIBUTION_USD) /
+        NET_USD_PER_EVERCOIN
     ),
     1
   );
 }
 
 export function roundedVideoDisplayCost(everCoinCost: number) {
-  if (!Number.isFinite(everCoinCost) || everCoinCost <= 0) {
-    return 0;
-  }
-
-  return (
-    Math.ceil(
-      Math.trunc(everCoinCost) /
-        DISPLAY_ROUNDING_INCREMENT
-    ) * DISPLAY_ROUNDING_INCREMENT
-  );
+  // Display exactly what will be charged. No fake "~" price and no markup
+  // rounding above the calculated live cost + contribution.
+  return Number.isFinite(everCoinCost) && everCoinCost > 0
+    ? Math.trunc(everCoinCost)
+    : 0;
 }
 
 export async function quoteEverCoinVideoCost(
@@ -139,9 +137,7 @@ export async function quoteEverCoinVideoCost(
       body: JSON.stringify({
         model: inputs.model,
         duration: inputs.duration,
-        resolution: inputs.resolution,
-        aspect_ratio: inputs.aspectRatio,
-        audio: inputs.audio
+        resolution: inputs.resolution
       }),
       cache: "no-store",
       signal: AbortSignal.timeout(15_000)
@@ -163,9 +159,9 @@ export async function quoteEverCoinVideoCost(
 
     return result(quoteUsd, "venice");
   } catch (error) {
-    // Never turn a failed quote into a fake/worst-case customer price.
+    // Never display or charge a made-up fallback price.
     console.error(
-      "Wan video quote unavailable; generation pricing is temporarily unavailable:",
+      "Wan video quote unavailable; pricing is temporarily unavailable:",
       error
     );
     return result(0, "fallback");
@@ -180,17 +176,18 @@ export async function quoteEverCoinVideoCost(
 
 const routePath =
   "src/app/api/character-video-gallery/[slug]/route.ts";
+
 let route = read(routePath);
 
+// One product duration only. Wan rejected the old 8s value.
 route = route.replace(
   /const VIDEO_DURATIONS = \[[^\]]+\] as const;/,
   "const VIDEO_DURATIONS = [10] as const;"
 );
 
-// Dynamic pricing is installed by the earlier media-pricing step.
-// Make sure the import exists even if the checked-in route was older.
+// Ensure dynamic quote helper exists even if checked-in source is older.
 if (!route.includes('from "@/lib/video-pricing"')) {
-  route = requireReplace(
+  route = replaceRequired(
     route,
     'import { veniceApiUrl } from "@/lib/venice-media";',
     'import { veniceApiUrl } from "@/lib/venice-media";\nimport { quoteEverCoinVideoCost } from "@/lib/video-pricing";',
@@ -198,14 +195,13 @@ if (!route.includes('from "@/lib/video-pricing"')) {
   );
 }
 
-// Remove a legacy static video cost import/call if an older source revision
-// reaches this finalizer.
+// Remove obsolete static video-cost import if present.
 route = route.replace(
   /(\n\s*)everCoinVideoCost,\n/,
   "$1"
 );
 
-// GET: only show a real live Venice price.
+// GET: only expose a real live Venice quote.
 const getPricingBlock =
 `    const pricing = await quoteEverCoinVideoCost(
       VIDEO_DURATIONS[0]
@@ -213,20 +209,17 @@ const getPricingBlock =
     const cost = pricing.everCoinCost;`;
 
 if (route.includes(getPricingBlock)) {
-  const getWithStatus =
-`${getPricingBlock}
-    const pricingConfigured =
-      pricing.source === "venice" && cost > 0;`;
-
   if (!route.includes('pricing.source === "venice" && cost > 0')) {
     route = route.replace(
       getPricingBlock,
-      getWithStatus
+`${getPricingBlock}
+    const pricingConfigured =
+      pricing.source === "venice" && cost > 0;`
     );
   }
 
   route = route.replace(
-    /        videoCost:[^\n]*,\n(?:        videoDisplayCost:[^\n]*,\n)?        pricingConfigured:[^\n]*,/,
+    /        videoCost:[^\n]*,\n(?:        videoDisplayCost:[\s\S]*?\n)?        pricingConfigured:[^\n]*,/,
 `        videoCost: pricingConfigured ? cost : null,
         videoDisplayCost: pricingConfigured
           ? pricing.displayCost
@@ -235,7 +228,7 @@ if (route.includes(getPricingBlock)) {
   );
 }
 
-// POST: require the exact live quote BEFORE EverCoin reservation.
+// POST: require a real live quote BEFORE reserving EverCoin.
 const postPricingBlock =
 `    const pricing = await quoteEverCoinVideoCost(
       parsed.data.durationSeconds
@@ -243,7 +236,15 @@ const postPricingBlock =
     const cost = pricing.everCoinCost;`;
 
 if (route.includes(postPricingBlock)) {
-  const guardedPost =
+  const position = route.indexOf(postPricingBlock);
+  const nearby = route.slice(
+    position,
+    position + postPricingBlock.length + 500
+  );
+
+  if (!nearby.includes('pricing.source !== "venice"')) {
+    route = route.replace(
+      postPricingBlock,
 `${postPricingBlock}
 
     if (pricing.source !== "venice" || cost <= 0) {
@@ -251,26 +252,12 @@ if (route.includes(postPricingBlock)) {
         { error: "VIDEO_PRICING_NOT_CONFIGURED" },
         { status: 503 }
       );
-    }`;
-
-  const afterPost = route.slice(
-    route.indexOf(postPricingBlock) +
-      postPricingBlock.length,
-    route.indexOf(postPricingBlock) +
-      postPricingBlock.length +
-      400
-  );
-
-  if (!afterPost.includes('pricing.source !== "venice"')) {
-    route = route.replace(
-      postPricingBlock,
-      guardedPost
+    }`
     );
   }
 }
 
-// If an older static route survived the media-pricing step, convert its POST
-// pricing before it can reserve EverCoin.
+// Convert a static legacy POST path if one survives earlier build scripts.
 const staticCostBlock =
 `    const cost = everCoinVideoCost();
     if (cost <= 0) {
@@ -302,30 +289,16 @@ route = route.replace(
   "    const model = pricing.model;"
 );
 
-// The current H3 recovery block uses a generic reference_image_urls payload,
-// which Wan also uses. Keep its proven retry/reference handling but force the
-// exact Wan request fields.
-route = route
-  .replace(
-    /const queueDurationVariants = \[[\s\S]*?\];/,
+// Force all duration variants produced by the H3/Kling recovery layers to the
+// one Wan duration Venice actually accepts for EverBond.
+route = route.replace(
+  /const queueDurationVariants = \[[\s\S]*?\];/,
 `const queueDurationVariants = [
       pricing.duration
     ];`
-  )
-  .replace(
-    "                duration: queueDuration,\n                aspect_ratio:",
-    "                duration: queueDuration,\n                resolution: pricing.resolution,\n                aspect_ratio:"
-  )
-  .replace(
-    '                aspect_ratio: "9:16",',
-    "                aspect_ratio: pricing.aspectRatio,"
-  )
-  .replace(
-    "                audio: false,",
-    "                audio: pricing.audio,"
-  );
+);
 
-// If an older direct queue block is present, normalize it too.
+// Normalize direct legacy queue fields.
 route = route
   .replace(
     /        duration: `\$\{parsed\.data\.durationSeconds\}s`,/,
@@ -334,23 +307,41 @@ route = route
   .replace(
     "        resolution: videoResolution(),",
     "        resolution: pricing.resolution,"
-  )
-  .replace(
-    "        aspect_ratio: videoAspectRatio(),",
-    "        aspect_ratio: pricing.aspectRatio,"
   );
 
+// The live Wan endpoint explicitly rejected these fields.
+// Remove them anywhere in this video route's provider payload.
+route = route
+  .replace(/\n\s+aspect_ratio:\s*[^,\n]+,?/g, "")
+  .replace(/\n\s+audio:\s*[^,\n]+,?/g, "");
+
+// Ensure Wan queue includes the accepted resolution.
 if (
-  route.includes("        aspect_ratio: pricing.aspectRatio,") &&
-  !route.includes("        audio: pricing.audio,")
+  route.includes("                duration: queueDuration,") &&
+  !route.includes(
+    "                duration: queueDuration,\n                resolution: pricing.resolution,"
+  )
 ) {
   route = route.replace(
-    "        audio: false,",
-    "        audio: pricing.audio,"
+    "                duration: queueDuration,",
+    "                duration: queueDuration,\n                resolution: pricing.resolution,"
   );
 }
 
-// Normalize legacy provider wording/markers in the deployed route.
+if (
+  route.includes("        duration: pricing.duration,") &&
+  !route.includes(
+    "        duration: pricing.duration,\n        resolution: pricing.resolution,"
+  )
+) {
+  route = route.replace(
+    "        duration: pricing.duration,",
+    "        duration: pricing.duration,\n        resolution: pricing.resolution,"
+  );
+}
+
+// Keep the generic reference-image queue format and user-controlled prompt,
+// while removing provider-specific H3/Kling labels.
 route = route
   .split("VIDEO_H3_QUEUE_RECOVERY")
   .join("VIDEO_WAN_QUEUE_RECOVERY")
@@ -361,37 +352,38 @@ route = route
   .split("H3 Enhanced")
   .join("Wan 2.7 Reference")
   .split("Kling O3")
-  .join("Wan 2.7 Reference")
-  .split("@Element1 is the exact fictional adult character")
-  .join("@Image1 is the exact fictional adult character");
+  .join("Wan 2.7 Reference");
 
 route = route.replace(
   "Preserve @Image1's recognizable face, identity, adult age, body, skin tone, hair, and defining appearance throughout the video. ",
   "Preserve @Image1's recognizable face, identity, adult age, skin tone, hair, and defining appearance throughout the video. "
 );
 
+// Encourage portrait composition through the text prompt because this live Wan
+// model does not expose an aspect_ratio parameter.
+route = route.replace(
+  `"Use the reference only to preserve character identity. The user's request controls the action, pose, expression, clothing, scene, framing, and camera movement. " +`,
+  `"Use the reference only to preserve character identity. Compose the scene as a vertical portrait-oriented video suitable for a 9:16 display. The user's request controls the action, pose, expression, clothing, scene, framing, and camera movement. " +`
+);
+
 if (
   !route.includes("const VIDEO_DURATIONS = [10] as const;") ||
   !route.includes("quoteEverCoinVideoCost(") ||
-  !(
-    route.includes("duration: pricing.duration") ||
-    (
-      route.includes("duration: queueDuration") &&
-      route.includes("pricing.duration")
-    )
-  ) ||
   !route.includes("resolution: pricing.resolution") ||
-  !route.includes("aspect_ratio: pricing.aspectRatio") ||
   !route.includes("reference_image_urls:") ||
-  !route.includes("parsed.data.prompt")
+  !route.includes("parsed.data.prompt") ||
+  route.includes("aspect_ratio:") ||
+  route.includes("audio:")
 ) {
-  throw new Error("WAN_FINALIZER_ROUTE_VALIDATION_FAILED");
+  throw new Error(
+    "WAN_FINALIZER_ROUTE_VALIDATION_FAILED"
+  );
 }
 
 write(routePath, route);
 
 // ============================================================================
-// PUBLIC EVERCOIN PRICING API
+// EVERCOIN PRICING API
 // ============================================================================
 
 write(
@@ -447,6 +439,7 @@ export async function GET() {
 
 const clientPath =
   "src/components/media/CharacterGalleryClient.tsx";
+
 let client = read(clientPath);
 
 client = client
@@ -462,5 +455,5 @@ client = client
 write(clientPath, client);
 
 console.log(
-  "WAN_VIDEO_READY model=wan-2-7-reference-to-video duration=10s resolution=720p aspect=9:16"
+  "WAN_VIDEO_READY model=wan-2-7-reference-to-video duration=10s resolution=720p optional_fields=omitted pricing=live_cost_plus_0.50"
 );
