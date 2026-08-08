@@ -166,7 +166,9 @@ for (const required of [
   "ADVERTISED_VIDEO_EVERCOIN = 155",
   'duration: `${inputs.durationSeconds}s`',
   'duration: `${values.durationSeconds}s`',
-  "reference_image_urls"
+  "reference_image_urls",
+  "RETRYABLE_PROVIDER_HTTP_STATUSES",
+  "VIDEO_DOWNLOAD_RETRYABLE"
 ]) {
   const combined =
     read("src/lib/video-pricing.ts") +
@@ -188,5 +190,5 @@ if (finalRouting.includes("referenceImageUrls")) {
 }
 
 console.log(
-  "EVERBOND_VIDEO_FINAL primary=grok-imagine-reference-to-video fallback=wan-2-7-reference-to-video duration=10s resolution=720p pricing=live-proportional-1.12-to-199 display=approx-155 grok-queue-schema=10s+reference_image_urls fallback=automatic-on-any-primary-failure"
+  "EVERBOND_VIDEO_FINAL primary=grok-imagine-reference-to-video fallback=wan-2-7-reference-to-video duration=10s resolution=720p pricing=live-proportional-1.12-to-199 display=approx-155 grok-queue-schema=10s+reference_image_urls transient-retrieve-errors=retry fallback=automatic-on-any-primary-failure+content-rejection canonical-routing=on"
 );

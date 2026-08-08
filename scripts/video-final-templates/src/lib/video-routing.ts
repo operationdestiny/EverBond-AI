@@ -8,6 +8,33 @@ import {
 
 export const MAX_GENERATED_VIDEO_BYTES = 100 * 1024 * 1024;
 
+// Venice documents 429/500/503 video errors as retryable. Treat the usual
+// gateway/timeout equivalents the same way so a temporary provider hiccup does
+// not cancel and refund an otherwise healthy queued generation.
+const RETRYABLE_PROVIDER_HTTP_STATUSES = new Set([
+  408,
+  425,
+  429,
+  500,
+  502,
+  503,
+  504
+]);
+
+function isRetryableProviderHttpStatus(status: number) {
+  return RETRYABLE_PROVIDER_HTTP_STATUSES.has(status);
+}
+
+function isRetryableNetworkError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+
+  return (
+    error.name === "AbortError" ||
+    error.name === "TimeoutError" ||
+    error instanceof TypeError
+  );
+}
+
 export type ProviderVideoResult =
   | {
       state: "processing";
@@ -127,11 +154,12 @@ export async function queueProviderVideo(values: {
     );
   }
 
+  // Keep EverBond's routing state on the exact model we submitted. Venice
+  // may return a normalized/aliased model string, but storing that value can
+  // break the later Grok -> Wan rejection check. Retrieve/cleanup should use
+  // the same model ID that was submitted to /video/queue.
   return {
-    model:
-      typeof payload?.model === "string" && payload.model.trim()
-        ? payload.model.trim()
-        : values.model,
+    model: values.model,
     queueId,
     downloadUrl:
       typeof payload?.download_url === "string"
@@ -169,6 +197,12 @@ async function downloadProviderUrl(urlValue: string) {
   });
 
   if (!response.ok) {
+    if (isRetryableProviderHttpStatus(response.status)) {
+      throw new Error(
+        `VIDEO_DOWNLOAD_RETRYABLE:${response.status}`
+      );
+    }
+
     throw new Error(`VIDEO_DOWNLOAD_FAILED:${response.status}`);
   }
 
@@ -232,9 +266,14 @@ export async function retrieveProviderVideo(values: {
         ?.trim()
         .toLowerCase() || "";
 
-    // Any provider HTTP failure on Grok can immediately trigger Wan.
-    // On Wan, the caller treats the same failure as terminal/refundable.
     if (!response.ok) {
+      // Venice explicitly recommends retry/backoff for 429, 500 and 503.
+      // Gateway/timeouts are also transient. Returning processing here keeps
+      // the existing queue alive so the browser/cron simply polls again.
+      if (isRetryableProviderHttpStatus(response.status)) {
+        return { state: "processing" };
+      }
+
       const detail = (await response.text()).slice(0, 500);
       return {
         state: "failed",
@@ -298,12 +337,21 @@ export async function retrieveProviderVideo(values: {
           bytes: await downloadProviderUrl(downloadUrl)
         };
       } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "VIDEO_DOWNLOAD_FAILED";
+
+        if (
+          message.startsWith("VIDEO_DOWNLOAD_RETRYABLE:") ||
+          isRetryableNetworkError(error)
+        ) {
+          return { state: "processing" };
+        }
+
         return {
           state: "failed",
-          errorCode:
-            error instanceof Error
-              ? error.message
-              : "VIDEO_DOWNLOAD_FAILED"
+          errorCode: message
         };
       }
     }
@@ -311,12 +359,19 @@ export async function retrieveProviderVideo(values: {
     if (
       status === "FAILED" ||
       status === "ERROR" ||
-      status === "CANCELLED"
+      status === "CANCELLED" ||
+      status === "REJECTED" ||
+      status === "BLOCKED" ||
+      status === "CONTENT_VIOLATION" ||
+      status === "MODERATION_FAILED"
     ) {
       return {
         state: "failed",
         errorCode: String(
-          payload?.error ?? payload?.message ?? status
+          payload?.error ??
+            payload?.message ??
+            payload?.error_code ??
+            status
         ).slice(0, 200)
       };
     }
@@ -331,6 +386,10 @@ export async function retrieveProviderVideo(values: {
       )
     };
   } catch (error) {
+    if (isRetryableNetworkError(error)) {
+      return { state: "processing" };
+    }
+
     return {
       state: "failed",
       errorCode:

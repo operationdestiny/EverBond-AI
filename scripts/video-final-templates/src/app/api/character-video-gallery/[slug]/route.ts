@@ -213,7 +213,7 @@ async function queueAndRecord(values: {
   const recorded = await setCharacterVideoQueue({
     userId: values.userId,
     requestId: values.requestId,
-    providerModel: queued.model,
+    providerModel: values.model,
     providerQueueId: queued.queueId,
     providerDownloadUrl: queued.downloadUrl
   });
@@ -221,7 +221,7 @@ async function queueAndRecord(values: {
   if (!recorded) {
     await cleanupProviderVideo({
       apiKey: values.apiKey,
-      model: queued.model,
+      model: values.model,
       queueId: queued.queueId
     });
     throw new Error("VIDEO_QUEUE_RECORD_FAILED");
@@ -271,7 +271,7 @@ async function fallbackToWan(values: {
   const fallback = await beginCharacterVideoFallback({
     userId: values.userId,
     requestId: values.current.request_id,
-    expectedProviderModel: PRIMARY_VIDEO_MODEL,
+    expectedProviderModel: values.current.provider_model,
     fallbackProviderModel: FALLBACK_VIDEO_MODEL,
     newAmount: fallbackPricing.everCoinCost
   });
@@ -375,11 +375,14 @@ async function recoverMissingQueue(values: {
   characterImage: string;
   current: VideoRequestRow;
 }) {
+  // Historical requests may contain a provider-normalized Grok model string.
+  // If it is not our Wan fallback model, treat it as the primary leg and
+  // switch to Wan instead of declaring the request unsupported.
   if (
     values.current.provider_model !== PRIMARY_VIDEO_MODEL &&
     values.current.provider_model !== FALLBACK_VIDEO_MODEL
   ) {
-    return { state: "failed" as const };
+    return fallbackToWan(values);
   }
 
   try {
@@ -404,7 +407,7 @@ async function recoverMissingQueue(values: {
 
     return { state: "processing" as const };
   } catch (error) {
-    if (values.current.provider_model === PRIMARY_VIDEO_MODEL) {
+    if (values.current.provider_model !== FALLBACK_VIDEO_MODEL) {
       return fallbackToWan(values);
     }
 
@@ -561,7 +564,7 @@ export async function GET(
       }
 
       if (retrieved.state === "failed") {
-        if (current.provider_model === PRIMARY_VIDEO_MODEL) {
+        if (current.provider_model !== FALLBACK_VIDEO_MODEL) {
           const fallback = await fallbackToWan({
             request,
             apiKey,

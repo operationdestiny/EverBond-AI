@@ -114,7 +114,7 @@ async function queueAndRecord(
   const recorded = await setCharacterVideoQueue({
     userId: request.user_id,
     requestId: request.request_id,
-    providerModel: queued.model,
+    providerModel: request.provider_model,
     providerQueueId: queued.queueId,
     providerDownloadUrl: queued.downloadUrl
   });
@@ -122,7 +122,7 @@ async function queueAndRecord(
   if (!recorded) {
     await cleanupProviderVideo({
       apiKey,
-      model: queued.model,
+      model: request.provider_model,
       queueId: queued.queueId
     });
     throw new Error("VIDEO_QUEUE_RECORD_FAILED");
@@ -162,7 +162,7 @@ async function beginWanFallback(
   const fallback = await beginCharacterVideoFallback({
     userId: request.user_id,
     requestId: request.request_id,
-    expectedProviderModel: PRIMARY_VIDEO_MODEL,
+    expectedProviderModel: request.provider_model,
     fallbackProviderModel: FALLBACK_VIDEO_MODEL,
     newAmount: pricing.everCoinCost
   });
@@ -297,16 +297,14 @@ async function processRequest(
   apiKey: string
 ) {
   if (!request.provider_queue_id) {
+    // Historical requests may have a Venice-normalized Grok model string.
+    // Anything not already on Wan is still the primary leg, so route it to
+    // Wan rather than failing it as an unsupported model.
     if (
       request.provider_model !== PRIMARY_VIDEO_MODEL &&
       request.provider_model !== FALLBACK_VIDEO_MODEL
     ) {
-      await failCharacterVideoRequest({
-        userId: request.user_id,
-        requestId: request.request_id,
-        errorCode: "VIDEO_MODEL_NOT_SUPPORTED"
-      });
-      return "failed" as const;
+      return beginWanFallback(request, apiKey);
     }
 
     try {
@@ -314,7 +312,7 @@ async function processRequest(
       return "processing" as const;
     } catch (error) {
       if (
-        request.provider_model === PRIMARY_VIDEO_MODEL
+        request.provider_model !== FALLBACK_VIDEO_MODEL
       ) {
         return beginWanFallback(request, apiKey);
       }
@@ -345,7 +343,7 @@ async function processRequest(
 
   if (retrieved.state === "failed") {
     if (
-      request.provider_model === PRIMARY_VIDEO_MODEL
+      request.provider_model !== FALLBACK_VIDEO_MODEL
     ) {
       return beginWanFallback(request, apiKey);
     }
