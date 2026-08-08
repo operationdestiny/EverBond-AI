@@ -17,63 +17,283 @@ function write(relativePath, content) {
 function replaceRequired(source, from, to, label) {
   if (source.includes(to)) return source;
   if (source.includes(from)) return source.replace(from, to);
-  throw new Error(`Final feature recovery patch could not find: ${label}`);
-}
-
-function replaceBetweenRequired(
-  source,
-  startMarker,
-  endMarker,
-  replacement,
-  alreadyPresent,
-  label
-) {
-  if (alreadyPresent && source.includes(alreadyPresent)) return source;
-
-  const start = source.indexOf(startMarker);
-  const end = source.indexOf(endMarker, start + startMarker.length);
-
-  if (start < 0 || end < 0 || end <= start) {
-    throw new Error(`Final feature recovery patch could not find: ${label}`);
-  }
-
-  return source.slice(0, start) + replacement + source.slice(end);
+  throw new Error(`User-ready recovery patch could not find: ${label}`);
 }
 
 // ===========================================================================
-// VIDEO
-// Keep Kling O3 Standard R2V, the real character image identity element,
-// dynamic EverCoin pricing, 8-second DB semantics, 9:16 framing, and no audio.
+// VIDEO REFERENCE URL
 //
-// Model-specific Venice Kling O3 documentation shows duration as "8", while
-// the generic queue schema also exposes "8s". Try the model-specific form
-// first and only try "8s" if Venice explicitly rejects the duration field.
-// Retry one transient upstream failure without double-charging EverCoin.
+// Keep image generation exactly as-is with its data URL reference.
+// Video gets a provider-fetchable URL instead. Selected private gallery images
+// use a Supabase signed URL; ordinary character images use their public/site URL.
+// This avoids sending a multi-megabyte base64 image inside the Kling queue JSON.
+// ===========================================================================
+
+const mediaReferencePath = "src/lib/character-media-reference.ts";
+let mediaReference = read(mediaReferencePath);
+
+if (!mediaReference.includes("export async function activeCharacterReferenceUrl(")) {
+  const urlHelper = `
+async function selectedGalleryImageUrl(values: {
+  userId: string;
+  characterId: string;
+}) {
+  const supabase = getSupabaseServiceClient();
+
+  const { data: preference, error: preferenceError } = await supabase
+    .from("user_character_preferences")
+    .select("selected_gallery_image_id")
+    .eq("user_id", values.userId)
+    .eq("character_id", values.characterId)
+    .maybeSingle();
+
+  if (preferenceError) throw preferenceError;
+
+  const selectedId = preference?.selected_gallery_image_id;
+  if (!selectedId) return null;
+
+  const { data: image, error: imageError } = await supabase
+    .from("character_gallery_images")
+    .select("storage_path")
+    .eq("id", selectedId)
+    .eq("user_id", values.userId)
+    .eq("character_id", values.characterId)
+    .maybeSingle();
+
+  if (imageError) throw imageError;
+  if (!image?.storage_path) return null;
+
+  const { data: signed, error: signedError } = await supabase.storage
+    .from("character-gallery")
+    .createSignedUrl(image.storage_path, 2 * 60 * 60);
+
+  if (signedError) throw signedError;
+  return signed.signedUrl;
+}
+
+function fallbackReferenceUrl(request: Request, image: string) {
+  if (image.startsWith("data:")) {
+    // Venice's generic video queue supports data URLs. Keep this only as a
+    // last-resort fallback for a legacy character that has no real URL.
+    return parseDataImage(image);
+  }
+
+  const url = new URL(image, trustedSiteOrigin(request));
+
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("REFERENCE_IMAGE_INVALID");
+  }
+
+  const hostname = url.hostname.toLowerCase();
+
+  if (
+    isPrivateIpAddress(hostname) ||
+    !allowedReferenceHosts(request).has(hostname)
+  ) {
+    throw new Error("REFERENCE_IMAGE_HOST_NOT_ALLOWED");
+  }
+
+  return url.href;
+}
+
+export async function activeCharacterReferenceUrl(values: {
+  request: Request;
+  userId: string;
+  characterId: string;
+  fallbackImage: string;
+}) {
+  const selected = await selectedGalleryImageUrl(values).catch(() => null);
+  if (selected) return selected;
+
+  return fallbackReferenceUrl(values.request, values.fallbackImage);
+}
+`;
+
+  mediaReference += urlHelper;
+}
+
+if (
+  !mediaReference.includes("activeCharacterReferenceDataUrl") ||
+  !mediaReference.includes("activeCharacterReferenceUrl") ||
+  !mediaReference.includes('createSignedUrl(image.storage_path, 2 * 60 * 60)')
+) {
+  throw new Error("Video reference URL helper validation failed.");
+}
+
+write(mediaReferencePath, mediaReference);
+
+// ===========================================================================
+// VIDEO
+// Keep Kling O3 Standard R2V, @Element1, 8 seconds, 9:16, audio off.
+// Also self-heal stale requests so an interrupted generation cannot lock users.
 // ===========================================================================
 
 const videoRoutePath =
   "src/app/api/character-video-gallery/[slug]/route.ts";
 let videoRoute = read(videoRoutePath);
 
-const queueStartMarker =
-  '    const providerResponse = await fetch(veniceApiUrl("video/queue"), {';
-const queueEndMarker =
-  "    queuedModel =";
+videoRoute = replaceRequired(
+  videoRoute,
+  'import { activeCharacterReferenceDataUrl } from "@/lib/character-media-reference";',
+  'import { activeCharacterReferenceUrl } from "@/lib/character-media-reference";',
+  "video reference import"
+);
 
-if (!videoRoute.includes("const queueDurationVariants =")) {
-  const queueStart = videoRoute.indexOf(queueStartMarker);
-  const queueEnd = videoRoute.indexOf(queueEndMarker, queueStart);
+videoRoute = replaceRequired(
+  videoRoute,
+  "    const referenceImage = await activeCharacterReferenceDataUrl({",
+  "    const referenceImage = await activeCharacterReferenceUrl({",
+  "video reference helper call"
+);
 
-  if (queueStart < 0 || queueEnd < 0 || queueEnd <= queueStart) {
+if (!videoRoute.includes("VIDEO_UNQUEUED_STALE_MS")) {
+  const insertMarker = "async function signedVideoUrl(path: string) {";
+  const insertAt = videoRoute.indexOf(insertMarker);
+
+  if (insertAt < 0) {
     throw new Error(
-      "Final feature recovery patch could not find: Kling queue request block"
+      "User-ready recovery patch could not find: signedVideoUrl insertion point"
     );
   }
 
-  const queueReplacement = `    const queueDurationVariants = [
+  const staleHelper = `const VIDEO_UNQUEUED_STALE_MS = 2 * 60 * 1000;
+const VIDEO_QUEUED_STALE_MS = 30 * 60 * 1000;
+
+async function clearStaleVideoRequests(values: {
+  userId: string;
+  characterId: string;
+}) {
+  const supabase = getSupabaseServiceClient();
+
+  const { data, error } = await supabase
+    .from("character_video_requests")
+    .select(
+      "request_id,provider_queue_id,provider_model,created_at"
+    )
+    .eq("user_id", values.userId)
+    .eq("character_id", values.characterId)
+    .eq("status", "processing");
+
+  if (error) throw error;
+
+  const now = Date.now();
+
+  for (const row of data ?? []) {
+    const createdAt = new Date(
+      String(row.created_at || "")
+    ).getTime();
+
+    if (!Number.isFinite(createdAt)) continue;
+
+    const queueId =
+      typeof row.provider_queue_id === "string"
+        ? row.provider_queue_id
+        : "";
+
+    const staleAfter = queueId
+      ? VIDEO_QUEUED_STALE_MS
+      : VIDEO_UNQUEUED_STALE_MS;
+
+    if (now - createdAt < staleAfter) continue;
+
+    const requestId = String(row.request_id || "");
+    if (!requestId) continue;
+
+    await failCharacterVideoRequest({
+      userId: values.userId,
+      requestId,
+      errorCode: queueId
+        ? "VIDEO_REQUEST_STALE"
+        : "VIDEO_QUEUE_NOT_CREATED"
+    }).catch((cleanupError) => {
+      console.error(
+        "Stale video request refund failed:",
+        cleanupError
+      );
+    });
+
+    const apiKey = process.env.VENICE_API_KEY?.trim();
+    const model =
+      typeof row.provider_model === "string"
+        ? row.provider_model
+        : "";
+
+    if (apiKey && queueId && model) {
+      await providerCleanup({
+        apiKey,
+        model,
+        queueId
+      });
+    }
+  }
+}
+
+`;
+
+  videoRoute =
+    videoRoute.slice(0, insertAt) +
+    staleHelper +
+    videoRoute.slice(insertAt);
+}
+
+if (!videoRoute.includes("VIDEO_STALE_CLEANUP_GET")) {
+  const getMarker =
+    '    const requestedId = new URL(request.url).searchParams.get("requestId");';
+
+  videoRoute = replaceRequired(
+    videoRoute,
+    getMarker,
+    `    // VIDEO_STALE_CLEANUP_GET
+    await clearStaleVideoRequests({
+      userId: user.id,
+      characterId: character.id
+    });
+
+${getMarker}`,
+    "video GET stale cleanup"
+  );
+}
+
+if (!videoRoute.includes("VIDEO_STALE_CLEANUP_POST")) {
+  const postMarker = "    const model = pricing.model;";
+
+  videoRoute = replaceRequired(
+    videoRoute,
+    postMarker,
+    `    // VIDEO_STALE_CLEANUP_POST
+    await clearStaleVideoRequests({
+      userId: user.id,
+      characterId: character.id
+    });
+
+${postMarker}`,
+    "video POST stale cleanup"
+  );
+}
+
+const queueStartMarker =
+  '    const providerResponse = await fetch(veniceApiUrl("video/queue"), {';
+const queueEndMarker = "    queuedModel =";
+
+if (!videoRoute.includes("VIDEO_KLING_QUEUE_RECOVERY")) {
+  const queueStart = videoRoute.indexOf(queueStartMarker);
+  const queueEnd = videoRoute.indexOf(
+    queueEndMarker,
+    Math.max(queueStart, 0)
+  );
+
+  if (queueStart < 0 || queueEnd < 0 || queueEnd <= queueStart) {
+    throw new Error(
+      "User-ready recovery patch could not find: Kling queue block"
+    );
+  }
+
+  const queueReplacement = `    // VIDEO_KLING_QUEUE_RECOVERY
+    const queueDurationVariants = [
       String(parsed.data.durationSeconds),
       \`\${parsed.data.durationSeconds}s\`
     ];
+
     let payload: Record<string, any> | null = null;
     let lastQueueError = "";
 
@@ -82,9 +302,14 @@ if (!videoRoute.includes("const queueDurationVariants =")) {
       durationIndex < queueDurationVariants.length && !payload;
       durationIndex += 1
     ) {
-      const queueDuration = queueDurationVariants[durationIndex];
+      const queueDuration =
+        queueDurationVariants[durationIndex];
 
-      for (let attempt = 0; attempt < 2 && !payload; attempt += 1) {
+      for (
+        let attempt = 0;
+        attempt < 2 && !payload;
+        attempt += 1
+      ) {
         const providerResponse = await fetch(
           veniceApiUrl("video/queue"),
           {
@@ -111,11 +336,18 @@ if (!videoRoute.includes("const queueDurationVariants =")) {
         );
 
         if (providerResponse.ok) {
-          payload = (await providerResponse.json()) as Record<string, any>;
+          payload =
+            (await providerResponse.json()) as Record<
+              string,
+              any
+            >;
           break;
         }
 
-        const detail = (await providerResponse.text()).slice(0, 500);
+        const detail = (
+          await providerResponse.text()
+        ).slice(0, 500);
+
         lastQueueError =
           \`VIDEO_PROVIDER_QUEUE_FAILED:\${providerResponse.status}:\${detail}\`;
 
@@ -123,19 +355,29 @@ if (!videoRoute.includes("const queueDurationVariants =")) {
           providerResponse.status === 400 &&
           /duration/i.test(detail);
 
-        if (durationRejected && durationIndex === 0) {
-          // Try Venice's generic "8s" spelling only when the model-specific
-          // "8" spelling is explicitly rejected for duration.
+        if (
+          durationRejected &&
+          durationIndex === 0
+        ) {
           break;
         }
 
-        const transient = [429, 500, 502, 503, 504].includes(
-          providerResponse.status
-        );
+        const transient = [
+          429,
+          500,
+          502,
+          503,
+          504
+        ].includes(providerResponse.status);
 
         if (transient && attempt === 0) {
           await new Promise((resolve) =>
-            setTimeout(resolve, providerResponse.status === 429 ? 1800 : 1200)
+            setTimeout(
+              resolve,
+              providerResponse.status === 429
+                ? 1800
+                : 1200
+            )
           );
           continue;
         }
@@ -146,7 +388,8 @@ if (!videoRoute.includes("const queueDurationVariants =")) {
 
     if (!payload) {
       throw new Error(
-        lastQueueError || "VIDEO_PROVIDER_QUEUE_FAILED"
+        lastQueueError ||
+          "VIDEO_PROVIDER_QUEUE_FAILED"
       );
     }
 
@@ -159,26 +402,30 @@ if (!videoRoute.includes("const queueDurationVariants =")) {
 }
 
 if (
-  !videoRoute.includes("const queueDurationVariants =") ||
-  !videoRoute.includes('String(parsed.data.durationSeconds)') ||
-  !videoRoute.includes('frontal_image_url: referenceImage') ||
-  !videoRoute.includes('@Element1 is the exact fictional adult character') ||
+  !videoRoute.includes("activeCharacterReferenceUrl") ||
+  !videoRoute.includes("VIDEO_KLING_QUEUE_RECOVERY") ||
+  !videoRoute.includes("VIDEO_STALE_CLEANUP_GET") ||
+  !videoRoute.includes("VIDEO_STALE_CLEANUP_POST") ||
+  !videoRoute.includes(
+    "frontal_image_url: referenceImage"
+  ) ||
+  !videoRoute.includes(
+    "@Element1 is the exact fictional adult character"
+  ) ||
   !videoRoute.includes('aspect_ratio: "9:16"') ||
   !videoRoute.includes("audio: false")
 ) {
-  throw new Error("Final video recovery validation failed.");
+  throw new Error("User-ready video validation failed.");
 }
 
 write(videoRoutePath, videoRoute);
 
 // ===========================================================================
-// VOICE TURN RELIABILITY
-// Preserve the permanent six-voice configuration, EverMemory-aware delivery,
-// billing limits, and all call limits. Only make provider execution resilient:
-// - allow enough server time for STT -> model -> TTS;
-// - retry one transient STT/TTS provider error;
-// - let Qwen TTS use its model-supported default output format;
-// - store the resulting file using the actual returned MIME extension.
+// VOICE FUNCTIONALITY
+//
+// Keep the CURRENT call visual design unchanged.
+// Keep explicit Opus because the private Supabase voice bucket stores OGG/Opus.
+// Keep permanent voices, EverMemory, pricing and all existing call limits.
 // ===========================================================================
 
 const voiceTurnPath = "src/app/api/voice/turn/route.ts";
@@ -188,291 +435,29 @@ voiceTurn = replaceRequired(
   voiceTurn,
   'export const maxDuration = 60;',
   'export const maxDuration = 180;',
-  "voice turn maxDuration"
-);
-
-const transcribeStart = "async function transcribeAudio(";
-const synthesizeStart = "async function synthesizeSpeech(";
-const existingTurnStart = "async function existingTurnResponse(";
-
-if (!voiceTurn.includes("TRANSCRIPTION_TRANSIENT_RETRY")) {
-  const transcribeIndex = voiceTurn.indexOf(transcribeStart);
-  const synthesizeIndex = voiceTurn.indexOf(synthesizeStart, transcribeIndex);
-
-  if (
-    transcribeIndex < 0 ||
-    synthesizeIndex < 0 ||
-    synthesizeIndex <= transcribeIndex
-  ) {
-    throw new Error(
-      "Final feature recovery patch could not find: voice transcription function"
-    );
-  }
-
-  const transcribeFunction = `async function transcribeAudio(
-  audio: File,
-  language: SupportedLanguage
-) {
-  const apiKey = process.env.VENICE_API_KEY;
-  if (!apiKey) throw new Error("VENICE_NOT_CONFIGURED");
-
-  let lastError = "TRANSCRIPTION_FAILED";
-
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const providerForm = new FormData();
-    providerForm.set("file", audio, "voice.wav");
-    providerForm.set(
-      "model",
-      process.env.VENICE_STT_MODEL ||
-        "openai/whisper-large-v3"
-    );
-    providerForm.set("response_format", "json");
-    providerForm.set("timestamps", "false");
-    providerForm.set("language", STT_LANGUAGE[language]);
-
-    const response = await fetch(
-      veniceApiUrl("audio/transcriptions"),
-      {
-        method: "POST",
-        headers: {
-          Authorization: \`Bearer \${apiKey}\`
-        },
-        body: providerForm,
-        signal: AbortSignal.timeout(60_000)
-      }
-    );
-
-    const payload = await response
-      .json()
-      .catch(() => ({}));
-
-    if (response.ok) {
-      const text =
-        typeof payload?.text === "string"
-          ? payload.text.trim()
-          : "";
-
-      return normalizeVoiceTranscript(text);
-    }
-
-    lastError =
-      \`TRANSCRIPTION_FAILED:\${providerMessage(
-        payload,
-        String(response.status)
-      )}\`;
-
-    if (
-      [429, 500, 502, 503, 504].includes(response.status) &&
-      attempt === 0
-    ) {
-      console.warn(
-        "TRANSCRIPTION_TRANSIENT_RETRY",
-        response.status
-      );
-      await new Promise((resolve) =>
-        setTimeout(resolve, response.status === 429 ? 1500 : 900)
-      );
-      continue;
-    }
-
-    throw new Error(lastError);
-  }
-
-  throw new Error(lastError);
-}
-
-`;
-
-  voiceTurn =
-    voiceTurn.slice(0, transcribeIndex) +
-    transcribeFunction +
-    voiceTurn.slice(synthesizeIndex);
-}
-
-if (!voiceTurn.includes("TTS_TRANSIENT_RETRY")) {
-  const synthesizeIndex = voiceTurn.indexOf(synthesizeStart);
-  const existingIndex = voiceTurn.indexOf(
-    existingTurnStart,
-    synthesizeIndex
-  );
-
-  if (
-    synthesizeIndex < 0 ||
-    existingIndex < 0 ||
-    existingIndex <= synthesizeIndex
-  ) {
-    throw new Error(
-      "Final feature recovery patch could not find: voice synthesis function"
-    );
-  }
-
-  const synthesizeFunction = `async function synthesizeSpeech(values: {
-  characterSlug: string;
-  character: Awaited<
-    ReturnType<typeof getCharacterBySlugForUser>
-  >;
-  text: string;
-  language: SupportedLanguage;
-  memory: Awaited<
-    ReturnType<typeof generateVoiceCharacterDraft>
-  >["memory"];
-}) {
-  const character = values.character;
-  if (!character) throw new Error("CHARACTER_NOT_FOUND");
-
-  const voice = getCharacterVoiceConfig(character, {
-    reply: values.text,
-    emotionalState: values.memory.emotional_state,
-    relationshipState: values.memory.relationship_state,
-    currentScene: values.memory.current_scene
-  });
-
-  if (!voice) throw new Error("VOICE_NOT_CONFIGURED");
-
-  const apiKey = process.env.VENICE_API_KEY;
-  if (!apiKey) throw new Error("VENICE_NOT_CONFIGURED");
-
-  const speechPayload = {
-    model: voice.model,
-    voice: voice.voice,
-    input: values.text,
-    language: values.language,
-    prompt: voice.prompt,
-    speed: voice.speed,
-    temperature: voice.temperature,
-    top_p: voice.topP,
-    streaming: false
-  };
-
-  let lastError = "SPEECH_FAILED";
-
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const response = await fetch(
-      veniceApiUrl("audio/speech"),
-      {
-        method: "POST",
-        headers: {
-          Authorization: \`Bearer \${apiKey}\`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(speechPayload),
-        signal: AbortSignal.timeout(60_000)
-      }
-    );
-
-    if (!response.ok) {
-      const detail = (await response.text()).slice(
-        0,
-        500
-      );
-
-      lastError =
-        \`SPEECH_FAILED:\${response.status}:\${detail}\`;
-
-      if (
-        [429, 500, 502, 503, 504].includes(response.status) &&
-        attempt === 0
-      ) {
-        console.warn(
-          "TTS_TRANSIENT_RETRY",
-          response.status
-        );
-        await new Promise((resolve) =>
-          setTimeout(
-            resolve,
-            response.status === 429 ? 1500 : 900
-          )
-        );
-        continue;
-      }
-
-      throw new Error(lastError);
-    }
-
-    const contentType =
-      response.headers
-        .get("content-type")
-        ?.split(";")[0]
-        .trim()
-        .toLowerCase() || "audio/mpeg";
-
-    if (
-      !contentType.startsWith("audio/") &&
-      contentType !== "application/ogg"
-    ) {
-      throw new Error("SPEECH_INVALID_FILE");
-    }
-
-    const buffer = Buffer.from(
-      await response.arrayBuffer()
-    );
-
-    if (
-      !buffer.length ||
-      buffer.length > 5 * 1024 * 1024
-    ) {
-      throw new Error("SPEECH_INVALID_FILE");
-    }
-
-    const extension =
-      contentType.includes("aac")
-        ? "aac"
-        : contentType.includes("ogg") ||
-            contentType.includes("opus")
-          ? "ogg"
-          : contentType.includes("flac")
-            ? "flac"
-            : contentType.includes("wav")
-              ? "wav"
-              : contentType.includes("pcm")
-                ? "pcm"
-                : "mp3";
-
-    return {
-      buffer,
-      contentType,
-      extension
-    };
-  }
-
-  throw new Error(lastError);
-}
-
-`;
-
-  voiceTurn =
-    voiceTurn.slice(0, synthesizeIndex) +
-    synthesizeFunction +
-    voiceTurn.slice(existingIndex);
-}
-
-voiceTurn = replaceRequired(
-  voiceTurn,
-  '    uploadedPath = `${user.id}/${callId}/${requestId}.opus`;',
-  '    uploadedPath = `${user.id}/${callId}/${requestId}.${speech.extension}`;',
-  "voice audio file extension"
+  "voice turn execution ceiling"
 );
 
 if (
-  !voiceTurn.includes('export const maxDuration = 180;') ||
-  !voiceTurn.includes("TRANSCRIPTION_TRANSIENT_RETRY") ||
-  !voiceTurn.includes("TTS_TRANSIENT_RETRY") ||
+  !voiceTurn.includes('response_format: "opus"') ||
+  !voiceTurn.includes(
+    'uploadedPath = `${user.id}/${callId}/${requestId}.opus`;'
+  ) ||
   !voiceTurn.includes("memory: generated.memory") ||
-  !voiceTurn.includes("getCharacterVoiceConfig(character, {") ||
-  !voiceTurn.includes("${speech.extension}") ||
-  voiceTurn.includes('response_format: "opus"')
+  !voiceTurn.includes(
+    "getCharacterVoiceConfig(character, {"
+  )
 ) {
-  throw new Error("Final voice reliability validation failed.");
+  throw new Error(
+    "Voice route no longer matches the permanent Opus/EverMemory system."
+  );
 }
 
 write(voiceTurnPath, voiceTurn);
 
 // ===========================================================================
-// VOICE CALL UI
-// Keep all existing call/recording/billing logic. Only simplify the visible
-// modal to the requested three elements:
-//   character picture + Speak control + Hang Up control.
-// A small error overlay remains only when something actually fails.
+// VOICE VISUAL DESIGN
+// Intentionally identical to the CURRENT deployed simple design.
 // ===========================================================================
 
 const voiceModalPath =
@@ -490,7 +475,7 @@ if (!voiceModal.includes("data-everbond-simple-voice-call")) {
 
   if (tailStart < 0) {
     throw new Error(
-      "Final feature recovery patch could not find: voice modal render tail"
+      "User-ready recovery patch could not find: voice modal render"
     );
   }
 
@@ -589,17 +574,16 @@ if (
   !voiceModal.includes("copy.hangUp") ||
   voiceModal.includes("<Sparkles")
 ) {
-  throw new Error("Simple voice-call UI validation failed.");
+  throw new Error(
+    "Current voice-call visual design validation failed."
+  );
 }
 
 write(voiceModalPath, voiceModal);
 
 // ===========================================================================
 // REFRESH CHAT SERVER
-// Replace the generated DELETE handler with a reset that prioritizes clearing
-// persisted visible history. Pending-request fail/refund cleanup is best-effort
-// and cannot prevent the actual message reset.
-// EverMemory, relationship state, and conversation memory_state are preserved.
+// One production RPC clears persisted history and synchronizes request state.
 // ===========================================================================
 
 const chatRoutePath = "src/app/api/chat/route.ts";
@@ -610,11 +594,11 @@ const deleteStartMarker =
 const postStartMarker =
   "export async function POST(request: Request) {";
 
-if (!chatRoute.includes("CHAT_RESET_PERSISTED_HISTORY_CLEARED")) {
+if (!chatRoute.includes("RESET_CHARACTER_CHAT_HISTORY_RPC")) {
   const deleteStart = chatRoute.indexOf(deleteStartMarker);
   const postStart = chatRoute.indexOf(
     postStartMarker,
-    deleteStart
+    Math.max(deleteStart, 0)
   );
 
   if (
@@ -623,7 +607,7 @@ if (!chatRoute.includes("CHAT_RESET_PERSISTED_HISTORY_CLEARED")) {
     postStart <= deleteStart
   ) {
     throw new Error(
-      "Final feature recovery patch could not find: chat DELETE handler"
+      "User-ready recovery patch could not find: chat DELETE handler"
     );
   }
 
@@ -663,129 +647,25 @@ if (!chatRoute.includes("CHAT_RESET_PERSISTED_HISTORY_CLEARED")) {
       );
     }
 
-    const supabase =
-      getSupabaseServiceClient();
-
-    // Invalidate any in-flight request for this exact character. These
-    // cleanups are intentionally best-effort; a refund bookkeeping problem
-    // must never make the Refresh Chat button appear broken.
-    const {
-      data: pendingRequests,
-      error: pendingError
-    } = await supabase
-      .from("chat_requests")
-      .select("request_id")
-      .eq("user_id", user.id)
-      .eq("character_id", character.id)
-      .eq("status", "pending");
-
-    if (pendingError) {
-      console.error(
-        "Chat reset pending-request lookup failed:",
-        pendingError
-      );
-    }
-
-    for (const pending of pendingRequests ?? []) {
-      const pendingRequestId = String(
-        pending.request_id || ""
+    // RESET_CHARACTER_CHAT_HISTORY_RPC
+    const { data, error } =
+      await getSupabaseServiceClient().rpc(
+        "reset_character_chat_history",
+        {
+          p_user_id: user.id,
+          p_character_id: character.id
+        }
       );
 
-      if (!pendingRequestId) continue;
-
-      await failChatRequest({
-        userId: user.id,
-        requestId: pendingRequestId,
-        errorCode: "CHAT_RESET"
-      }).catch((cleanupError) => {
-        console.error(
-          "Chat reset request invalidation failed:",
-          cleanupError
-        );
-      });
-
-      await refundChatMessageCredit({
-        userId: user.id,
-        requestId: pendingRequestId
-      }).catch((cleanupError) => {
-        console.error(
-          "Chat reset credit refund failed:",
-          cleanupError
-        );
-      });
-    }
-
-    const {
-      data: conversations,
-      error: conversationError
-    } = await supabase
-      .from("conversations")
-      .select("id,updated_at")
-      .eq("user_id", user.id)
-      .eq("character_id", character.id)
-      .order("updated_at", {
-        ascending: false
-      });
-
-    if (conversationError) {
-      throw conversationError;
-    }
-
-    const conversationIds =
-      (conversations ?? [])
-        .map((conversation) =>
-          String(conversation.id || "")
-        )
-        .filter(Boolean);
-
-    if (conversationIds.length > 0) {
-      const {
-        error: messageDeleteError
-      } = await supabase
-        .from("messages")
-        .delete()
-        .in(
-          "conversation_id",
-          conversationIds
-        );
-
-      if (messageDeleteError) {
-        throw messageDeleteError;
-      }
-
-      const {
-        error: conversationUpdateError
-      } = await supabase
-        .from("conversations")
-        .update({
-          updated_at:
-            new Date().toISOString()
-        })
-        .in("id", conversationIds);
-
-      if (conversationUpdateError) {
-        console.error(
-          "Chat reset timestamp update failed:",
-          conversationUpdateError
-        );
-      }
-    }
-
-    console.info(
-      "CHAT_RESET_PERSISTED_HISTORY_CLEARED",
-      {
-        userId: user.id,
-        characterId: character.id,
-        conversations:
-          conversationIds.length
-      }
-    );
+    if (error) throw error;
 
     return NextResponse.json(
       {
         reset: true,
         conversationId:
-          conversationIds[0] ?? null
+          typeof data === "string"
+            ? data
+            : null
       },
       {
         headers: {
@@ -817,33 +697,58 @@ if (!chatRoute.includes("CHAT_RESET_PERSISTED_HISTORY_CLEARED")) {
 
 if (
   !chatRoute.includes(
-    "CHAT_RESET_PERSISTED_HISTORY_CLEARED"
+    "RESET_CHARACTER_CHAT_HISTORY_RPC"
   ) ||
   !chatRoute.includes(
-    '.from("messages")'
-  ) ||
-  !chatRoute.includes(
-    'errorCode: "CHAT_RESET"'
+    '"reset_character_chat_history"'
   )
 ) {
-  throw new Error("Final chat reset server validation failed.");
+  throw new Error(
+    "User-ready chat reset server validation failed."
+  );
 }
 
 write(chatRoutePath, chatRoute);
 
 // ===========================================================================
 // REFRESH CHAT CLIENT
-// Make Refresh visibly happen immediately. The browser aborts/invalidates an
-// old send, clears the pending sign-in message, and restores the opening
-// message BEFORE waiting for the server DELETE. The server then synchronizes
-// persisted history. No EverMemory is deleted.
+// Clear immediately and prevent stale send/history responses from restoring it.
 // ===========================================================================
 
 const chatShellPath =
   "src/components/chat/ChatShell.tsx";
 let chatShell = read(chatShellPath);
 
-if (!chatShell.includes("CHAT_RESET_OPTIMISTIC_CLEAR")) {
+if (!chatShell.includes("historyGeneration !== chatGenerationRef.current")) {
+  chatShell = replaceRequired(
+    chatShell,
+    `    let cancelled = false;
+
+    async function loadHistory() {`,
+    `    let cancelled = false;
+    const historyGeneration =
+      chatGenerationRef.current;
+
+    async function loadHistory() {`,
+    "chat history generation token"
+  );
+
+  chatShell = replaceRequired(
+    chatShell,
+    "        if (cancelled || !response.ok) return;",
+    `        if (
+          cancelled ||
+          historyGeneration !==
+            chatGenerationRef.current ||
+          !response.ok
+        ) {
+          return;
+        }`,
+    "chat history stale response guard"
+  );
+}
+
+if (!chatShell.includes("USER_READY_CHAT_RESET")) {
   const resetStartMarker =
     "  async function resetConversation() {";
   const shareStartMarker =
@@ -854,7 +759,7 @@ if (!chatShell.includes("CHAT_RESET_OPTIMISTIC_CLEAR")) {
   const shareStart =
     chatShell.indexOf(
       shareStartMarker,
-      resetStart
+      Math.max(resetStart, 0)
     );
 
   if (
@@ -863,19 +768,21 @@ if (!chatShell.includes("CHAT_RESET_OPTIMISTIC_CLEAR")) {
     shareStart <= resetStart
   ) {
     throw new Error(
-      "Final feature recovery patch could not find: chat reset client function"
+      "User-ready recovery patch could not find: resetConversation"
     );
   }
 
   const resetFunction = `  async function resetConversation() {
     if (refreshingChat) return;
 
+    // USER_READY_CHAT_RESET
     chatGenerationRef.current += 1;
     chatAbortRef.current?.abort();
     chatAbortRef.current = null;
     sendInFlightRef.current = false;
 
     setRefreshingChat(true);
+    setHistoryLoading(false);
     setIsTyping(false);
     setGiftError("");
     setChatError("");
@@ -886,9 +793,6 @@ if (!chatShell.includes("CHAT_RESET_OPTIMISTIC_CLEAR")) {
       );
     }
 
-    // CHAT_RESET_OPTIMISTIC_CLEAR
-    // Give immediate visual feedback instead of making Refresh appear dead
-    // while the server clears persisted history.
     setMessages([
       {
         role: "character",
@@ -951,14 +855,13 @@ if (!chatShell.includes("CHAT_RESET_OPTIMISTIC_CLEAR")) {
     chatShell.slice(shareStart);
 }
 
-// Disable the existing refresh control while the server sync is active and
-// animate the icon. Match only the button wired to resetConversation.
 if (!chatShell.includes("disabled={refreshingChat}")) {
-  const refreshButtonPattern = /<button\s+onClick=\{\(\) => void resetConversation\(\)\}[\s\S]*?aria-label=\{t\("refresh"\)\}[\s\S]*?<RefreshCcw size=\{15\} \/>[\s\S]*?<\/button>/;
+  const refreshButtonPattern =
+    /<button\s+onClick=\{\(\) => void resetConversation\(\)\}[\s\S]*?aria-label=\{t\("refresh"\)\}[\s\S]*?<RefreshCcw size=\{15\} \/>[\s\S]*?<\/button>/;
 
   if (!refreshButtonPattern.test(chatShell)) {
     throw new Error(
-      "Final feature recovery patch could not find: Refresh Chat button state"
+      "User-ready recovery patch could not find: Refresh Chat button"
     );
   }
 
@@ -980,24 +883,19 @@ if (!chatShell.includes("disabled={refreshingChat}")) {
 }
 
 if (
-  !chatShell.includes(
-    "CHAT_RESET_OPTIMISTIC_CLEAR"
-  ) ||
-  !chatShell.includes(
-    "disabled={refreshingChat}"
-  ) ||
-  !chatShell.includes(
-    'method: "DELETE"'
-  ) ||
-  !chatShell.includes(
-    "chatGenerationRef.current += 1"
-  )
+  !chatShell.includes("USER_READY_CHAT_RESET") ||
+  !chatShell.includes("historyGeneration !==") ||
+  !chatShell.includes("chatGenerationRef.current") ||
+  !chatShell.includes("disabled={refreshingChat}") ||
+  !chatShell.includes('method: "DELETE"')
 ) {
-  throw new Error("Final chat reset client validation failed.");
+  throw new Error(
+    "User-ready chat reset client validation failed."
+  );
 }
 
 write(chatShellPath, chatShell);
 
 console.log(
-  "EverBond final video, voice-call, and Refresh Chat recovery applied."
+  "EverBond user-ready Refresh Chat, voice, and Kling video recovery applied."
 );
