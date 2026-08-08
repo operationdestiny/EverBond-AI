@@ -62,13 +62,17 @@ function queuePayload(values: {
   );
 
   if (values.model === PRIMARY_VIDEO_MODEL) {
+    // Venice's live /video/queue validator currently uses the normalized
+    // video schema for Grok R2V: suffixed duration + snake_case references.
+    // This intentionally follows the live endpoint rather than the older
+    // Grok guide examples that still show bare durations/camelCase fields.
     return {
       model: values.model,
       prompt: commonPrompt,
-      duration: String(values.durationSeconds),
+      duration: `${values.durationSeconds}s`,
       resolution: VIDEO_RESOLUTION,
       aspect_ratio: VIDEO_ASPECT_RATIO,
-      referenceImageUrls: [values.referenceImage]
+      reference_image_urls: [values.referenceImage]
     };
   }
 
