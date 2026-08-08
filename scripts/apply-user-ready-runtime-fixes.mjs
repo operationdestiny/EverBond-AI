@@ -605,18 +605,8 @@ fastVoiceTurn = replaceRequired(
   "Next.js after import"
 );
 
-// English voice calls use Venice's current default STT model. Keep Whisper for
-// the other localized site languages because it honors explicit language hints.
-fastVoiceTurn = replaceRequired(
-  fastVoiceTurn,
-  `    process.env.VENICE_STT_MODEL ||
-      "openai/whisper-large-v3"`,
-  `    process.env.VENICE_STT_MODEL ||
-      (language === "English"
-        ? "nvidia/parakeet-tdt-0.6b-v3"
-        : "openai/whisper-large-v3")`,
-  "fast English STT default"
-);
+// Keep the existing configured STT model exactly as-is. Whisper was already
+// working before; the speed fix must not depend on rewriting its formatting.
 
 // Long timeouts are poor UX for a live call. Faster STT + shorter TTS text
 // allow bounded failure instead of an apparently endless spinner.
@@ -761,9 +751,6 @@ if (
     "VOICE_MEMORY_AFTER_RESPONSE"
   ) ||
   !fastVoiceTurn.includes(
-    "nvidia/parakeet-tdt-0.6b-v3"
-  ) ||
-  !fastVoiceTurn.includes(
     "AbortSignal.timeout(35_000)"
   ) ||
   !fastVoiceTurn.includes(
@@ -785,5 +772,5 @@ write(voiceTurnPath, fastVoiceTurn);
 
 
 console.log(
-  "EverBond fast voice critical path applied; video remains unchanged for diagnosis."
+  "EverBond fast voice critical path applied (STT preserved); video remains unchanged for diagnosis."
 );
