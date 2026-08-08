@@ -135,14 +135,52 @@ let videoRoute = read(videoRoutePath);
 videoRoute = replaceRequired(
   videoRoute,
   'import { activeCharacterReferenceDataUrl } from "@/lib/character-media-reference";',
-  'import { activeCharacterReferenceUrl } from "@/lib/character-media-reference";',
+  'import { activeCharacterReferenceDataUrl, activeCharacterReferenceUrl } from "@/lib/character-media-reference";',
   "video reference import"
 );
 
 videoRoute = replaceRequired(
   videoRoute,
-  "    const referenceImage = await activeCharacterReferenceDataUrl({",
-  "    const referenceImage = await activeCharacterReferenceUrl({",
+  `    const referenceImage = await activeCharacterReferenceDataUrl({
+      request,
+      userId: user.id,
+      characterId: character.id,
+      fallbackImage: character.image
+    });`,
+  `    const referenceImageUrl =
+      await activeCharacterReferenceUrl({
+        request,
+        userId: user.id,
+        characterId: character.id,
+        fallbackImage: character.image
+      }).catch(() => null);
+
+    const referenceImageDataUrl =
+      await activeCharacterReferenceDataUrl({
+        request,
+        userId: user.id,
+        characterId: character.id,
+        fallbackImage: character.image
+      });
+
+    const referenceImages = Array.from(
+      new Set(
+        [
+          referenceImageUrl,
+          referenceImageDataUrl
+        ].filter(
+          (value): value is string =>
+            typeof value === "string" &&
+            Boolean(value.trim())
+        )
+      )
+    );
+
+    if (!referenceImages.length) {
+      throw new Error(
+        "REFERENCE_IMAGE_LOAD_FAILED"
+      );
+    }`,
   "video reference helper call"
 );
 
@@ -298,91 +336,124 @@ if (!videoRoute.includes("VIDEO_KLING_QUEUE_RECOVERY")) {
     let lastQueueError = "";
 
     for (
-      let durationIndex = 0;
-      durationIndex < queueDurationVariants.length && !payload;
-      durationIndex += 1
+      let referenceIndex = 0;
+      referenceIndex < referenceImages.length && !payload;
+      referenceIndex += 1
     ) {
-      const queueDuration =
-        queueDurationVariants[durationIndex];
+      const queueReference =
+        referenceImages[referenceIndex];
 
       for (
-        let attempt = 0;
-        attempt < 2 && !payload;
-        attempt += 1
+        let durationIndex = 0;
+        durationIndex < queueDurationVariants.length && !payload;
+        durationIndex += 1
       ) {
-        const providerResponse = await fetch(
-          veniceApiUrl("video/queue"),
-          {
-            method: "POST",
-            headers: providerHeaders(apiKey),
-            body: JSON.stringify({
-              model,
-              prompt:
-                \`@Element1 is the exact fictional adult character \${character.name}. \` +
-                "Keep @Element1's recognizable face, identity, adult age, body, skin tone, hair, and defining appearance consistent throughout the video. " +
-                "The user's request controls the action, pose, expression, clothing, scene, framing, and camera movement. " +
-                parsed.data.prompt,
-              duration: queueDuration,
-              aspect_ratio: "9:16",
-              audio: false,
-              elements: [
-                {
-                  frontal_image_url: referenceImage
-                }
-              ]
-            }),
-            signal: AbortSignal.timeout(60_000)
-          }
-        );
+        const queueDuration =
+          queueDurationVariants[durationIndex];
 
-        if (providerResponse.ok) {
-          payload =
-            (await providerResponse.json()) as Record<
-              string,
-              any
-            >;
-          break;
-        }
+        let tryNextReference = false;
 
-        const detail = (
-          await providerResponse.text()
-        ).slice(0, 500);
-
-        lastQueueError =
-          \`VIDEO_PROVIDER_QUEUE_FAILED:\${providerResponse.status}:\${detail}\`;
-
-        const durationRejected =
-          providerResponse.status === 400 &&
-          /duration/i.test(detail);
-
-        if (
-          durationRejected &&
-          durationIndex === 0
+        for (
+          let attempt = 0;
+          attempt < 2 && !payload;
+          attempt += 1
         ) {
+          const providerResponse = await fetch(
+            veniceApiUrl("video/queue"),
+            {
+              method: "POST",
+              headers: providerHeaders(apiKey),
+              body: JSON.stringify({
+                model,
+                prompt:
+                  \`@Element1 is the exact fictional adult character \${character.name}. \` +
+                  "Keep @Element1's recognizable face, identity, adult age, body, skin tone, hair, and defining appearance consistent throughout the video. " +
+                  "The user's request controls the action, pose, expression, clothing, scene, framing, and camera movement. " +
+                  parsed.data.prompt,
+                duration: queueDuration,
+                aspect_ratio: "9:16",
+                audio: false,
+                elements: [
+                  {
+                    frontal_image_url:
+                      queueReference
+                  }
+                ]
+              }),
+              signal: AbortSignal.timeout(60_000)
+            }
+          );
+
+          if (providerResponse.ok) {
+            payload =
+              (await providerResponse.json()) as Record<
+                string,
+                any
+              >;
+            break;
+          }
+
+          const detail = (
+            await providerResponse.text()
+          ).slice(0, 500);
+
+          lastQueueError =
+            \`VIDEO_PROVIDER_QUEUE_FAILED:\${providerResponse.status}:\${detail}\`;
+
+          const durationRejected =
+            providerResponse.status === 400 &&
+            /duration/i.test(detail);
+
+          if (
+            durationRejected &&
+            durationIndex === 0
+          ) {
+            break;
+          }
+
+          const referenceRejected =
+            [400, 422].includes(
+              providerResponse.status
+            ) &&
+            /reference|frontal|element|image|url/i.test(
+              detail
+            );
+
+          if (
+            referenceRejected &&
+            referenceIndex <
+              referenceImages.length - 1
+          ) {
+            tryNextReference = true;
+            break;
+          }
+
+          const transient = [
+            429,
+            500,
+            502,
+            503,
+            504
+          ].includes(providerResponse.status);
+
+          if (transient && attempt === 0) {
+            await new Promise((resolve) =>
+              setTimeout(
+                resolve,
+                providerResponse.status === 429
+                  ? 1800
+                  : 1200
+              )
+            );
+            continue;
+          }
+
+          throw new Error(lastQueueError);
+        }
+
+        if (tryNextReference) {
           break;
         }
-
-        const transient = [
-          429,
-          500,
-          502,
-          503,
-          504
-        ].includes(providerResponse.status);
-
-        if (transient && attempt === 0) {
-          await new Promise((resolve) =>
-            setTimeout(
-              resolve,
-              providerResponse.status === 429
-                ? 1800
-                : 1200
-            )
-          );
-          continue;
-        }
-
-        throw new Error(lastQueueError);
       }
     }
 
@@ -407,8 +478,9 @@ if (
   !videoRoute.includes("VIDEO_STALE_CLEANUP_GET") ||
   !videoRoute.includes("VIDEO_STALE_CLEANUP_POST") ||
   !videoRoute.includes(
-    "frontal_image_url: referenceImage"
+    "frontal_image_url:"
   ) ||
+  !videoRoute.includes("referenceImages") ||
   !videoRoute.includes(
     "@Element1 is the exact fictional adult character"
   ) ||
@@ -647,9 +719,14 @@ if (!chatRoute.includes("RESET_CHARACTER_CHAT_HISTORY_RPC")) {
       );
     }
 
+    const supabase =
+      getSupabaseServiceClient();
+
     // RESET_CHARACTER_CHAT_HISTORY_RPC
-    const { data, error } =
-      await getSupabaseServiceClient().rpc(
+    // Use the atomic RPC when available, but do not make the user-facing
+    // Refresh button depend on one database function existing correctly.
+    const { data: resetData, error: resetError } =
+      await supabase.rpc(
         "reset_character_chat_history",
         {
           p_user_id: user.id,
@@ -657,15 +734,130 @@ if (!chatRoute.includes("RESET_CHARACTER_CHAT_HISTORY_RPC")) {
         }
       );
 
-    if (error) throw error;
+    if (resetError) {
+      console.error(
+        "Atomic chat reset RPC failed; using server fallback:",
+        resetError
+      );
+    }
+
+    let conversationId =
+      typeof resetData === "string"
+        ? resetData
+        : null;
+
+    // Always reconcile pending requests. This is idempotent after a successful
+    // RPC and is the recovery path when the RPC is missing or stale.
+    const {
+      data: pendingRequests,
+      error: pendingError
+    } = await supabase
+      .from("chat_requests")
+      .select("request_id")
+      .eq("user_id", user.id)
+      .eq("character_id", character.id)
+      .eq("status", "pending");
+
+    if (pendingError) {
+      console.error(
+        "Chat reset pending lookup failed:",
+        pendingError
+      );
+    } else {
+      for (const pending of pendingRequests ?? []) {
+        const pendingRequestId =
+          String(pending.request_id || "");
+
+        if (!pendingRequestId) continue;
+
+        await failChatRequest({
+          userId: user.id,
+          requestId: pendingRequestId,
+          errorCode: "CHAT_RESET"
+        }).catch((cleanupError) => {
+          console.error(
+            "Chat reset request invalidation failed:",
+            cleanupError
+          );
+        });
+
+        await refundChatMessageCredit({
+          userId: user.id,
+          requestId: pendingRequestId
+        }).catch((cleanupError) => {
+          console.error(
+            "Chat reset credit refund failed:",
+            cleanupError
+          );
+        });
+      }
+    }
+
+    const {
+      data: conversations,
+      error: conversationError
+    } = await supabase
+      .from("conversations")
+      .select("id,updated_at")
+      .eq("user_id", user.id)
+      .eq("character_id", character.id)
+      .order("updated_at", {
+        ascending: false
+      });
+
+    if (conversationError) {
+      throw conversationError;
+    }
+
+    const conversationIds =
+      (conversations ?? [])
+        .map((conversation) =>
+          String(conversation.id || "")
+        )
+        .filter(Boolean);
+
+    if (!conversationId) {
+      conversationId =
+        conversationIds[0] ?? null;
+    }
+
+    if (conversationIds.length > 0) {
+      const {
+        error: messageDeleteError
+      } = await supabase
+        .from("messages")
+        .delete()
+        .in(
+          "conversation_id",
+          conversationIds
+        );
+
+      if (messageDeleteError) {
+        throw messageDeleteError;
+      }
+
+      const {
+        error: conversationUpdateError
+      } = await supabase
+        .from("conversations")
+        .update({
+          updated_at:
+            new Date().toISOString()
+        })
+        .in("id", conversationIds);
+
+      if (conversationUpdateError) {
+        console.error(
+          "Chat reset timestamp update failed:",
+          conversationUpdateError
+        );
+      }
+    }
 
     return NextResponse.json(
       {
         reset: true,
-        conversationId:
-          typeof data === "string"
-            ? data
-            : null
+        conversationId
       },
       {
         headers: {
