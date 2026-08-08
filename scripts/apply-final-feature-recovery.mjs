@@ -722,9 +722,9 @@ if (!chatRoute.includes("RESET_CHARACTER_CHAT_HISTORY_RPC")) {
     const supabase =
       getSupabaseServiceClient();
 
-    // RESET_CHARACTER_CHAT_HISTORY_RPC
-    // Use the atomic RPC when available, but do not make the user-facing
-    // Refresh button depend on one database function existing correctly.
+    // TRUE_NEW_CHAT_SESSION
+    // The RPC creates a brand-new conversation ID. Old conversations can no
+    // longer become active again just because an old request updates them.
     const { data: resetData, error: resetError } =
       await supabase.rpc(
         "reset_character_chat_history",
@@ -734,20 +734,61 @@ if (!chatRoute.includes("RESET_CHARACTER_CHAT_HISTORY_RPC")) {
         }
       );
 
-    if (resetError) {
-      console.error(
-        "Atomic chat reset RPC failed; using server fallback:",
-        resetError
+    if (
+      !resetError &&
+      typeof resetData === "string" &&
+      resetData
+    ) {
+      return NextResponse.json(
+        {
+          reset: true,
+          conversationId: resetData
+        },
+        {
+          headers: {
+            "Cache-Control":
+              "private, no-store"
+          }
+        }
       );
     }
 
-    let conversationId =
-      typeof resetData === "string"
-        ? resetData
-        : null;
+    console.error(
+      "Atomic new-chat reset RPC failed; using server fallback:",
+      resetError
+    );
 
-    // Always reconcile pending requests. This is idempotent after a successful
-    // RPC and is the recovery path when the RPC is missing or stale.
+    // FALLBACK_NEW_CHAT_SESSION
+    // Keep this fallback server-authoritative as well. It preserves only the
+    // latest memory_state, clears visible history, and creates a fresh row.
+    const {
+      data: conversations,
+      error: conversationError
+    } = await supabase
+      .from("conversations")
+      .select(
+        "id,memory_state,created_at,updated_at"
+      )
+      .eq("user_id", user.id)
+      .eq("character_id", character.id)
+      .order("updated_at", {
+        ascending: false
+      });
+
+    if (conversationError) {
+      throw conversationError;
+    }
+
+    const conversationIds =
+      (conversations ?? [])
+        .map((conversation) =>
+          String(conversation.id || "")
+        )
+        .filter(Boolean);
+
+    const preservedMemoryState =
+      conversations?.[0]?.memory_state ?? null;
+
     const {
       data: pendingRequests,
       error: pendingError
@@ -793,34 +834,6 @@ if (!chatRoute.includes("RESET_CHARACTER_CHAT_HISTORY_RPC")) {
       }
     }
 
-    const {
-      data: conversations,
-      error: conversationError
-    } = await supabase
-      .from("conversations")
-      .select("id,updated_at")
-      .eq("user_id", user.id)
-      .eq("character_id", character.id)
-      .order("updated_at", {
-        ascending: false
-      });
-
-    if (conversationError) {
-      throw conversationError;
-    }
-
-    const conversationIds =
-      (conversations ?? [])
-        .map((conversation) =>
-          String(conversation.id || "")
-        )
-        .filter(Boolean);
-
-    if (!conversationId) {
-      conversationId =
-        conversationIds[0] ?? null;
-    }
-
     if (conversationIds.length > 0) {
       const {
         error: messageDeleteError
@@ -835,29 +848,43 @@ if (!chatRoute.includes("RESET_CHARACTER_CHAT_HISTORY_RPC")) {
       if (messageDeleteError) {
         throw messageDeleteError;
       }
+    }
 
-      const {
-        error: conversationUpdateError
-      } = await supabase
-        .from("conversations")
-        .update({
-          updated_at:
-            new Date().toISOString()
-        })
-        .in("id", conversationIds);
+    const {
+      data: newConversation,
+      error: newConversationError
+    } = await supabase
+      .from("conversations")
+      .insert({
+        user_id: user.id,
+        character_id: character.id,
+        ...(preservedMemoryState
+          ? {
+              memory_state:
+                preservedMemoryState
+            }
+          : {})
+      })
+      .select("id")
+      .single();
 
-      if (conversationUpdateError) {
-        console.error(
-          "Chat reset timestamp update failed:",
-          conversationUpdateError
-        );
-      }
+    if (
+      newConversationError ||
+      !newConversation?.id
+    ) {
+      throw (
+        newConversationError ??
+        new Error(
+          "NEW_CHAT_CONVERSATION_CREATE_FAILED"
+        )
+      );
     }
 
     return NextResponse.json(
       {
         reset: true,
-        conversationId
+        conversationId:
+          String(newConversation.id)
       },
       {
         headers: {
@@ -897,6 +924,23 @@ if (
 ) {
   throw new Error(
     "User-ready chat reset server validation failed."
+  );
+}
+
+
+// A refreshed chat is a new conversation boundary. Always resolve the newest
+// CREATED conversation, not the most recently updated old conversation.
+chatRoute = chatRoute
+  .split('.order("updated_at", { ascending: false })')
+  .join('.order("created_at", { ascending: false })');
+
+if (
+  chatRoute.includes(
+    '.order("updated_at", { ascending: false })'
+  )
+) {
+  throw new Error(
+    "Old updated_at conversation selection still remains in chat route."
   );
 }
 
@@ -965,7 +1009,13 @@ if (!chatShell.includes("USER_READY_CHAT_RESET")) {
   }
 
   const resetFunction = `  async function resetConversation() {
-    if (refreshingChat) return;
+    if (
+      !authReady ||
+      !session?.access_token ||
+      refreshingChat
+    ) {
+      return;
+    }
 
     // USER_READY_CHAT_RESET
     chatGenerationRef.current += 1;
@@ -995,38 +1045,38 @@ if (!chatShell.includes("USER_READY_CHAT_RESET")) {
     focusChatInput();
 
     try {
-      if (session?.access_token) {
-        const response = await fetch(
-          \`/api/chat?characterSlug=\${encodeURIComponent(
-            character.slug
-          )}\`,
-          {
-            method: "DELETE",
-            headers: {
-              Authorization:
-                \`Bearer \${session.access_token}\`
-            },
-            cache: "no-store"
-          }
-        );
-
-        const data = await response
-          .json()
-          .catch(() => ({}));
-
-        if (!response.ok) {
-          throw new Error(
-            data?.error ||
-              "CHAT_RESET_FAILED"
-          );
+      const response = await fetch(
+        \`/api/chat?characterSlug=\${encodeURIComponent(
+          character.slug
+        )}\`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization:
+              \`Bearer \${session.access_token}\`
+          },
+          cache: "no-store"
         }
+      );
 
-        setConversationId(
-          data.conversationId ?? null
+      const data = await response
+        .json()
+        .catch(() => ({}));
+
+      if (
+        !response.ok ||
+        typeof data?.conversationId !== "string" ||
+        !data.conversationId
+      ) {
+        throw new Error(
+          data?.error ||
+            "CHAT_RESET_FAILED"
         );
-      } else {
-        setConversationId(null);
       }
+
+      setConversationId(
+        data.conversationId
+      );
     } catch (error) {
       console.error(
         "Chat reset failed:",
@@ -1047,7 +1097,7 @@ if (!chatShell.includes("USER_READY_CHAT_RESET")) {
     chatShell.slice(shareStart);
 }
 
-if (!chatShell.includes("disabled={refreshingChat}")) {
+if (!chatShell.includes("disabled={!authReady || !session?.access_token || refreshingChat}")) {
   const refreshButtonPattern =
     /<button\s+onClick=\{\(\) => void resetConversation\(\)\}[\s\S]*?aria-label=\{t\("refresh"\)\}[\s\S]*?<RefreshCcw size=\{15\} \/>[\s\S]*?<\/button>/;
 
@@ -1078,7 +1128,9 @@ if (
   !chatShell.includes("USER_READY_CHAT_RESET") ||
   !chatShell.includes("historyGeneration !==") ||
   !chatShell.includes("chatGenerationRef.current") ||
-  !chatShell.includes("disabled={refreshingChat}") ||
+  !chatShell.includes(
+    "disabled={!authReady || !session?.access_token || refreshingChat}"
+  ) ||
   !chatShell.includes('method: "DELETE"')
 ) {
   throw new Error(
@@ -1089,5 +1141,5 @@ if (
 write(chatShellPath, chatShell);
 
 console.log(
-  "EverBond user-ready Refresh Chat, voice, and Kling video recovery applied."
+  "EverBond true-new-session Refresh Chat, voice, and Kling video recovery applied."
 );
