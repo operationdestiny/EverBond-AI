@@ -201,9 +201,9 @@ write(profilePath, profile);
 
 // ===========================================================================
 // VOICE
-// Venice currently reports tts-qwen3-1-7b supports MP3, not Opus.
-// Keep the voice model, six permanent assignments, UI, EverMemory, billing,
-// and call limits unchanged. Only fix output format/storage extension.
+// Keep current visual design, permanent six voices, EverMemory, billing,
+// call limits, and current STT/model selection. Fix only the live MP3 format
+// mismatch plus provider-stage timeouts and diagnostics.
 // ===========================================================================
 
 const voiceTurnPath =
@@ -212,9 +212,16 @@ let voiceTurn = read(voiceTurnPath);
 
 voiceTurn = replaceRequired(
   voiceTurn,
-  'export const maxDuration = 60;',
   'export const maxDuration = 180;',
-  "voice execution ceiling"
+  'export const maxDuration = 300;',
+  "voice execution ceiling 180 to 300"
+);
+
+voiceTurn = replaceRequired(
+  voiceTurn,
+  'export const maxDuration = 60;',
+  'export const maxDuration = 300;',
+  "voice execution ceiling 60 to 300"
 );
 
 voiceTurn = replaceRequired(
@@ -238,109 +245,191 @@ voiceTurn = replaceRequired(
   "MP3 storage path"
 );
 
+// Raise only the two explicit Venice media timeouts.
+// Keep the configured STT model selection exactly as the existing route has it.
+const transcriptionStart =
+  voiceTurn.indexOf("async function transcribeAudio(");
+const synthesisStart =
+  voiceTurn.indexOf(
+    "async function synthesizeSpeech(",
+    transcriptionStart
+  );
+const existingTurnStart =
+  voiceTurn.indexOf(
+    "async function existingTurnResponse(",
+    synthesisStart
+  );
+
 if (
+  transcriptionStart < 0 ||
+  synthesisStart < 0 ||
+  existingTurnStart < 0
+) {
+  throw new Error(
+    "Voice provider function boundaries not found."
+  );
+}
+
+let transcriptionSection =
+  voiceTurn.slice(
+    transcriptionStart,
+    synthesisStart
+  );
+
+if (
+  transcriptionSection.includes(
+    "AbortSignal.timeout(45_000)"
+  )
+) {
+  transcriptionSection =
+    transcriptionSection.replace(
+      "AbortSignal.timeout(45_000)",
+      "AbortSignal.timeout(90_000)"
+    );
+} else if (
+  !transcriptionSection.includes(
+    "AbortSignal.timeout(90_000)"
+  )
+) {
+  throw new Error(
+    "Voice STT timeout anchor not found."
+  );
+}
+
+voiceTurn =
+  voiceTurn.slice(0, transcriptionStart) +
+  transcriptionSection +
+  voiceTurn.slice(synthesisStart);
+
+const synthesisStart2 =
+  voiceTurn.indexOf("async function synthesizeSpeech(");
+const existingTurnStart2 =
+  voiceTurn.indexOf(
+    "async function existingTurnResponse(",
+    synthesisStart2
+  );
+
+let synthesisSection =
+  voiceTurn.slice(
+    synthesisStart2,
+    existingTurnStart2
+  );
+
+if (
+  synthesisSection.includes(
+    "AbortSignal.timeout(45_000)"
+  )
+) {
+  synthesisSection =
+    synthesisSection.replace(
+      "AbortSignal.timeout(45_000)",
+      "AbortSignal.timeout(120_000)"
+    );
+} else if (
+  !synthesisSection.includes(
+    "AbortSignal.timeout(120_000)"
+  )
+) {
+  throw new Error(
+    "Voice TTS timeout anchor not found."
+  );
+}
+
+voiceTurn =
+  voiceTurn.slice(0, synthesisStart2) +
+  synthesisSection +
+  voiceTurn.slice(existingTurnStart2);
+
+if (!voiceTurn.includes("VOICE_STAGE_DIAGNOSTICS")) {
+  voiceTurn = replaceRequired(
+    voiceTurn,
+    '  let uploadedPath = "";',
+    `  let uploadedPath = "";
+  // VOICE_STAGE_DIAGNOSTICS
+  let voiceStage = "setup";`,
+    "voice stage state"
+  );
+
+  voiceTurn = replaceRequired(
+    voiceTurn,
+    "    const transcript = await transcribeAudio(audio, parsed.data.language);",
+    `    voiceStage = "stt";
+    const transcript = await transcribeAudio(
+      audio,
+      parsed.data.language
+    );
+
+    voiceStage = "ai";`,
+    "voice STT stage"
+  );
+
+  voiceTurn = replaceRequired(
+    voiceTurn,
+    "    const speech = await synthesizeSpeech({",
+    `    voiceStage = "tts";
+    const speech = await synthesizeSpeech({`,
+    "voice TTS stage"
+  );
+
+  voiceTurn = replaceRequired(
+    voiceTurn,
+    '    uploadedPath = `${user.id}/${callId}/${requestId}.mp3`;',
+    `    voiceStage = "storage";
+    uploadedPath =
+      \`\${user.id}/\${callId}/\${requestId}.mp3\`;`,
+    "voice storage stage"
+  );
+
+  voiceTurn = replaceRequired(
+    voiceTurn,
+    "    const completed = await completeVoiceCallTurn({",
+    `    voiceStage = "complete";
+    const completed = await completeVoiceCallTurn({`,
+    "voice completion stage"
+  );
+
+  voiceTurn = replaceRequired(
+    voiceTurn,
+    '    console.error("Voice turn failed:", error);',
+    `    console.error(
+      "Voice turn failed:",
+      {
+        stage: voiceStage,
+        error
+      }
+    );`,
+    "voice stage log"
+  );
+}
+
+if (
+  !voiceTurn.includes(
+    'export const maxDuration = 300;'
+  ) ||
   !voiceTurn.includes(
     'response_format: "mp3"'
   ) ||
   !voiceTurn.includes(
-    'uploadedPath = `${user.id}/${callId}/${requestId}.mp3`;'
+    "AbortSignal.timeout(90_000)"
+  ) ||
+  !voiceTurn.includes(
+    "AbortSignal.timeout(120_000)"
+  ) ||
+  !voiceTurn.includes(
+    "VOICE_STAGE_DIAGNOSTICS"
   ) ||
   voiceTurn.includes(
     'response_format: "opus"'
   )
 ) {
   throw new Error(
-    "Voice MP3 final validation failed."
+    "Voice-only runtime validation failed."
   );
 }
 
 write(voiceTurnPath, voiceTurn);
 
-// ===========================================================================
-// VIDEO
-// Keep Kling O3 Standard R2V, @Element1, 8 seconds, 9:16, no audio,
-// existing EverCoin pricing and refunds.
-// Prefer the current queue-schema "8s" spelling and a data URL reference,
-// both explicitly supported by Venice. Keep the HTTPS/signed URL fallback.
-// ===========================================================================
-
-const videoRoutePath =
-  "src/app/api/character-video-gallery/[slug]/route.ts";
-let videoRoute = read(videoRoutePath);
-
-const referenceBefore =
-  `    const referenceImages = Array.from(
-      new Set(
-        [
-          referenceImageUrl,
-          referenceImageDataUrl
-        ].filter(`;
-
-const referenceAfter =
-  `    const referenceImages = Array.from(
-      new Set(
-        [
-          referenceImageDataUrl,
-          referenceImageUrl
-        ].filter(`;
-
-videoRoute = replaceRequired(
-  videoRoute,
-  referenceBefore,
-  referenceAfter,
-  "Kling reference preference"
-);
-
-const durationBefore =
-  '    const queueDurationVariants = [\n' +
-  '      String(parsed.data.durationSeconds),\n' +
-  '      `${parsed.data.durationSeconds}s`\n' +
-  '    ];';
-
-const durationAfter =
-  '    const queueDurationVariants = [\n' +
-  '      `${parsed.data.durationSeconds}s`,\n' +
-  '      String(parsed.data.durationSeconds)\n' +
-  '    ];';
-
-videoRoute = replaceRequired(
-  videoRoute,
-  durationBefore,
-  durationAfter,
-  "Kling duration preference"
-);
-
-const pricingPath =
-  "src/lib/video-pricing.ts";
-const videoPricing = read(pricingPath);
-
-if (
-  !videoPricing.includes(
-    'const DEFAULT_VIDEO_MODEL = "kling-o3-standard-reference-to-video";'
-  ) ||
-  !videoRoute.includes(
-    "@Element1 is the exact fictional adult character"
-  ) ||
-  !videoRoute.includes(
-    "VIDEO_KLING_QUEUE_RECOVERY"
-  ) ||
-  !videoRoute.includes(
-    "referenceImageDataUrl"
-  ) ||
-  !videoRoute.includes(
-    'aspect_ratio: "9:16"'
-  ) ||
-  !videoRoute.includes(
-    "audio: false"
-  )
-) {
-  throw new Error(
-    "Kling final runtime validation failed."
-  );
-}
-
-write(videoRoutePath, videoRoute);
 
 console.log(
-  "EverBond final profile Refresh, MP3 voice, and Kling runtime fixes applied."
+  "EverBond profile Refresh and resilient MP3 voice fixes applied; video left unchanged for diagnostics."
 );
