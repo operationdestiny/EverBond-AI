@@ -225,28 +225,9 @@ videoRoute = videoRoute
   .replace(/\n\s+audio: false,?/g, "")
   .replace(/\n\s+audio: pricing\.audio,?/g, "");
 
-// The first queue attempt already proved Venice accepts the "8s" duration form.
-// Avoid a second speculative bare "8" variant for this model.
-videoRoute = videoRoute.replace(
-  `    const queueDurationVariants = [
-      \`${parsed.data.durationSeconds}s\`,
-      String(parsed.data.durationSeconds)
-    ];`,
-  `    const queueDurationVariants = [
-      \`${parsed.data.durationSeconds}s\`
-    ];`
-);
-
-// reference_image_urls already carries the identity image. Keep the prompt
-// model-neutral instead of relying on another model family's @Image tag syntax.
-videoRoute = videoRoute.replace(
-  `\`@Image1 is the exact fictional adult character \${character.name}. \` +`,
-  `\`The supplied reference image is the exact identity reference for the fictional adult character \${character.name}. \` +`
-);
-videoRoute = videoRoute.replace(
-  `"Preserve @Image1's recognizable face, identity, adult age, body, skin tone, hair, and defining appearance throughout the video. " +`,
-  `"Preserve the reference image's recognizable face, identity, adult age, body, skin tone, hair, and defining appearance throughout the video. " +`
-);
+// The existing H3 queue already reached Venice's model validator successfully.
+// Keep its duration/reference/prompt structure unchanged. Only unsupported
+// provider configuration fields are removed here.
 
 if (
   !videoRoute.includes("videoCost: advertisedCost") ||
@@ -256,9 +237,6 @@ if (
   !videoRoute.includes("resolution: pricing.resolution") ||
   !videoRoute.includes("reference_image_urls:") ||
   !videoRoute.includes("parsed.data.prompt") ||
-  !videoRoute.includes(
-    "The supplied reference image is the exact identity reference"
-  ) ||
   videoRoute.includes("audio: false") ||
   videoRoute.includes("audio: pricing.audio")
 ) {
@@ -402,5 +380,5 @@ for (const [from, to] of replacements) copy = copy.split(from).join(to);
 write(copyPath, copy);
 
 console.log(
-  "EverBond video fully wired: H3 Enhanced R2V, 8s 768P, no unsupported audio config, active reference image + user prompt, ~155 EC advertised, exact live quote charge, 199 EC ceiling, existing atomic refunds preserved."
+  "EverBond video fully wired: H3 Enhanced R2V, 8s 768P, provider-safe payload, active reference image + user prompt, ~155 EC advertised, exact live quote charge, 199 EC ceiling, existing atomic refunds preserved."
 );
