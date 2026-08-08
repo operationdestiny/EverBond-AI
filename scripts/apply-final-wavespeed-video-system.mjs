@@ -62,6 +62,18 @@ for (const retired of [
   rmSync(join(root, retired), { force: true });
 }
 
+// Remove the retired Grok/Wan final-template tree entirely. EverBond's
+// tsconfig includes every **/*.ts file in the repository, so leaving these
+// abandoned templates on disk makes Next.js type-check dead Venice code even
+// though the live src/ runtime has already been replaced by WaveSpeed.
+rmSync(join(root, "scripts", "video-final-templates"), {
+  recursive: true,
+  force: true
+});
+rmSync(join(root, "scripts", "apply-final-wan-video-system.mjs"), {
+  force: true
+});
+
 // Keep the shared EverCoin helper aligned with the fixed Video Studio charge.
 {
   const path = "src/lib/evercoin.ts";
@@ -244,6 +256,10 @@ for (const retired of [
 const ui = read("src/components/media/CharacterGalleryClient.tsx");
 if (!ui.includes("copy.videoStudio") || !ui.includes("copy.videoEmpty")) {
   throw new Error("WAVESPEED_VIDEO_UI_VALIDATION_FAILED:studio-copy");
+}
+
+if (existsSync(join(root, "scripts", "video-final-templates"))) {
+  throw new Error("WAVESPEED_VIDEO_RETIRED_TEMPLATE_TREE_STILL_PRESENT");
 }
 
 console.log(
