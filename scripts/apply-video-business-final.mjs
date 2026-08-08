@@ -41,6 +41,13 @@ pricing = replaceRequired(
   "MiniMax H3 exact 768P resolution enum"
 );
 
+// H3 Enhanced does not expose configurable audio in Venice.
+// Venice requires the field to be omitted entirely; even `audio: false`
+// is rejected by /video/queue for this exact model.
+pricing = pricing
+  .replace(/\n        audio: false,?/g, "")
+  .replace(/\n        audio: inputs\.audio,?/g, "");
+
 pricing = replaceRequired(
   pricing,
   "const DISPLAY_ROUNDING_INCREMENT = 10;",
@@ -104,7 +111,9 @@ if (
   !pricing.includes('const DEFAULT_RESOLUTION = "768P";') ||
   !pricing.includes("resolution: inputs.resolution") ||
   !pricing.includes("ADVERTISED_VIDEO_EVERCOIN = 155") ||
-  !pricing.includes("MAX_VIDEO_EVERCOIN = 199")
+  !pricing.includes("MAX_VIDEO_EVERCOIN = 199") ||
+  pricing.includes("audio: false") ||
+  pricing.includes("audio: inputs.audio")
 ) {
   throw new Error("Final H3 pricing validation failed.");
 }
@@ -210,6 +219,35 @@ videoRoute = replaceRequired(
   "live quote ceiling"
 );
 
+// H3 Enhanced queue hardening.
+// Keep only provider-supported generation fields. Do not send audio at all.
+videoRoute = videoRoute
+  .replace(/\n\s+audio: false,?/g, "")
+  .replace(/\n\s+audio: pricing\.audio,?/g, "");
+
+// The first queue attempt already proved Venice accepts the "8s" duration form.
+// Avoid a second speculative bare "8" variant for this model.
+videoRoute = videoRoute.replace(
+  `    const queueDurationVariants = [
+      \`${parsed.data.durationSeconds}s\`,
+      String(parsed.data.durationSeconds)
+    ];`,
+  `    const queueDurationVariants = [
+      \`${parsed.data.durationSeconds}s\`
+    ];`
+);
+
+// reference_image_urls already carries the identity image. Keep the prompt
+// model-neutral instead of relying on another model family's @Image tag syntax.
+videoRoute = videoRoute.replace(
+  `\`@Image1 is the exact fictional adult character \${character.name}. \` +`,
+  `\`The supplied reference image is the exact identity reference for the fictional adult character \${character.name}. \` +`
+);
+videoRoute = videoRoute.replace(
+  `"Preserve @Image1's recognizable face, identity, adult age, body, skin tone, hair, and defining appearance throughout the video. " +`,
+  `"Preserve the reference image's recognizable face, identity, adult age, body, skin tone, hair, and defining appearance throughout the video. " +`
+);
+
 if (
   !videoRoute.includes("videoCost: advertisedCost") ||
   !videoRoute.includes("cost > maxCost") ||
@@ -218,7 +256,11 @@ if (
   !videoRoute.includes("resolution: pricing.resolution") ||
   !videoRoute.includes("reference_image_urls:") ||
   !videoRoute.includes("parsed.data.prompt") ||
-  !videoRoute.includes("@Image1 is the exact fictional adult character")
+  !videoRoute.includes(
+    "The supplied reference image is the exact identity reference"
+  ) ||
+  videoRoute.includes("audio: false") ||
+  videoRoute.includes("audio: pricing.audio")
 ) {
   throw new Error("Final H3 video route validation failed.");
 }
@@ -360,5 +402,5 @@ for (const [from, to] of replacements) copy = copy.split(from).join(to);
 write(copyPath, copy);
 
 console.log(
-  "EverBond video fully wired: H3 Enhanced R2V, 8s 768P, active reference image + user prompt, ~155 EC advertised, exact live quote charge, 199 EC ceiling, existing atomic refunds preserved."
+  "EverBond video fully wired: H3 Enhanced R2V, 8s 768P, no unsupported audio config, active reference image + user prompt, ~155 EC advertised, exact live quote charge, 199 EC ceiling, existing atomic refunds preserved."
 );
