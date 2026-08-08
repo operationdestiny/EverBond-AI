@@ -666,7 +666,7 @@ const deleteStartMarker =
 const postStartMarker =
   "export async function POST(request: Request) {";
 
-if (!chatRoute.includes("RESET_CHARACTER_CHAT_HISTORY_RPC")) {
+if (!chatRoute.includes("TRUE_NEW_CHAT_SESSION")) {
   const deleteStart = chatRoute.indexOf(deleteStartMarker);
   const postStart = chatRoute.indexOf(
     postStartMarker,
@@ -916,7 +916,7 @@ if (!chatRoute.includes("RESET_CHARACTER_CHAT_HISTORY_RPC")) {
 
 if (
   !chatRoute.includes(
-    "RESET_CHARACTER_CHAT_HISTORY_RPC"
+    "TRUE_NEW_CHAT_SESSION"
   ) ||
   !chatRoute.includes(
     '"reset_character_chat_history"'
@@ -1112,7 +1112,7 @@ if (!chatShell.includes("disabled={!authReady || !session?.access_token || refre
     `<button
               type="button"
               onClick={() => void resetConversation()}
-              disabled={refreshingChat}
+              disabled={!authReady || !session?.access_token || refreshingChat}
               className="bond-pink-button flex h-8.5 w-8.5 items-center justify-center rounded-full border border-white/15 bg-white/[0.035] text-white disabled:cursor-not-allowed disabled:opacity-55"
               aria-label={t("refresh")}
             >
@@ -1141,5 +1141,5 @@ if (
 write(chatShellPath, chatShell);
 
 console.log(
-  "EverBond true-new-session Refresh Chat, voice, and Kling video recovery applied."
+  "EverBond true-new-session Refresh Chat, voice, and Kling video recovery applied (build validation fixed)."
 );
