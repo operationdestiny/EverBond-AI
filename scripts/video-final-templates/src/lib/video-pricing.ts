@@ -80,7 +80,9 @@ function quotePayload(
   if (model === PRIMARY_VIDEO_MODEL) {
     return {
       model: inputs.model,
-      duration: inputs.duration,
+      // Venice uses different Grok duration enums by endpoint:
+      // /video/quote requires "10s" while /video/queue requires "10".
+      duration: `${inputs.durationSeconds}s`,
       resolution: inputs.resolution,
       aspect_ratio: inputs.aspectRatio
     };

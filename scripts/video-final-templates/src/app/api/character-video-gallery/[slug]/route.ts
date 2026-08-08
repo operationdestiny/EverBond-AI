@@ -762,21 +762,40 @@ export async function POST(
     }
     requestId = parsed.data.requestId;
 
-    const pricing = await quoteEverCoinVideoCost(
+    // Quote Grok first. A quote/schema/provider failure is itself a primary
+    // failure, so route directly to Wan instead of returning a 503 to users.
+    const primaryPricing = await quoteEverCoinVideoCost(
       PRIMARY_VIDEO_MODEL,
       parsed.data.durationSeconds
     );
-    const cost = pricing.everCoinCost;
+
+    let initialModel = PRIMARY_VIDEO_MODEL;
+    let pricing = primaryPricing;
 
     if (
-      pricing.source !== "venice" ||
-      cost <= 0
+      primaryPricing.source !== "venice" ||
+      primaryPricing.everCoinCost <= 0
     ) {
-      return NextResponse.json(
-        { error: "VIDEO_PRICING_NOT_CONFIGURED" },
-        { status: 503 }
+      const fallbackPricing = await quoteEverCoinVideoCost(
+        FALLBACK_VIDEO_MODEL,
+        parsed.data.durationSeconds
       );
+
+      if (
+        fallbackPricing.source !== "venice" ||
+        fallbackPricing.everCoinCost <= 0
+      ) {
+        return NextResponse.json(
+          { error: "VIDEO_PRICING_NOT_CONFIGURED" },
+          { status: 503 }
+        );
+      }
+
+      initialModel = FALLBACK_VIDEO_MODEL;
+      pricing = fallbackPricing;
     }
+
+    const cost = pricing.everCoinCost;
 
     const { slug } = await params;
     const character = await getCharacterBySlugForUser(
@@ -798,7 +817,7 @@ export async function POST(
       durationSeconds: parsed.data.durationSeconds,
       amount: cost,
       galleryLimit: VIDEO_LIMIT,
-      providerModel: PRIMARY_VIDEO_MODEL
+      providerModel: initialModel
     });
 
     if (claim.status === "completed" && claim.videoId) {
@@ -881,7 +900,7 @@ export async function POST(
         userId: user.id,
         requestId,
         characterName: character.name,
-        model: PRIMARY_VIDEO_MODEL,
+        model: initialModel,
         prompt: parsed.data.prompt,
         durationSeconds: parsed.data.durationSeconds,
         referenceImage
@@ -894,7 +913,8 @@ export async function POST(
         {
           status: "processing",
           requestId,
-          everCoinCost: cost
+          everCoinCost: cost,
+          fallback: initialModel === FALLBACK_VIDEO_MODEL
         },
         {
           status: 202,
@@ -904,6 +924,12 @@ export async function POST(
         }
       );
     } catch (primaryError) {
+      // If we already started directly on Wan because the Grok quote failed,
+      // there is no second provider to fall back to. Fail/refund normally.
+      if (initialModel === FALLBACK_VIDEO_MODEL) {
+        throw primaryError;
+      }
+
       console.warn(
         "Grok video attempt did not produce a queue; switching to Wan:",
         primaryError

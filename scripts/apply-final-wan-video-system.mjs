@@ -163,7 +163,8 @@ for (const required of [
   'VIDEO_RESOLUTION = "720p"',
   "beginCharacterVideoFallback",
   "fallbackToWan",
-  "ADVERTISED_VIDEO_EVERCOIN = 155"
+  "ADVERTISED_VIDEO_EVERCOIN = 155",
+  'duration: `${inputs.durationSeconds}s`'
 ]) {
   const combined =
     read("src/lib/video-pricing.ts") +
