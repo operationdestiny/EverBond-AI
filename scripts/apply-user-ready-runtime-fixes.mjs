@@ -430,6 +430,360 @@ if (
 write(voiceTurnPath, voiceTurn);
 
 
+
+// ===========================================================================
+// VOICE CALL LATENCY
+//
+// Keep text chat behavior unchanged. These changes apply voice-specific
+// latency controls and move voice EverMemory extraction after the response.
+// ===========================================================================
+
+const providerPath = "src/lib/ai/provider.ts";
+let provider = read(providerPath);
+
+if (!provider.includes("skipSimilarityRetry?: boolean")) {
+  provider = replaceRequired(
+    provider,
+    `async function postChatCompletion(
+  endpoint: string,
+  apiKey: string,
+  body: Record<string, unknown>
+) {`,
+    `async function postChatCompletion(
+  endpoint: string,
+  apiKey: string,
+  body: Record<string, unknown>,
+  timeoutMs?: number
+) {`,
+    "AI provider optional timeout parameter"
+  );
+
+  provider = replaceRequired(
+    provider,
+    `    body: JSON.stringify(body)
+  });`,
+    `    body: JSON.stringify(body),
+    signal:
+      timeoutMs && timeoutMs > 0
+        ? AbortSignal.timeout(timeoutMs)
+        : undefined
+  });`,
+    "AI provider timeout signal"
+  );
+
+  provider = replaceRequired(
+    provider,
+    `export async function callEverBondModel(
+  messages: EverBondMessage[]
+): Promise<EverBondModelResult> {`,
+    `export async function callEverBondModel(
+  messages: EverBondMessage[],
+  options?: {
+    timeoutMs?: number;
+    skipSimilarityRetry?: boolean;
+  }
+): Promise<EverBondModelResult> {`,
+    "AI model voice options"
+  );
+
+  provider = replaceRequired(
+    provider,
+    `  const firstData: any = await postChatCompletion(
+    endpoint,
+    config.apiKey,
+    buildRequestBody(messages)
+  );`,
+    `  const firstData: any = await postChatCompletion(
+    endpoint,
+    config.apiKey,
+    buildRequestBody(messages),
+    options?.timeoutMs
+  );`,
+    "AI first call voice timeout"
+  );
+
+  provider = replaceRequired(
+    provider,
+    `  if (
+    previousAssistantReply &&
+    isTooSimilarToPreviousReply(`,
+    `  if (
+    !options?.skipSimilarityRetry &&
+    previousAssistantReply &&
+    isTooSimilarToPreviousReply(`,
+    "voice skip anti-repeat retry"
+  );
+
+  provider = replaceRequired(
+    provider,
+    `    const retryData: any = await postChatCompletion(
+      endpoint,
+      config.apiKey,
+      buildRequestBody(retryMessages)
+    );`,
+    `    const retryData: any = await postChatCompletion(
+      endpoint,
+      config.apiKey,
+      buildRequestBody(retryMessages),
+      options?.timeoutMs
+    );`,
+    "AI retry timeout"
+  );
+}
+
+if (
+  !provider.includes("skipSimilarityRetry?: boolean") ||
+  !provider.includes("AbortSignal.timeout(timeoutMs)")
+) {
+  throw new Error(
+    "Voice-specific AI timeout validation failed."
+  );
+}
+
+write(providerPath, provider);
+
+const voiceChatPath = "src/lib/voice-chat.ts";
+let voiceChat = read(voiceChatPath);
+
+voiceChat = replaceRequired(
+  voiceChat,
+  `  const voiceInstruction =
+    "LIVE VOICE CALL: Reply as natural spoken dialogue with concise actions. " +
+    "Use roughly 45-65 visible tokens when detail is needed, fewer for simple moments, " +
+    "and never exceed 75 visible tokens. Do not use markdown headings or long narration.";`,
+  `  const voiceInstruction =
+    "LIVE VOICE CALL: Reply as natural spoken dialogue with very concise actions. " +
+    "Use roughly 20-35 visible tokens for most turns, fewer for simple moments, " +
+    "and never exceed 45 visible tokens. Keep the response immediately speakable. " +
+    "Do not use markdown headings or long narration.";`,
+  "short live voice replies"
+);
+
+voiceChat = replaceRequired(
+  voiceChat,
+  `  const result = await callEverBondModel(modelMessages);`,
+  `  const result = await callEverBondModel(
+    modelMessages,
+    {
+      timeoutMs: 18_000,
+      skipSimilarityRetry: true
+    }
+  );`,
+  "voice-only AI deadline"
+);
+
+voiceChat = replaceRequired(
+  voiceChat,
+  `  const reply = limitVoiceReply(result.content, values.maxReplyCharacters);`,
+  `  const reply = limitVoiceReply(
+    result.content,
+    Math.min(values.maxReplyCharacters, 320)
+  );`,
+  "voice reply character limit"
+);
+
+if (
+  !voiceChat.includes("timeoutMs: 18_000") ||
+  !voiceChat.includes("skipSimilarityRetry: true") ||
+  !voiceChat.includes("never exceed 45 visible tokens") ||
+  !voiceChat.includes("Math.min(values.maxReplyCharacters, 320)")
+) {
+  throw new Error(
+    "Voice draft latency validation failed."
+  );
+}
+
+write(voiceChatPath, voiceChat);
+
+// Patch the already-generated voice Route Handler.
+let fastVoiceTurn = read(voiceTurnPath);
+
+fastVoiceTurn = replaceRequired(
+  fastVoiceTurn,
+  'import { NextResponse } from "next/server";',
+  'import { after, NextResponse } from "next/server";',
+  "Next.js after import"
+);
+
+// English voice calls use Venice's current default STT model. Keep Whisper for
+// the other localized site languages because it honors explicit language hints.
+fastVoiceTurn = replaceRequired(
+  fastVoiceTurn,
+  `    process.env.VENICE_STT_MODEL ||
+      "openai/whisper-large-v3"`,
+  `    process.env.VENICE_STT_MODEL ||
+      (language === "English"
+        ? "nvidia/parakeet-tdt-0.6b-v3"
+        : "openai/whisper-large-v3")`,
+  "fast English STT default"
+);
+
+// Long timeouts are poor UX for a live call. Faster STT + shorter TTS text
+// allow bounded failure instead of an apparently endless spinner.
+fastVoiceTurn = replaceRequired(
+  fastVoiceTurn,
+  "AbortSignal.timeout(90_000)",
+  "AbortSignal.timeout(35_000)",
+  "voice STT live-call timeout"
+);
+
+fastVoiceTurn = replaceRequired(
+  fastVoiceTurn,
+  "AbortSignal.timeout(120_000)",
+  "AbortSignal.timeout(60_000)",
+  "voice TTS live-call timeout"
+);
+
+// Memory extraction should never delay playback. completeVoiceCallTurn has
+// already committed the visible turn before this is scheduled.
+if (!fastVoiceTurn.includes("VOICE_MEMORY_AFTER_RESPONSE")) {
+  const oldMemoryBlock = `    const memoryUsage = await updateVoiceMemoryAfterCommit({
+      userId: user.id,
+      character,
+      draft: generated
+    });
+
+    return NextResponse.json(`;
+
+  const newMemoryBlock = `    // VOICE_MEMORY_AFTER_RESPONSE
+    after(async () => {
+      await updateVoiceMemoryAfterCommit({
+        userId: user.id,
+        character,
+        draft: generated
+      });
+    });
+
+    return NextResponse.json(`;
+
+  fastVoiceTurn = replaceRequired(
+    fastVoiceTurn,
+    oldMemoryBlock,
+    newMemoryBlock,
+    "voice memory background update"
+  );
+
+  fastVoiceTurn = replaceRequired(
+    fastVoiceTurn,
+    `          inputTokens: generated.inputTokens + memoryUsage.inputTokens,
+          outputTokens: generated.outputTokens + memoryUsage.outputTokens,`,
+    `          inputTokens: generated.inputTokens,
+          outputTokens: generated.outputTokens,`,
+    "voice immediate token usage"
+  );
+}
+
+// Record practical stage timings in Vercel without changing the UI.
+if (!fastVoiceTurn.includes("VOICE_TURN_TIMING")) {
+  fastVoiceTurn = replaceRequired(
+    fastVoiceTurn,
+    '  let voiceStage = "setup";',
+    `  let voiceStage = "setup";
+  // VOICE_TURN_TIMING
+  const voiceTurnStartedAt = Date.now();
+  let voiceStageStartedAt = voiceTurnStartedAt;`,
+    "voice timing state"
+  );
+
+  fastVoiceTurn = replaceRequired(
+    fastVoiceTurn,
+    `    voiceStage = "ai";`,
+    `    console.info("Voice stage complete:", {
+      stage: "stt",
+      ms: Date.now() - voiceStageStartedAt
+    });
+    voiceStage = "ai";
+    voiceStageStartedAt = Date.now();`,
+    "STT timing log"
+  );
+
+  fastVoiceTurn = replaceRequired(
+    fastVoiceTurn,
+    `    voiceStage = "tts";
+    const speech = await synthesizeSpeech({`,
+    `    console.info("Voice stage complete:", {
+      stage: "ai",
+      ms: Date.now() - voiceStageStartedAt
+    });
+    voiceStage = "tts";
+    voiceStageStartedAt = Date.now();
+    const speech = await synthesizeSpeech({`,
+    "AI timing log"
+  );
+
+  fastVoiceTurn = replaceRequired(
+    fastVoiceTurn,
+    `    voiceStage = "storage";
+    uploadedPath =`,
+    `    console.info("Voice stage complete:", {
+      stage: "tts",
+      ms: Date.now() - voiceStageStartedAt
+    });
+    voiceStage = "storage";
+    voiceStageStartedAt = Date.now();
+    uploadedPath =`,
+    "TTS timing log"
+  );
+
+  fastVoiceTurn = replaceRequired(
+    fastVoiceTurn,
+    `    voiceStage = "complete";
+    const completed = await completeVoiceCallTurn({`,
+    `    console.info("Voice stage complete:", {
+      stage: "storage",
+      ms: Date.now() - voiceStageStartedAt
+    });
+    voiceStage = "complete";
+    voiceStageStartedAt = Date.now();
+    const completed = await completeVoiceCallTurn({`,
+    "storage timing log"
+  );
+
+  fastVoiceTurn = replaceRequired(
+    fastVoiceTurn,
+    `    if (!completed) throw new Error("VOICE_TURN_COMPLETION_FAILED");`,
+    `    if (!completed) throw new Error("VOICE_TURN_COMPLETION_FAILED");
+
+    console.info("Voice stage complete:", {
+      stage: "complete",
+      ms: Date.now() - voiceStageStartedAt,
+      totalMs: Date.now() - voiceTurnStartedAt
+    });`,
+    "completion timing log"
+  );
+}
+
+if (
+  !fastVoiceTurn.includes(
+    'import { after, NextResponse } from "next/server";'
+  ) ||
+  !fastVoiceTurn.includes(
+    "VOICE_MEMORY_AFTER_RESPONSE"
+  ) ||
+  !fastVoiceTurn.includes(
+    "nvidia/parakeet-tdt-0.6b-v3"
+  ) ||
+  !fastVoiceTurn.includes(
+    "AbortSignal.timeout(35_000)"
+  ) ||
+  !fastVoiceTurn.includes(
+    "AbortSignal.timeout(60_000)"
+  ) ||
+  !fastVoiceTurn.includes(
+    "VOICE_TURN_TIMING"
+  ) ||
+  fastVoiceTurn.includes(
+    "const memoryUsage = await updateVoiceMemoryAfterCommit"
+  )
+) {
+  throw new Error(
+    "Fast voice-call final validation failed."
+  );
+}
+
+write(voiceTurnPath, fastVoiceTurn);
+
+
 console.log(
-  "EverBond profile Refresh and resilient MP3 voice fixes applied; video left unchanged for diagnostics."
+  "EverBond fast voice critical path applied; video remains unchanged for diagnosis."
 );
