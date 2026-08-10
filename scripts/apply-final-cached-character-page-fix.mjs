@@ -17,638 +17,257 @@ function write(relativePath, content) {
 function replaceRequired(source, from, to, label) {
   if (source.includes(to)) return source;
   if (source.includes(from)) return source.replace(from, to);
-  throw new Error(`Supabase translation cache fix could not find: ${label}`);
+  throw new Error(`Final character translation fix could not find: ${label}`);
 }
 
 // ===========================================================================
-// 1) CENTRAL CACHE-ONLY LOADER
+// IMPORTANT SCOPE
 //
-// Existing paid translations are already stored in Supabase. For runtime
-// profile/chat/Discover localization, use character_id + language + content.
-// Do NOT reject a paid cached translation merely because source_hash differs
-// from the character's current derived schema.
+// Discover already worked before the previous cache rewrite.
+// DO NOT modify:
+// - /api/character-localizations
+// - client-character-localization.ts
+// - useLocalizedCharacters.ts
+// - useCharacterBrowser.ts
+// - CharacterCard.tsx
 //
-// This loader performs NO writes and NO Venice/provider calls.
-// It also tolerates the common cached JSON shapes EverBond may already contain.
+// This patch fixes ONLY the selected character/profile/chat path.
 // ===========================================================================
 
-const cacheModulePath = "src/lib/stored-character-translations.ts";
-const cacheModule = `import { getSupabaseServiceClient } from "@/lib/supabase/server";
-import type { Character } from "@/types/character";
+// ===========================================================================
+// 1) EXACT EXISTING-CACHE HELPER
+//
+// The Venice localization code stores TranslationItemSchema directly in
+// character_translations.content.
+//
+// For a selected character, read the already-paid cache row directly by:
+//   character_id + language
+//
+// Deliberately do NOT require:
+// - current source_hash equality
+// - provider generation
+// - a translation claim/write
+//
+// If valid cached content exists, apply it to the exact current Character.
+// ===========================================================================
 
-export type StoredCharacterLanguage =
-  | "EN"
-  | "ES"
-  | "FR"
-  | "DE"
-  | "JA"
-  | "KO";
+const localizationPath = "src/lib/character-localization.ts";
+let localization = read(localizationPath);
 
-type JsonRecord = Record<string, unknown>;
+const helperName = "localizeCharacterFromExistingCache";
 
-function asRecord(value: unknown): JsonRecord | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as JsonRecord)
-    : null;
-}
+if (!localization.includes(`export async function ${helperName}(`)) {
+  localization += `
 
-function textFrom(record: JsonRecord | null, ...keys: string[]) {
-  if (!record) return "";
-
-  for (const key of keys) {
-    const value = record[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-
-  return "";
-}
-
-function stringsFrom(record: JsonRecord | null, ...keys: string[]) {
-  if (!record) return [];
-
-  for (const key of keys) {
-    const value = record[key];
-
-    if (Array.isArray(value)) {
-      return value
-        .filter((item): item is string => typeof item === "string")
-        .map((item) => item.trim())
-        .filter(Boolean);
-    }
-  }
-
-  return [];
-}
-
-function candidateRecords(content: unknown, characterId: string) {
-  const candidates: JsonRecord[] = [];
-  const seen = new Set<JsonRecord>();
-
-  function push(value: unknown) {
-    if (typeof value === "string" && value.trim()) {
-      try {
-        push(JSON.parse(value));
-      } catch {
-        // Non-JSON strings are not translation objects.
-      }
-      return;
-    }
-
-    const record = asRecord(value);
-    if (!record || seen.has(record)) return;
-    seen.add(record);
-    candidates.push(record);
-
-    const nestedKeys = [
-      "translation",
-      "character",
-      "data",
-      "content",
-      "localized",
-      "value"
-    ];
-
-    for (const key of nestedKeys) {
-      const nested = record[key];
-
-      if (Array.isArray(nested)) {
-        for (const item of nested) push(item);
-      } else {
-        push(nested);
-      }
-    }
-
-    const items = record.items;
-    if (Array.isArray(items)) {
-      const exact = items.find((item) => {
-        const itemRecord = asRecord(item);
-        return (
-          textFrom(itemRecord, "id", "character_id", "characterId") ===
-          characterId
-        );
-      });
-
-      if (exact) push(exact);
-      for (const item of items) push(item);
-    }
-  }
-
-  if (Array.isArray(content)) {
-    for (const item of content) push(item);
-  } else {
-    push(content);
-  }
-
-  return candidates;
-}
-
-function normalizeCachedTranslation(
-  content: unknown,
-  characterId: string
-): JsonRecord | null {
-  const candidates = candidateRecords(content, characterId);
-
-  const exact =
-    candidates.find((record) => {
-      const id = textFrom(record, "id", "character_id", "characterId");
-      return id === characterId;
-    }) ?? candidates[0];
-
-  if (!exact) return null;
-
-  const card =
-    asRecord(exact.card) ??
-    asRecord(exact.character_card) ??
-    asRecord(exact.characterCard) ??
-    {};
-
-  const normalized: JsonRecord = {
-    id:
-      textFrom(exact, "id", "character_id", "characterId") || characterId,
-    title: textFrom(exact, "title", "tagline"),
-    openingScenario: textFrom(
-      exact,
-      "openingScenario",
-      "opening_scenario",
-      "description"
-    ),
-    firstMessage: textFrom(
-      exact,
-      "firstMessage",
-      "first_message",
-      "openingMessage",
-      "opening_message"
-    ),
-    relationshipContext: textFrom(
-      exact,
-      "relationshipContext",
-      "relationship_context"
-    ),
-    role: textFrom(exact, "role", "archetype"),
-    relationshipPace: textFrom(
-      exact,
-      "relationshipPace",
-      "relationship_pace"
-    ),
-    tags: stringsFrom(exact, "tags"),
-    card: {
-      personality: textFrom(card, "personality"),
-      tone: textFrom(card, "tone"),
-      speechStyle: textFrom(card, "speechStyle", "speech_style"),
-      motivations: textFrom(card, "motivations"),
-      boundaries: textFrom(card, "boundaries"),
-      relationshipStyle: textFrom(
-        card,
-        "relationshipStyle",
-        "relationship_style"
-      ),
-      worldContext: textFrom(card, "worldContext", "world_context"),
-      exampleDialogue: stringsFrom(
-        card,
-        "exampleDialogue",
-        "example_dialogue"
-      )
-    }
-  };
-
-  const normalizedCard = normalized.card as JsonRecord;
-  const hasContent = [
-    normalized.title,
-    normalized.openingScenario,
-    normalized.firstMessage,
-    normalized.relationshipContext,
-    normalized.role,
-    normalized.relationshipPace,
-    ...(normalized.tags as string[]),
-    normalizedCard.personality,
-    normalizedCard.tone,
-    normalizedCard.speechStyle,
-    normalizedCard.motivations,
-    normalizedCard.boundaries,
-    normalizedCard.relationshipStyle,
-    normalizedCard.worldContext,
-    ...(normalizedCard.exampleDialogue as string[])
-  ].some((value) => typeof value === "string" && value.trim());
-
-  return hasContent ? normalized : null;
-}
-
-function alignTranslatedTags(character: Character, translatedTags: string[]) {
-  let translatedIndex = 0;
-
-  return character.tags.map((tag) => {
-    if (tag === "Ever Memory™") return tag;
-
-    const translated = translatedTags[translatedIndex]?.trim();
-    translatedIndex += 1;
-    return translated || tag;
-  });
-}
-
-function applyStoredTranslation(
+export async function localizeCharacterFromExistingCache(
   character: Character,
-  translation: JsonRecord,
-  translateTags: boolean
-): Character {
-  const card = asRecord(translation.card) ?? {};
-
-  const title =
-    textFrom(translation, "title", "tagline") ||
-    character.title ||
-    character.tagline;
-  const openingScenario =
-    textFrom(
-      translation,
-      "openingScenario",
-      "opening_scenario",
-      "description"
-    ) ||
-    character.openingScenario ||
-    character.description;
-  const firstMessage =
-    textFrom(
-      translation,
-      "firstMessage",
-      "first_message",
-      "openingMessage",
-      "opening_message"
-    ) ||
-    character.firstMessage ||
-    character.openingMessage;
-  const relationshipContext =
-    textFrom(
-      translation,
-      "relationshipContext",
-      "relationship_context"
-    ) ||
-    character.relationshipContext ||
-    "";
-  const role =
-    textFrom(translation, "role", "archetype") ||
-    character.role ||
-    character.archetype;
-  const relationshipPace =
-    textFrom(
-      translation,
-      "relationshipPace",
-      "relationship_pace"
-    ) ||
-    character.relationshipPace ||
-    "";
-
-  const translatedTags = stringsFrom(translation, "tags");
-
-  return {
-    ...character,
-    archetype: role,
-    role,
-    relationshipPace,
-    tagline: title,
-    title,
-    description: openingScenario,
-    openingScenario,
-    openingMessage: firstMessage,
-    firstMessage,
-    relationshipContext,
-    tags:
-      translateTags && translatedTags.length
-        ? alignTranslatedTags(character, translatedTags)
-        : character.tags,
-    card: {
-      ...character.card,
-      personality:
-        textFrom(card, "personality") || character.card.personality,
-      tone: textFrom(card, "tone") || character.card.tone,
-      speechStyle:
-        textFrom(card, "speechStyle", "speech_style") ||
-        character.card.speechStyle,
-      motivations:
-        textFrom(card, "motivations") || character.card.motivations,
-      boundaries:
-        textFrom(card, "boundaries") || character.card.boundaries,
-      relationshipStyle:
-        textFrom(card, "relationshipStyle", "relationship_style") ||
-        character.card.relationshipStyle,
-      worldContext:
-        textFrom(card, "worldContext", "world_context") ||
-        character.card.worldContext,
-      exampleDialogue:
-        stringsFrom(card, "exampleDialogue", "example_dialogue").length
-          ? stringsFrom(card, "exampleDialogue", "example_dialogue")
-          : character.card.exampleDialogue
-    }
-  };
-}
-
-export async function localizeCharactersFromStoredCache(
-  characters: Character[],
-  language: StoredCharacterLanguage,
-  options?: {
-    translateTags?: boolean;
-  }
-): Promise<Character[]> {
-  if (language === "EN" || !characters.length) return characters;
-
-  const supabase = getSupabaseServiceClient();
-  const ids = characters.map((character) => character.id);
-
-  const { data, error } = await supabase
-    .from("character_translations")
-    .select("character_id,status,content")
-    .eq("language", language)
-    .in("character_id", ids);
-
-  if (error) throw error;
-
-  const rows = new Map(
-    (data ?? []).map((row: Record<string, unknown>) => [
-      String(row.character_id),
-      row
-    ])
-  );
-
-  return characters.map((character) => {
-    const row = rows.get(character.id);
-    if (!row?.content) return character;
-
-    const translation = normalizeCachedTranslation(
-      row.content,
-      character.id
-    );
-
-    if (!translation) return character;
-
-    return applyStoredTranslation(
-      character,
-      translation,
-      options?.translateTags !== false
-    );
-  });
-}
-
-export async function localizeCharacterFromStoredCache(
-  character: Character,
-  language: StoredCharacterLanguage,
+  language: CharacterContentLanguage,
   options?: {
     translateTags?: boolean;
   }
 ): Promise<Character> {
-  return (
-    await localizeCharactersFromStoredCache(
-      [character],
+  if (language === "EN") return character;
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("character_translations")
+    .select("content,status,source_hash")
+    .eq("character_id", character.id)
+    .eq("language", language)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  // Existing paid translation content is the runtime source of truth here.
+  // Do not reject it only because the English character schema/hash changed
+  // after the translation was originally cached.
+  if (!data?.content) {
+    console.warn("EVERBOND_CHARACTER_TRANSLATION_CACHE_MISS", {
+      characterId: character.id,
       language,
-      options
-    )
-  )[0] ?? character;
+      status: data?.status ?? null
+    });
+    return character;
+  }
+
+  const parsed = TranslationItemSchema.safeParse(data.content);
+
+  if (!parsed.success) {
+    console.error("EVERBOND_CHARACTER_TRANSLATION_CACHE_INVALID", {
+      characterId: character.id,
+      language,
+      status: data.status ?? null
+    });
+    return character;
+  }
+
+  return applyTranslation(
+    character,
+    parsed.data,
+    options?.translateTags !== false
+  );
 }
 `;
-
-write(cacheModulePath, cacheModule);
-
-// ===========================================================================
-// 2) DISCOVER / BATCH LOCALIZATION
-//
-// Use the paid Supabase cache directly. No source_hash rejection.
-// No provider generation.
-// ===========================================================================
-
-const batchRoutePath = "src/app/api/character-localizations/route.ts";
-let batchRoute = read(batchRoutePath);
-
-batchRoute = replaceRequired(
-  batchRoute,
-  `import {
-  localizeCharacters,
-  type CharacterContentLanguage
-} from "@/lib/character-localization";`,
-  `import type { CharacterContentLanguage } from "@/lib/character-localization";
-import { localizeCharactersFromStoredCache } from "@/lib/stored-character-translations";`,
-  "batch cache import"
-);
-
-batchRoute = replaceRequired(
-  batchRoute,
-  `    const localized = await localizeCharacters(
-      characters,
-      parsed.data.language as CharacterContentLanguage,
-      { translateTags: true, allowProvider: false }
-    );`,
-  `    const localized = await localizeCharactersFromStoredCache(
-      characters,
-      parsed.data.language as CharacterContentLanguage,
-      { translateTags: true }
-    );`,
-  "batch cache call"
-);
-
-if (
-  !batchRoute.includes("localizeCharactersFromStoredCache(") ||
-  batchRoute.includes("{ translateTags: true, allowProvider: false }")
-) {
-  throw new Error("Batch cache-only route validation failed.");
 }
 
-write(batchRoutePath, batchRoute);
+if (
+  !localization.includes(`export async function ${helperName}(`) ||
+  !localization.includes('.from("character_translations")') ||
+  !localization.includes('.eq("character_id", character.id)') ||
+  !localization.includes('.eq("language", language)') ||
+  !localization.includes("TranslationItemSchema.safeParse(data.content)") ||
+  !localization.includes("return applyTranslation(")
+) {
+  throw new Error("Existing-cache helper validation failed.");
+}
+
+write(localizationPath, localization);
 
 // ===========================================================================
-// 3) SINGLE CHARACTER PROFILE / CHAT LOCALIZATION
+// 2) SELECTED CHARACTER API
 //
-// Same exact paid Supabase cache path as Discover.
+// Both public profile/chat localization and PrivateChatLoader ultimately use
+// this route. Make it use the direct existing-cache helper.
+//
+// Also isolate the optional selected gallery image. A missing preference,
+// storage/signing issue, or stale gallery row must NEVER turn a valid character
+// translation into a 500 response.
 // ===========================================================================
 
-const singleRoutePath = "src/app/api/characters/[slug]/route.ts";
-let singleRoute = read(singleRoutePath);
+const routePath = "src/app/api/characters/[slug]/route.ts";
+let route = read(routePath);
 
-singleRoute = replaceRequired(
-  singleRoute,
+route = replaceRequired(
+  route,
   `import {
   localizeCharacter,
   type CharacterContentLanguage
 } from "@/lib/character-localization";`,
-  `import type { CharacterContentLanguage } from "@/lib/character-localization";
-import { localizeCharacterFromStoredCache } from "@/lib/stored-character-translations";`,
-  "single cache import"
+  `import {
+  localizeCharacterFromExistingCache,
+  type CharacterContentLanguage
+} from "@/lib/character-localization";`,
+  "selected-character localization import"
 );
 
-singleRoute = replaceRequired(
-  singleRoute,
+route = replaceRequired(
+  route,
   `    const localized = await localizeCharacter(
       character,
       languageResult.data as CharacterContentLanguage,
       { translateTags: true, allowProvider: false }
     );`,
-  `    const localized = await localizeCharacterFromStoredCache(
+  `    const localized = await localizeCharacterFromExistingCache(
       character,
       languageResult.data as CharacterContentLanguage,
       { translateTags: true }
     );`,
-  "single cache call"
+  "selected-character direct cache call"
 );
 
-singleRoute = replaceRequired(
-  singleRoute,
+route = replaceRequired(
+  route,
   `    const selectedImage = userId
       ? await selectedCharacterImageUrl(userId, character.id)
       : null;`,
   `    const selectedImage = userId
-      ? await selectedCharacterImageUrl(userId, character.id).catch(() => null)
+      ? await selectedCharacterImageUrl(userId, character.id).catch((error) => {
+          console.warn("EVERBOND_SELECTED_CHARACTER_IMAGE_OPTIONAL_FAILED", {
+            characterId: character.id,
+            error:
+              error instanceof Error
+                ? error.message
+                : "OPTIONAL_SELECTED_IMAGE_FAILED"
+          });
+          return null;
+        })
       : null;`,
-  "non-fatal selected image"
+  "optional selected character image isolation"
 );
 
 if (
-  !singleRoute.includes("localizeCharacterFromStoredCache(") ||
-  !singleRoute.includes(
-    "await selectedCharacterImageUrl(userId, character.id).catch(() => null)"
-  )
+  !route.includes("localizeCharacterFromExistingCache(") ||
+  route.includes(
+    `const localized = await localizeCharacter(
+      character,`
+  ) ||
+  !route.includes("EVERBOND_SELECTED_CHARACTER_IMAGE_OPTIONAL_FAILED")
 ) {
-  throw new Error("Single-character stored-cache route validation failed.");
+  throw new Error("Selected-character route validation failed.");
 }
 
-write(singleRoutePath, singleRoute);
+write(routePath, route);
 
 // ===========================================================================
-// 4) NEVER TURN A TRANSLATION ERROR INTO CHARACTER CONTENT
+// 3) SAFETY: DO NOT LET THE OLD SYNTHETIC ERROR CHARACTER LEAK INTO CHAT
 //
-// The existing client fallback fills scenario/message/title/etc with the
-// localized error sentence. That is exactly why the Spanish error text showed
-// up where the opening scenario and first message belong.
-//
-// Fallback now leaves the original Character intact.
+// Keep Discover's existing behavior untouched. But if a user arrives at chat
+// with stale sessionStorage left by one of the temporary handoff builds, remove
+// those keys before the current hook runs. This does not affect fresh Discover
+// localization and prevents an old fake "translation unavailable" Character
+// from being reused by the browser.
 // ===========================================================================
 
-const clientLocalizationPath = "src/lib/client-character-localization.ts";
-let clientLocalization = read(clientLocalizationPath);
+const hookPath = "src/components/character/useLocalizedCharacter.ts";
+let hook = read(hookPath);
 
-clientLocalization = clientLocalization.replace(
-  'import { FINAL_LOCALIZATION_COPY } from "@/lib/final-localization-language";\n',
-  ""
-);
+if (!hook.includes("EVERBOND_CLEAR_LEGACY_TRANSLATION_HANDOFF")) {
+  hook = replaceRequired(
+    hook,
+    `    const currentBaseCharacter = baseCharacterRef.current;
+    setCharacter(currentBaseCharacter);`,
+    `    const currentBaseCharacter = baseCharacterRef.current;
 
-const fallbackStart =
-  `export function localizedCharacterFallback(
-  character: Character,
-  language: Exclude<LanguageCode, "EN">
-): Character {`;
+    // EVERBOND_CLEAR_LEGACY_TRANSLATION_HANDOFF
+    // Previous temporary builds used sessionStorage to hand translated card
+    // objects into chat. Remove any stale copy so the selected page always
+    // loads from the real Supabase cache API now.
+    if (typeof window !== "undefined" && language !== "EN") {
+      try {
+        window.sessionStorage.removeItem(
+          \`everbond-localized-clickthrough:\${language}:\${currentBaseCharacter.slug}\`
+        );
+      } catch {
+        // Optional cleanup must never block localization.
+      }
+    }
 
-const fallbackEnd = `
-}
-
-async function fetchBatch(`;
-
-const fallbackStartIndex = clientLocalization.indexOf(fallbackStart);
-const fallbackEndIndex = clientLocalization.indexOf(
-  fallbackEnd,
-  Math.max(fallbackStartIndex, 0)
-);
-
-if (fallbackStartIndex < 0 || fallbackEndIndex < 0) {
-  throw new Error("Could not find client localization fallback function.");
-}
-
-const cleanFallback = `export function localizedCharacterFallback(
-  character: Character,
-  language: Exclude<LanguageCode, "EN">
-): Character {
-  void language;
-  return character;
-}`;
-
-clientLocalization =
-  clientLocalization.slice(0, fallbackStartIndex) +
-  cleanFallback +
-  clientLocalization.slice(fallbackEndIndex + 2);
-
-if (
-  clientLocalization.includes(
-    "const placeholder = FINAL_LOCALIZATION_COPY[language].translationUnavailable"
-  )
-) {
-  throw new Error("Translation-unavailable placeholder character still exists.");
-}
-
-write(clientLocalizationPath, clientLocalization);
-
-// ===========================================================================
-// 5) PAGE SHELLS SHOULD LOOK LIKE ENGLISH AFTER LOADING
-//
-// While the cache request is running, show the loader.
-// Once it completes, render the normal English-style profile/chat layout.
-// With the paid cache present, character content will be localized.
-// If one row is truly missing, the page still works instead of dead-ending.
-// ===========================================================================
-
-for (const shellPath of [
-  "src/components/character/LocalizedCharacterProfileShell.tsx",
-  "src/components/chat/LocalizedChatShell.tsx"
-]) {
-  let shell = read(shellPath);
-
-  shell = replaceRequired(
-    shell,
-    `if (language !== "EN" && (loading || !localized))`,
-    `if (language !== "EN" && loading)`,
-    `${shellPath} loading gate`
+    setCharacter(currentBaseCharacter);`,
+    "legacy translation handoff cleanup"
   );
-
-  if (shellPath.endsWith("LocalizedCharacterProfileShell.tsx")) {
-    shell = replaceRequired(
-      shell,
-      `const { character, language, loading, localized } =`,
-      `const { character, language, loading } =`,
-      "profile shell unused localized state"
-    );
-  }
-
-  write(shellPath, shell);
 }
 
-// ===========================================================================
-// 6) PRIVATE / OWNER CHAT SHOULD NEVER DEAD-END ON TRANSLATION DETECTION
-// ===========================================================================
+if (!hook.includes("EVERBOND_CLEAR_LEGACY_TRANSLATION_HANDOFF")) {
+  throw new Error("Legacy translation handoff cleanup validation failed.");
+}
 
-const privateLoaderPath = "src/components/chat/PrivateChatLoader.tsx";
-let privateLoader = read(privateLoaderPath);
-
-privateLoader = replaceRequired(
-  privateLoader,
-  `          if (!isLocalizedCharacterContent(baseCharacter, targetCharacter)) {
-            setUnavailable(true);
-            return;
-          }`,
-  `          if (!isLocalizedCharacterContent(baseCharacter, targetCharacter)) {
-            setCharacter(baseCharacter);
-            setUnavailable(false);
-            return;
-          }`,
-  "private chat fallback"
-);
-
-write(privateLoaderPath, privateLoader);
+write(hookPath, hook);
 
 // ===========================================================================
-// FINAL VALIDATION
+// 4) FINAL GUARDS
 // ===========================================================================
 
-const finalClient = read(clientLocalizationPath);
-const finalBatch = read(batchRoutePath);
-const finalSingle = read(singleRoutePath);
-const finalProfile = read(
-  "src/components/character/LocalizedCharacterProfileShell.tsx"
-);
-const finalChat = read("src/components/chat/LocalizedChatShell.tsx");
+// These strings must remain absent from this final patch because changing
+// Discover again caused the last regression.
+const forbiddenTargets = [
+  'src/app/api/character-localizations/route.ts',
+  'src/lib/client-character-localization.ts',
+  'src/components/character/useLocalizedCharacters.ts',
+  'src/components/character/useCharacterBrowser.ts',
+  'src/components/character/CharacterCard.tsx'
+];
 
-if (
-  !fs.existsSync(path.join(root, cacheModulePath)) ||
-  !finalBatch.includes("localizeCharactersFromStoredCache") ||
-  !finalSingle.includes("localizeCharacterFromStoredCache") ||
-  finalClient.includes("const placeholder = FINAL_LOCALIZATION_COPY") ||
-  finalProfile.includes("(loading || !localized)") ||
-  finalChat.includes("(loading || !localized)")
-) {
-  throw new Error("Final Supabase translation cache validation failed.");
+const ownSource = read("scripts/apply-final-cached-character-page-fix.mjs");
+
+for (const target of forbiddenTargets) {
+  // Comments above mention the paths for documentation; writing them is what
+  // must never happen. Validate that no write(...) targets those files.
+  const writeNeedle = `write("${target}"`;
+  if (ownSource.includes(writeNeedle)) {
+    throw new Error(`Discover regression guard failed: ${target}`);
+  }
 }
 
 console.log(
-  "EVERBOND_TRANSLATION_CACHE_FINAL source=supabase-content hash-gate=off provider=off placeholder-character=removed profile-chat=normal-layout"
+  "EVERBOND_CHARACTER_TRANSLATION_FINAL discover=unchanged selected=supabase-existing-cache hash-gate=off provider=off optional-image=isolated legacy-handoff=cleared"
 );
