@@ -53,7 +53,7 @@ export async function GET(request: Request) {
     const characters = await localizeCharacters(
       result.characters,
       parsed.data.language as CharacterContentLanguage,
-      { translateTags: true }
+      { translateTags: true, allowProvider: false }
     );
 
     return NextResponse.json(
