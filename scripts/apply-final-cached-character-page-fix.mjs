@@ -17,122 +17,64 @@ function write(relativePath, content) {
 function replaceRequired(source, from, to, label) {
   if (source.includes(to)) return source;
   if (source.includes(from)) return source.replace(from, to);
-  throw new Error(`Final character translation fix could not find: ${label}`);
+  throw new Error(`Zero-cost chat translation fix could not find: ${label}`);
 }
 
-// ===========================================================================
-// IMPORTANT SCOPE
-//
-// Discover already worked before the previous cache rewrite.
-// DO NOT modify:
-// - /api/character-localizations
-// - client-character-localization.ts
-// - useLocalizedCharacters.ts
-// - useCharacterBrowser.ts
-// - CharacterCard.tsx
-//
-// This patch fixes ONLY the selected character/profile/chat path.
-// ===========================================================================
+const helperPath = "src/lib/chat-intro-localization.ts";
 
-// ===========================================================================
-// 1) EXACT EXISTING-CACHE HELPER
-//
-// The Venice localization code stores TranslationItemSchema directly in
-// character_translations.content.
-//
-// For a selected character, read the already-paid cache row directly by:
-//   character_id + language
-//
-// Deliberately do NOT require:
-// - current source_hash equality
-// - provider generation
-// - a translation claim/write
-//
-// If valid cached content exists, apply it to the exact current Character.
-// ===========================================================================
+write(
+  helperPath,
+  `import { getSupabaseServiceClient } from "@/lib/supabase/server";
+import type { Character } from "@/types/character";
 
-const localizationPath = "src/lib/character-localization.ts";
-let localization = read(localizationPath);
+export type ChatIntroLanguage = "EN" | "ES" | "FR" | "DE" | "JA" | "KO";
 
-const helperName = "localizeCharacterFromExistingCache";
+type ChatIntroTranslationRow = {
+  opening_scenario: string | null;
+  first_message: string | null;
+};
 
-if (!localization.includes(`export async function ${helperName}(`)) {
-  localization += `
-
-export async function localizeCharacterFromExistingCache(
+export async function localizeCharacterChatIntroFromCache(
   character: Character,
-  language: CharacterContentLanguage,
-  options?: {
-    translateTags?: boolean;
-  }
+  language: ChatIntroLanguage
 ): Promise<Character> {
   if (language === "EN") return character;
 
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
-    .from("character_translations")
-    .select("content,status,source_hash")
+    .from("character_chat_translations")
+    .select("opening_scenario,first_message")
     .eq("character_id", character.id)
     .eq("language", language)
     .maybeSingle();
 
-  if (error) throw error;
-
-  // Existing paid translation content is the runtime source of truth here.
-  // Do not reject it only because the English character schema/hash changed
-  // after the translation was originally cached.
-  if (!data?.content) {
-    console.warn("EVERBOND_CHARACTER_TRANSLATION_CACHE_MISS", {
+  if (error) {
+    console.warn("EVERBOND_CHAT_INTRO_TRANSLATION_CACHE_READ_FAILED", {
       characterId: character.id,
       language,
-      status: data?.status ?? null
+      error: error.message
     });
     return character;
   }
 
-  const parsed = TranslationItemSchema.safeParse(data.content);
+  const row = data as ChatIntroTranslationRow | null;
+  const openingScenario =
+    typeof row?.opening_scenario === "string" ? row.opening_scenario.trim() : "";
+  const firstMessage =
+    typeof row?.first_message === "string" ? row.first_message.trim() : "";
 
-  if (!parsed.success) {
-    console.error("EVERBOND_CHARACTER_TRANSLATION_CACHE_INVALID", {
-      characterId: character.id,
-      language,
-      status: data.status ?? null
-    });
-    return character;
-  }
+  if (!openingScenario || !firstMessage) return character;
 
-  return applyTranslation(
-    character,
-    parsed.data,
-    options?.translateTags !== false
-  );
+  return {
+    ...character,
+    description: openingScenario,
+    openingScenario,
+    openingMessage: firstMessage,
+    firstMessage
+  };
 }
-`;
-}
-
-if (
-  !localization.includes(`export async function ${helperName}(`) ||
-  !localization.includes('.from("character_translations")') ||
-  !localization.includes('.eq("character_id", character.id)') ||
-  !localization.includes('.eq("language", language)') ||
-  !localization.includes("TranslationItemSchema.safeParse(data.content)") ||
-  !localization.includes("return applyTranslation(")
-) {
-  throw new Error("Existing-cache helper validation failed.");
-}
-
-write(localizationPath, localization);
-
-// ===========================================================================
-// 2) SELECTED CHARACTER API
-//
-// Both public profile/chat localization and PrivateChatLoader ultimately use
-// this route. Make it use the direct existing-cache helper.
-//
-// Also isolate the optional selected gallery image. A missing preference,
-// storage/signing issue, or stale gallery row must NEVER turn a valid character
-// translation into a 500 response.
-// ===========================================================================
+`
+);
 
 const routePath = "src/app/api/characters/[slug]/route.ts";
 let route = read(routePath);
@@ -144,10 +86,10 @@ route = replaceRequired(
   type CharacterContentLanguage
 } from "@/lib/character-localization";`,
   `import {
-  localizeCharacterFromExistingCache,
-  type CharacterContentLanguage
-} from "@/lib/character-localization";`,
-  "selected-character localization import"
+  localizeCharacterChatIntroFromCache,
+  type ChatIntroLanguage
+} from "@/lib/chat-intro-localization";`,
+  "selected character localization import"
 );
 
 route = replaceRequired(
@@ -157,12 +99,12 @@ route = replaceRequired(
       languageResult.data as CharacterContentLanguage,
       { translateTags: true, allowProvider: false }
     );`,
-  `    const localized = await localizeCharacterFromExistingCache(
+  `    // EVERBOND_ZERO_COST_CHAT_INTRO_TRANSLATION
+    const localized = await localizeCharacterChatIntroFromCache(
       character,
-      languageResult.data as CharacterContentLanguage,
-      { translateTags: true }
+      languageResult.data as ChatIntroLanguage
     );`,
-  "selected-character direct cache call"
+  "selected character lightweight cache call"
 );
 
 route = replaceRequired(
@@ -182,92 +124,89 @@ route = replaceRequired(
           return null;
         })
       : null;`,
-  "optional selected character image isolation"
+  "optional selected image isolation"
 );
-
-if (
-  !route.includes("localizeCharacterFromExistingCache(") ||
-  route.includes(
-    `const localized = await localizeCharacter(
-      character,`
-  ) ||
-  !route.includes("EVERBOND_SELECTED_CHARACTER_IMAGE_OPTIONAL_FAILED")
-) {
-  throw new Error("Selected-character route validation failed.");
-}
 
 write(routePath, route);
 
-// ===========================================================================
-// 3) SAFETY: DO NOT LET THE OLD SYNTHETIC ERROR CHARACTER LEAK INTO CHAT
-//
-// Keep Discover's existing behavior untouched. But if a user arrives at chat
-// with stale sessionStorage left by one of the temporary handoff builds, remove
-// those keys before the current hook runs. This does not affect fresh Discover
-// localization and prevents an old fake "translation unavailable" Character
-// from being reused by the browser.
-// ===========================================================================
+const chatPath = "src/components/chat/LocalizedChatShell.tsx";
+let chat = read(chatPath);
 
-const hookPath = "src/components/character/useLocalizedCharacter.ts";
-let hook = read(hookPath);
-
-if (!hook.includes("EVERBOND_CLEAR_LEGACY_TRANSLATION_HANDOFF")) {
-  hook = replaceRequired(
-    hook,
-    `    const currentBaseCharacter = baseCharacterRef.current;
-    setCharacter(currentBaseCharacter);`,
-    `    const currentBaseCharacter = baseCharacterRef.current;
-
-    // EVERBOND_CLEAR_LEGACY_TRANSLATION_HANDOFF
-    // Previous temporary builds used sessionStorage to hand translated card
-    // objects into chat. Remove any stale copy so the selected page always
-    // loads from the real Supabase cache API now.
-    if (typeof window !== "undefined" && language !== "EN") {
-      try {
-        window.sessionStorage.removeItem(
-          \`everbond-localized-clickthrough:\${language}:\${currentBaseCharacter.slug}\`
-        );
-      } catch {
-        // Optional cleanup must never block localization.
-      }
-    }
-
-    setCharacter(currentBaseCharacter);`,
-    "legacy translation handoff cleanup"
-  );
-}
-
-if (!hook.includes("EVERBOND_CLEAR_LEGACY_TRANSLATION_HANDOFF")) {
-  throw new Error("Legacy translation handoff cleanup validation failed.");
-}
-
-write(hookPath, hook);
-
-// ===========================================================================
-// 4) FINAL GUARDS
-// ===========================================================================
-
-// These strings must remain absent from this final patch because changing
-// Discover again caused the last regression.
-const forbiddenTargets = [
-  'src/app/api/character-localizations/route.ts',
-  'src/lib/client-character-localization.ts',
-  'src/components/character/useLocalizedCharacters.ts',
-  'src/components/character/useCharacterBrowser.ts',
-  'src/components/character/CharacterCard.tsx'
-];
-
-const ownSource = read("scripts/apply-final-cached-character-page-fix.mjs");
-
-for (const target of forbiddenTargets) {
-  // Comments above mention the paths for documentation; writing them is what
-  // must never happen. Validate that no write(...) targets those files.
-  const writeNeedle = `write("${target}"`;
-  if (ownSource.includes(writeNeedle)) {
-    throw new Error(`Discover regression guard failed: ${target}`);
+chat = replaceRequired(
+  chat,
+  `  if (language !== "EN" && (loading || !localized)) {
+    return (
+      <main className="flex h-[calc(100dvh-64px)] items-center justify-center px-4">
+        <section className="w-full max-w-2xl rounded-[2rem] border border-bond-rose/35 bg-white/[0.035] p-8 text-center shadow-[0_0_34px_rgba(255,92,168,0.08)]">
+          <p className={loading ? "animate-pulse text-bond-muted" : "text-bond-muted"}>
+            {loading ? copy.translatingCharacter : copy.translationUnavailable}
+          </p>
+        </section>
+      </main>
+    );
   }
+
+  return (
+    <ChatShell
+      key={\`\${character.id}:\${language}:\${character.tagline}\`}
+      character={character}
+    />
+  );`,
+  `  if (language !== "EN" && loading) {
+    return (
+      <main className="flex h-[calc(100dvh-64px)] items-center justify-center px-4">
+        <section className="w-full max-w-2xl rounded-[2rem] border border-bond-rose/35 bg-white/[0.035] p-8 text-center shadow-[0_0_34px_rgba(255,92,168,0.08)]">
+          <p className="animate-pulse text-bond-muted">
+            {copy.translatingCharacter}
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  // EVERBOND_CHAT_INTRO_ENGLISH_FALLBACK
+  const renderedCharacter =
+    language !== "EN" && !localized ? baseCharacter : character;
+
+  return (
+    <ChatShell
+      key={\`\${renderedCharacter.id}:\${language}:\${renderedCharacter.tagline}\`}
+      character={renderedCharacter}
+    />
+  );`,
+  "non-blocking chat intro fallback"
+);
+
+write(chatPath, chat);
+
+const legacyPath = "src/app/api/characters-localized/route.ts";
+let legacy = read(legacyPath);
+legacy = replaceRequired(
+  legacy,
+  `    const characters = await localizeCharacters(
+      result.characters,
+      parsed.data.language as CharacterContentLanguage,
+      { translateTags: true }
+    );`,
+  `    const characters = await localizeCharacters(
+      result.characters,
+      parsed.data.language as CharacterContentLanguage,
+      { translateTags: true, allowProvider: false }
+    );`,
+  "legacy localized endpoint provider guard"
+);
+write(legacyPath, legacy);
+
+if (!route.includes("EVERBOND_ZERO_COST_CHAT_INTRO_TRANSLATION")) {
+  throw new Error("Selected route validation failed.");
+}
+if (!chat.includes("EVERBOND_CHAT_INTRO_ENGLISH_FALLBACK")) {
+  throw new Error("Chat fallback validation failed.");
+}
+if (!legacy.includes("allowProvider: false")) {
+  throw new Error("Legacy provider guard validation failed.");
 }
 
 console.log(
-  "EVERBOND_CHARACTER_TRANSLATION_FINAL discover=unchanged selected=supabase-existing-cache hash-gate=off provider=off optional-image=isolated legacy-handoff=cleared"
+  "EVERBOND_ZERO_COST_CHAT_TRANSLATION discover=unchanged chat=intro-cache-only fields=opening-scenario+first-message provider=off missing=fallback-English legacy-provider-route=off"
 );
