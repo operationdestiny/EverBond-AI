@@ -17,37 +17,32 @@ function write(relativePath, content) {
 function replaceRequired(source, from, to, label) {
   if (source.includes(to)) return source;
   if (source.includes(from)) return source.replace(from, to);
-  throw new Error(`Translation handoff fix could not find: ${label}`);
+  throw new Error(`Translation build fix could not find: ${label}`);
 }
 
 const STORAGE_PREFIX = "everbond-localized-clickthrough";
 
 // ===========================================================================
-// DISCOVER CARD -> CHAT HANDOFF
-//
-// Discover already has the successfully translated Character object. Preserve
-// that exact Supabase-backed object synchronously when the user clicks a card.
-// sessionStorage survives the Next navigation and a same-tab refresh, but does
-// not create a permanent stale copy.
+// 1) DISCOVER CARD -> CHAT HANDOFF
 // ===========================================================================
 
 const cardPath = "src/components/character/CharacterCard.tsx";
 let card = read(cardPath);
 
-if (!card.startsWith('"use client";')) {
-  card = `"use client";\n\n${card}`;
-}
-
-if (!card.includes('useSiteLanguage')) {
-  card = replaceRequired(
-    card,
-    'import { Character } from "@/types/character";',
-    'import { Character } from "@/types/character";\nimport { useSiteLanguage } from "@/lib/site-language";',
-    "CharacterCard language import"
-  );
-}
-
 if (!card.includes("CHARACTER_TRANSLATION_HANDOFF")) {
+  if (!card.startsWith('"use client";')) {
+    card = `"use client";\n\n${card}`;
+  }
+
+  if (!card.includes('useSiteLanguage')) {
+    card = replaceRequired(
+      card,
+      'import { Character } from "@/types/character";',
+      'import { Character } from "@/types/character";\nimport { useSiteLanguage } from "@/lib/site-language";',
+      "CharacterCard language import"
+    );
+  }
+
   card = replaceRequired(
     card,
     `}) {
@@ -65,12 +60,12 @@ if (!card.includes("CHARACTER_TRANSLATION_HANDOFF")) {
         JSON.stringify(character)
       );
     } catch {
-      // Optional navigation handoff must never block opening chat.
+      // Optional handoff must never block chat navigation.
     }
   }
 
   const openingPreview =`,
-    "CharacterCard translation handoff function"
+    "CharacterCard handoff function"
   );
 
   card = replaceRequired(
@@ -100,8 +95,10 @@ if (!card.includes("CHARACTER_TRANSLATION_HANDOFF")) {
 }
 
 if (
+  !card.startsWith('"use client";') ||
   !card.includes("CHARACTER_TRANSLATION_HANDOFF") ||
   !card.includes("rememberLocalizedCharacter") ||
+  !card.includes("onClick={rememberLocalizedCharacter}") ||
   !card.includes(STORAGE_PREFIX)
 ) {
   throw new Error("CharacterCard translation handoff validation failed.");
@@ -110,34 +107,98 @@ if (
 write(cardPath, card);
 
 // ===========================================================================
-// CHAT/PROFILE LOCALIZATION HOOK
+// 2) SELECTED CHARACTER LOCALIZATION
 //
-// On a non-English character page, first consume the exact translated object
-// that the user just clicked. Then continue the existing cache-only Supabase
-// request in the background. If that background request fails or returns the
-// English source, keep the already-successful translated object instead of
-// replacing the page with "translation unavailable."
+// Write this small hook deterministically instead of stacking fragile search /
+// replace operations. It preserves the existing public API:
+//   isLocalizedCharacterContent()
+//   useLocalizedCharacter()
+//
+// Behavior:
+// - EN: unchanged.
+// - ES/FR/DE/JA/KO: first use the exact translated Character clicked in
+//   Discover when available.
+// - Then verify against the SAME cache-only endpoint Discover uses:
+//   POST /api/character-localizations.
+// - If that background cache request fails or returns English, keep the valid
+//   clicked translation instead of showing "translation unavailable".
+// - No Venice provider calls are introduced here.
 // ===========================================================================
 
 const hookPath = "src/components/character/useLocalizedCharacter.ts";
-let hook = read(hookPath);
+const currentHook = read(hookPath);
 
-if (!hook.includes("CLICKTHROUGH_TRANSLATION_HANDOFF")) {
-  hook = replaceRequired(
-    hook,
-    `    setLocalized(false);
+if (
+  !currentHook.includes("export function isLocalizedCharacterContent") ||
+  !currentHook.includes("export function useLocalizedCharacter")
+) {
+  throw new Error("Unexpected useLocalizedCharacter.ts shape; refusing to overwrite.");
+}
 
-    if (!authReady) {
-      setLoading(true);
+const hook = `"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { useSiteLanguage } from "@/lib/site-language";
+import type { Character } from "@/types/character";
+
+const CHARACTER_LOCALIZATION_TIMEOUT_MS = 15_000;
+const CLICKTHROUGH_STORAGE_PREFIX = "${STORAGE_PREFIX}";
+
+function localizationComparable(character: Character) {
+  return JSON.stringify({
+    archetype: character.archetype,
+    role: character.role,
+    tagline: character.tagline,
+    title: character.title,
+    description: character.description,
+    openingScenario: character.openingScenario,
+    openingMessage: character.openingMessage,
+    firstMessage: character.firstMessage,
+    relationshipContext: character.relationshipContext,
+    relationshipPace: character.relationshipPace,
+    tags: character.tags,
+    card: character.card
+  });
+}
+
+export function isLocalizedCharacterContent(
+  baseCharacter: Character,
+  candidate: Character
+) {
+  return localizationComparable(baseCharacter) !== localizationComparable(candidate);
+}
+
+export function useLocalizedCharacter(baseCharacter: Character) {
+  const { language } = useSiteLanguage();
+  const { session, authReady } = useAuth();
+  const baseCharacterRef = useRef(baseCharacter);
+  baseCharacterRef.current = baseCharacter;
+
+  const [character, setCharacter] = useState(baseCharacter);
+  const [loading, setLoading] = useState(language !== "EN");
+  const [localized, setLocalized] = useState(language === "EN");
+  const characterKey = useMemo(
+    () => \`\${baseCharacter.id}:\${baseCharacter.slug}\`,
+    [baseCharacter.id, baseCharacter.slug]
+  );
+
+  useEffect(() => {
+    const currentBaseCharacter = baseCharacterRef.current;
+    setCharacter(currentBaseCharacter);
+
+    if (language === "EN") {
+      setLocalized(true);
+      setLoading(false);
       return;
-    }`,
-    `    // CLICKTHROUGH_TRANSLATION_HANDOFF
+    }
+
     let handedOffCharacter: Character | null = null;
 
     if (typeof window !== "undefined") {
       try {
         const raw = window.sessionStorage.getItem(
-          \`${STORAGE_PREFIX}:\${language}:\${currentBaseCharacter.slug}\`
+          \`\${CLICKTHROUGH_STORAGE_PREFIX}:\${language}:\${currentBaseCharacter.slug}\`
         );
 
         if (raw) {
@@ -155,7 +216,7 @@ if (!hook.includes("CLICKTHROUGH_TRANSLATION_HANDOFF")) {
           }
         }
       } catch {
-        // Damaged optional handoff cache falls through to the server cache.
+        // Damaged optional handoff falls through to the Supabase cache endpoint.
       }
     }
 
@@ -166,40 +227,53 @@ if (!hook.includes("CLICKTHROUGH_TRANSLATION_HANDOFF")) {
     if (!authReady) {
       if (!handedOffCharacter) setLoading(true);
       return;
-    }`,
-    "useLocalizedCharacter handoff read"
-  );
+    }
 
-  hook = replaceRequired(
-    hook,
-    `    setLoading(true);
+    const controller = new AbortController();
+    let cancelled = false;
+    setLoading(!handedOffCharacter);
 
-    const timeout =`,
-    `    setLoading(!handedOffCharacter);
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      CHARACTER_LOCALIZATION_TIMEOUT_MS
+    );
 
-    const timeout =`,
-    "useLocalizedCharacter non-blocking background refresh"
-  );
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
 
-  hook = replaceRequired(
-    hook,
-    `        if (!response.ok || !candidate) {
-          throw new Error("CHARACTER_LOCALIZATION_FAILED");
-        }`,
-    `        if (!response.ok || !candidate) {
+    if (session?.access_token) {
+      headers.Authorization = \`Bearer \${session.access_token}\`;
+    }
+
+    void fetch("/api/character-localizations", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        slugs: [currentBaseCharacter.slug],
+        language
+      }),
+      cache: "no-store",
+      signal: controller.signal
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        const candidate =
+          Array.isArray(payload?.characters) && payload.characters.length
+            ? (payload.characters[0] as Character)
+            : null;
+
+        if (!response.ok || !candidate) {
           if (handedOffCharacter) return;
           throw new Error("CHARACTER_LOCALIZATION_FAILED");
-        }`,
-    "useLocalizedCharacter preserve handoff on empty response"
-  );
+        }
 
-  hook = replaceRequired(
-    hook,
-    `        if (!cancelled && translated) {
-          setCharacter(candidate);
-          setLocalized(true);
-        }`,
-    `        if (!cancelled && translated) {
+        const translated = isLocalizedCharacterContent(
+          currentBaseCharacter,
+          candidate
+        );
+
+        if (!cancelled && translated) {
           setCharacter(candidate);
           setLocalized(true);
           return;
@@ -208,17 +282,18 @@ if (!hook.includes("CLICKTHROUGH_TRANSLATION_HANDOFF")) {
         if (!cancelled && handedOffCharacter) {
           setCharacter(handedOffCharacter);
           setLocalized(true);
-        }`,
-    "useLocalizedCharacter preserve handoff on untranslated response"
-  );
+        }
+      })
+      .catch((error) => {
+        if (
+          error instanceof DOMException &&
+          error.name === "AbortError" &&
+          cancelled
+        ) {
+          return;
+        }
 
-  hook = replaceRequired(
-    hook,
-    `        if (!cancelled) {
-          setCharacter(currentBaseCharacter);
-          setLocalized(false);
-        }`,
-    `        if (!cancelled && handedOffCharacter) {
+        if (!cancelled && handedOffCharacter) {
           setCharacter(handedOffCharacter);
           setLocalized(true);
           return;
@@ -227,27 +302,37 @@ if (!hook.includes("CLICKTHROUGH_TRANSLATION_HANDOFF")) {
         if (!cancelled) {
           setCharacter(currentBaseCharacter);
           setLocalized(false);
-        }`,
-    "useLocalizedCharacter preserve handoff on request failure"
-  );
-}
+        }
+      })
+      .finally(() => {
+        window.clearTimeout(timeout);
+        if (!cancelled) setLoading(false);
+      });
 
-if (
-  !hook.includes("CLICKTHROUGH_TRANSLATION_HANDOFF") ||
-  !hook.includes("handedOffCharacter") ||
-  !hook.includes(STORAGE_PREFIX) ||
-  !hook.includes('fetch("/api/character-localizations"')
-) {
-  throw new Error("Character localization handoff validation failed.");
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [authReady, characterKey, language, session?.access_token]);
+
+  return {
+    character,
+    language,
+    loading,
+    localized
+  };
 }
+`;
 
 write(hookPath, hook);
 
 // ===========================================================================
-// OPTIONAL SELECTED CHAT IMAGE
+// 3) OPTIONAL SELECTED CHAT IMAGE
 //
-// Keep the optional user image lookup non-fatal. A storage preference problem
-// must never be reported to the user as a translation failure.
+// This endpoint can still be used after localization to refresh the user's
+// currently selected gallery image. An optional image lookup failure must not
+// become a translation failure.
 // ===========================================================================
 
 const routePath = "src/app/api/characters/[slug]/route.ts";
@@ -275,5 +360,5 @@ if (
 write(routePath, route);
 
 console.log(
-  "EVERBOND_TRANSLATION_HANDOFF_FINAL discover=supabase-translated clickthrough=session-handoff server-cache=background provider=off"
+  "EVERBOND_TRANSLATION_HANDOFF_FINAL build=deterministic discover=handoff cache=/api/character-localizations provider=off image=nonfatal"
 );
