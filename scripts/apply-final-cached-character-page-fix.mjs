@@ -17,81 +17,113 @@ function write(relativePath, content) {
 function replaceRequired(source, from, to, label) {
   if (source.includes(to)) return source;
   if (source.includes(from)) return source.replace(from, to);
-  throw new Error(`Cached character-page fix could not find: ${label}`);
+  throw new Error(`Translation click-through fix could not find: ${label}`);
 }
 
 // ===========================================================================
-// READY CACHE LOADER
+// CHARACTER PROFILE + CHAT LOCALIZATION
 //
-// EverBond already has pre-generated translations in Supabase. The selected
-// character profile/chat page should use those rows directly instead of trying
-// to generate anything or rejecting a ready row because a derived source hash
-// changed elsewhere.
+// Discover already works through POST /api/character-localizations.
+// Use that exact same cache-only endpoint for a selected character instead of
+// the separate /api/characters/[slug] route.
 //
-// This helper:
-// - reads character_translations only
-// - requires status = "ready"
-// - never calls Venice
-// - never writes translations
-// - applies the existing stored translation content to the current character
+// The batch endpoint already reads Supabase character_translations and calls
+// localizeCharacters with allowProvider:false, so this cannot create new
+// Venice translation spend.
 // ===========================================================================
 
-const localizationPath = "src/lib/character-localization.ts";
-let localization = read(localizationPath);
+const hookPath = "src/components/character/useLocalizedCharacter.ts";
+let hook = read(hookPath);
 
-if (!localization.includes("localizeCharacterFromReadyCache")) {
-  localization += `
+if (!hook.includes("CHARACTER_CLICKTHROUGH_USES_DISCOVER_CACHE")) {
+  const startMarker = "    void fetch(\n      `/api/characters/";
+  const endMarker = "\n\n    return () => {";
+  const start = hook.indexOf(startMarker);
+  const end = hook.indexOf(endMarker, Math.max(start, 0));
 
-export async function localizeCharacterFromReadyCache(
-  character: Character,
-  language: CharacterContentLanguage,
-  options?: {
-    translateTags?: boolean;
+  if (start < 0 || end < 0 || end <= start) {
+    throw new Error(
+      "Translation click-through fix could not find the selected-character fetch block."
+    );
   }
-): Promise<Character> {
-  if (language === "EN") return character;
 
-  const supabase = getSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from("character_translations")
-    .select("content")
-    .eq("character_id", character.id)
-    .eq("language", language)
-    .eq("status", "ready")
-    .maybeSingle();
+  const replacement = `    // CHARACTER_CLICKTHROUGH_USES_DISCOVER_CACHE
+    void fetch("/api/character-localizations", {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        slugs: [currentBaseCharacter.slug],
+        language
+      }),
+      cache: "no-store",
+      signal: controller.signal
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        const candidate =
+          Array.isArray(payload?.characters) && payload.characters.length
+            ? (payload.characters[0] as Character)
+            : null;
 
-  if (error) throw error;
-  if (!data?.content) return character;
+        if (!response.ok || !candidate) {
+          throw new Error("CHARACTER_LOCALIZATION_FAILED");
+        }
 
-  const parsed = TranslationItemSchema.safeParse(data.content);
-  if (!parsed.success) return character;
+        const translated = isLocalizedCharacterContent(
+          currentBaseCharacter,
+          candidate
+        );
 
-  return applyTranslation(
-    character,
-    parsed.data,
-    options?.translateTags !== false
-  );
-}
-`;
+        if (!cancelled && translated) {
+          setCharacter(candidate);
+          setLocalized(true);
+        }
+      })
+      .catch((error) => {
+        if (
+          error instanceof DOMException &&
+          error.name === "AbortError" &&
+          cancelled
+        ) {
+          return;
+        }
+
+        if (!cancelled) {
+          setCharacter(currentBaseCharacter);
+          setLocalized(false);
+        }
+      })
+      .finally(() => {
+        window.clearTimeout(timeout);
+        if (!cancelled) setLoading(false);
+      });`;
+
+  hook =
+    hook.slice(0, start) +
+    replacement +
+    hook.slice(end);
 }
 
 if (
-  !localization.includes("export async function localizeCharacterFromReadyCache(") ||
-  !localization.includes('.from("character_translations")') ||
-  !localization.includes('.eq("status", "ready")')
+  !hook.includes("CHARACTER_CLICKTHROUGH_USES_DISCOVER_CACHE") ||
+  !hook.includes('fetch("/api/character-localizations"') ||
+  !hook.includes('method: "POST"') ||
+  !hook.includes("slugs: [currentBaseCharacter.slug]")
 ) {
-  throw new Error("Ready-cache localization helper validation failed.");
+  throw new Error("Character click-through cache validation failed.");
 }
 
-write(localizationPath, localization);
+write(hookPath, hook);
 
 // ===========================================================================
-// SINGLE CHARACTER API
+// OPTIONAL USER CHAT IMAGE
 //
-// Both the selected profile page and chat page use this endpoint. Point it at
-// the existing ready-cache helper. This deliberately does NOT use the normal
-// localization function on this click-through path, so there is no provider
-// fallback and no source-hash rejection.
+// The single-character endpoint is still used elsewhere to refresh a user's
+// selected gallery/chat image. That optional lookup must never turn a valid
+// cached translation into a 500 response.
 // ===========================================================================
 
 const routePath = "src/app/api/characters/[slug]/route.ts";
@@ -99,41 +131,25 @@ let route = read(routePath);
 
 route = replaceRequired(
   route,
-  `import {
-  localizeCharacter,
-  type CharacterContentLanguage
-} from "@/lib/character-localization";`,
-  `import {
-  localizeCharacterFromReadyCache,
-  type CharacterContentLanguage
-} from "@/lib/character-localization";`,
-  "single-character localization import"
-);
-
-route = replaceRequired(
-  route,
-  `    const localized = await localizeCharacter(
-      character,
-      languageResult.data as CharacterContentLanguage,
-      { translateTags: true, allowProvider: false }
-    );`,
-  `    const localized = await localizeCharacterFromReadyCache(
-      character,
-      languageResult.data as CharacterContentLanguage,
-      { translateTags: true }
-    );`,
-  "single-character ready-cache call"
+  `    const selectedImage = userId
+      ? await selectedCharacterImageUrl(userId, character.id)
+      : null;`,
+  `    const selectedImage = userId
+      ? await selectedCharacterImageUrl(userId, character.id).catch(() => null)
+      : null;`,
+  "non-fatal selected chat image lookup"
 );
 
 if (
-  !route.includes("localizeCharacterFromReadyCache(") ||
-  route.includes("localizeCharacter(")
+  !route.includes(
+    "await selectedCharacterImageUrl(userId, character.id).catch(() => null)"
+  )
 ) {
-  throw new Error("Single-character ready-cache route validation failed.");
+  throw new Error("Selected chat image fallback validation failed.");
 }
 
 write(routePath, route);
 
 console.log(
-  "EVERBOND_CHARACTER_PAGE_CACHE_FINAL source=supabase-ready-cache provider=off translation-writes=off discover=unchanged media=unchanged"
+  "EVERBOND_TRANSLATION_CLICKTHROUGH_FINAL source=discover-cache-endpoint provider=off selected-image=nonfatal other-systems=unchanged"
 );
