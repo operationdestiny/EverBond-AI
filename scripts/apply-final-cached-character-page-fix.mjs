@@ -17,112 +17,23 @@ function write(relativePath, content) {
 function replaceRequired(source, from, to, label) {
   if (source.includes(to)) return source;
   if (source.includes(from)) return source.replace(from, to);
-  throw new Error(`Spanish chat intro fix could not find: ${label}`);
+  throw new Error(`Static chat intro fix could not find: ${label}`);
 }
 
 const spanishDataPath = "src/data/chat-intro-translations/es.json";
-if (!fs.existsSync(path.join(root, spanishDataPath))) {
-  throw new Error(`Missing exact Spanish chat intro data: ${spanishDataPath}`);
+const frenchDataPath = "src/data/chat-intro-translations/fr.json";
+
+for (const dataPath of [spanishDataPath, frenchDataPath]) {
+  if (!fs.existsSync(path.join(root, dataPath))) {
+    throw new Error(`Missing exact static chat intro data: ${dataPath}`);
+  }
 }
 
 const helperPath = "src/lib/chat-intro-localization.ts";
 
 write(
   helperPath,
-  `import spanishChatIntros from "@/data/chat-intro-translations/es.json";
-import { getSupabaseServiceClient } from "@/lib/supabase/server";
-import type { Character } from "@/types/character";
-
-export type ChatIntroLanguage = "EN" | "ES" | "FR" | "DE" | "JA" | "KO";
-
-type ChatIntroTranslationRow = {
-  opening_scenario: string | null;
-  first_message: string | null;
-};
-
-type StaticChatIntro = {
-  openingScenario: string;
-  firstMessage: string;
-};
-
-const SPANISH_CHAT_INTROS =
-  spanishChatIntros as Record<string, StaticChatIntro>;
-
-function applyChatIntro(
-  character: Character,
-  openingScenario: string,
-  firstMessage: string
-): Character {
-  return {
-    ...character,
-    description: openingScenario,
-    openingScenario,
-    openingMessage: firstMessage,
-    firstMessage
-  };
-}
-
-export async function localizeCharacterChatIntroFromCache(
-  character: Character,
-  language: ChatIntroLanguage
-): Promise<Character> {
-  if (language === "EN") return character;
-
-  // Exact, static Spanish translation for every official catalog character.
-  // No provider call and no Supabase read are needed for these rows.
-  if (language === "ES") {
-    const exact = SPANISH_CHAT_INTROS[String(character.id)];
-    const openingScenario =
-      typeof exact?.openingScenario === "string"
-        ? exact.openingScenario.trim()
-        : "";
-    const firstMessage =
-      typeof exact?.firstMessage === "string"
-        ? exact.firstMessage.trim()
-        : "";
-
-    if (openingScenario && firstMessage) {
-      return applyChatIntro(character, openingScenario, firstMessage);
-    }
-  }
-
-  // Keep the lightweight cache for future languages or any manually cached
-  // non-catalog character. This never calls a translation provider.
-  const supabase = getSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from("character_chat_translations")
-    .select("opening_scenario,first_message")
-    .eq("character_id", character.id)
-    .eq("language", language)
-    .maybeSingle();
-
-  if (!error) {
-    const row = data as ChatIntroTranslationRow | null;
-    const openingScenario =
-      typeof row?.opening_scenario === "string"
-        ? row.opening_scenario.trim()
-        : "";
-    const firstMessage =
-      typeof row?.first_message === "string"
-        ? row.first_message.trim()
-        : "";
-
-    if (openingScenario && firstMessage) {
-      return applyChatIntro(character, openingScenario, firstMessage);
-    }
-  } else {
-    console.warn("EVERBOND_CHAT_INTRO_TRANSLATION_CACHE_READ_FAILED", {
-      characterId: character.id,
-      language,
-      error: error.message
-    });
-  }
-
-  // Missing static/cache translation: keep the English intro.
-  // ChatShell still sends the selected language to the normal AI chat API.
-  return character;
-}
-`
+  `import spanishChatIntros from "@/data/chat-intro-translations/es.json";\nimport frenchChatIntros from "@/data/chat-intro-translations/fr.json";\nimport { getSupabaseServiceClient } from "@/lib/supabase/server";\nimport type { Character } from "@/types/character";\n\nexport type ChatIntroLanguage = "EN" | "ES" | "FR" | "DE" | "JA" | "KO";\n\ntype ChatIntroTranslationRow = {\n  opening_scenario: string | null;\n  first_message: string | null;\n};\n\ntype StaticChatIntro = {\n  openingScenario: string;\n  firstMessage: string;\n};\n\ntype StaticChatIntroMap = Record<string, StaticChatIntro>;\n\nconst STATIC_CHAT_INTROS: Partial<Record<ChatIntroLanguage, StaticChatIntroMap>> = {\n  ES: spanishChatIntros as StaticChatIntroMap,\n  FR: frenchChatIntros as StaticChatIntroMap\n};\n\nfunction applyChatIntro(\n  character: Character,\n  openingScenario: string,\n  firstMessage: string\n): Character {\n  return {\n    ...character,\n    description: openingScenario,\n    openingScenario,\n    openingMessage: firstMessage,\n    firstMessage\n  };\n}\n\nexport async function localizeCharacterChatIntroFromCache(\n  character: Character,\n  language: ChatIntroLanguage\n): Promise<Character> {\n  if (language === "EN") return character;\n\n  // Exact static translations for catalog languages shipped with the app.\n  // No translation provider and no Supabase read are needed for these rows.\n  const staticRows = STATIC_CHAT_INTROS[language];\n  if (staticRows) {\n    const exact = staticRows[String(character.id)];\n    const openingScenario =\n      typeof exact?.openingScenario === "string"\n        ? exact.openingScenario.trim()\n        : "";\n    const firstMessage =\n      typeof exact?.firstMessage === "string"\n        ? exact.firstMessage.trim()\n        : "";\n\n    if (openingScenario && firstMessage) {\n      return applyChatIntro(character, openingScenario, firstMessage);\n    }\n  }\n\n  // Keep the lightweight cache for future languages or any manually cached\n  // non-catalog character. This never calls a translation provider.\n  const supabase = getSupabaseServiceClient();\n  const { data, error } = await supabase\n    .from("character_chat_translations")\n    .select("opening_scenario,first_message")\n    .eq("character_id", character.id)\n    .eq("language", language)\n    .maybeSingle();\n\n  if (!error) {\n    const row = data as ChatIntroTranslationRow | null;\n    const openingScenario =\n      typeof row?.opening_scenario === "string"\n        ? row.opening_scenario.trim()\n        : "";\n    const firstMessage =\n      typeof row?.first_message === "string"\n        ? row.first_message.trim()\n        : "";\n\n    if (openingScenario && firstMessage) {\n      return applyChatIntro(character, openingScenario, firstMessage);\n    }\n  } else {\n    console.warn("EVERBOND_CHAT_INTRO_TRANSLATION_CACHE_READ_FAILED", {\n      characterId: character.id,\n      language,\n      error: error.message\n    });\n  }\n\n  // Missing static/cache translation: keep the English intro.\n  // ChatShell still sends the selected language to the normal AI chat API.\n  return character;\n}\n`
 );
 
 const routePath = "src/app/api/characters/[slug]/route.ts";
@@ -130,49 +41,22 @@ let route = read(routePath);
 
 route = replaceRequired(
   route,
-  `import {
-  localizeCharacter,
-  type CharacterContentLanguage
-} from "@/lib/character-localization";`,
-  `import {
-  localizeCharacterChatIntroFromCache,
-  type ChatIntroLanguage
-} from "@/lib/chat-intro-localization";`,
+  `import {\n  localizeCharacter,\n  type CharacterContentLanguage\n} from "@/lib/character-localization";`,
+  `import {\n  localizeCharacterChatIntroFromCache,\n  type ChatIntroLanguage\n} from "@/lib/chat-intro-localization";`,
   "selected character localization import"
 );
 
 route = replaceRequired(
   route,
-  `    const localized = await localizeCharacter(
-      character,
-      languageResult.data as CharacterContentLanguage,
-      { translateTags: true, allowProvider: false }
-    );`,
-  `    // EVERBOND_EXACT_STATIC_CHAT_INTRO_TRANSLATION
-    const localized = await localizeCharacterChatIntroFromCache(
-      character,
-      languageResult.data as ChatIntroLanguage
-    );`,
+  `    const localized = await localizeCharacter(\n      character,\n      languageResult.data as CharacterContentLanguage,\n      { translateTags: true, allowProvider: false }\n    );`,
+  `    // EVERBOND_EXACT_STATIC_CHAT_INTRO_TRANSLATION\n    const localized = await localizeCharacterChatIntroFromCache(\n      character,\n      languageResult.data as ChatIntroLanguage\n    );`,
   "selected character exact chat intro call"
 );
 
 route = replaceRequired(
   route,
-  `    const selectedImage = userId
-      ? await selectedCharacterImageUrl(userId, character.id)
-      : null;`,
-  `    const selectedImage = userId
-      ? await selectedCharacterImageUrl(userId, character.id).catch((error) => {
-          console.warn("EVERBOND_SELECTED_CHARACTER_IMAGE_OPTIONAL_FAILED", {
-            characterId: character.id,
-            error:
-              error instanceof Error
-                ? error.message
-                : "OPTIONAL_SELECTED_IMAGE_FAILED"
-          });
-          return null;
-        })
-      : null;`,
+  `    const selectedImage = userId\n      ? await selectedCharacterImageUrl(userId, character.id)\n      : null;`,
+  `    const selectedImage = userId\n      ? await selectedCharacterImageUrl(userId, character.id).catch((error) => {\n          console.warn("EVERBOND_SELECTED_CHARACTER_IMAGE_OPTIONAL_FAILED", {\n            characterId: character.id,\n            error:\n              error instanceof Error\n                ? error.message\n                : "OPTIONAL_SELECTED_IMAGE_FAILED"\n          });\n          return null;\n        })\n      : null;`,
   "optional selected image isolation"
 );
 
@@ -183,46 +67,8 @@ let chat = read(chatPath);
 
 chat = replaceRequired(
   chat,
-  `  if (language !== "EN" && (loading || !localized)) {
-    return (
-      <main className="flex h-[calc(100dvh-64px)] items-center justify-center px-4">
-        <section className="w-full max-w-2xl rounded-[2rem] border border-bond-rose/35 bg-white/[0.035] p-8 text-center shadow-[0_0_34px_rgba(255,92,168,0.08)]">
-          <p className={loading ? "animate-pulse text-bond-muted" : "text-bond-muted"}>
-            {loading ? copy.translatingCharacter : copy.translationUnavailable}
-          </p>
-        </section>
-      </main>
-    );
-  }
-
-  return (
-    <ChatShell
-      key={\`\${character.id}:\${language}:\${character.tagline}\`}
-      character={character}
-    />
-  );`,
-  `  if (language !== "EN" && loading) {
-    return (
-      <main className="flex h-[calc(100dvh-64px)] items-center justify-center px-4">
-        <section className="w-full max-w-2xl rounded-[2rem] border border-bond-rose/35 bg-white/[0.035] p-8 text-center shadow-[0_0_34px_rgba(255,92,168,0.08)]">
-          <p className="animate-pulse text-bond-muted">
-            {copy.translatingCharacter}
-          </p>
-        </section>
-      </main>
-    );
-  }
-
-  // EVERBOND_CHAT_INTRO_ENGLISH_FALLBACK
-  const renderedCharacter =
-    language !== "EN" && !localized ? baseCharacter : character;
-
-  return (
-    <ChatShell
-      key={\`\${renderedCharacter.id}:\${language}:\${renderedCharacter.tagline}\`}
-      character={renderedCharacter}
-    />
-  );`,
+  `  if (language !== "EN" && (loading || !localized)) {\n    return (\n      <main className="flex h-[calc(100dvh-64px)] items-center justify-center px-4">\n        <section className="w-full max-w-2xl rounded-[2rem] border border-bond-rose/35 bg-white/[0.035] p-8 text-center shadow-[0_0_34px_rgba(255,92,168,0.08)]">\n          <p className={loading ? "animate-pulse text-bond-muted" : "text-bond-muted"}>\n            {loading ? copy.translatingCharacter : copy.translationUnavailable}\n          </p>\n        </section>\n      </main>\n    );\n  }\n\n  return (\n    <ChatShell\n      key={\`\${character.id}:\${language}:\${character.tagline}\`}\n      character={character}\n    />\n  );`,
+  `  if (language !== "EN" && loading) {\n    return (\n      <main className="flex h-[calc(100dvh-64px)] items-center justify-center px-4">\n        <section className="w-full max-w-2xl rounded-[2rem] border border-bond-rose/35 bg-white/[0.035] p-8 text-center shadow-[0_0_34px_rgba(255,92,168,0.08)]">\n          <p className="animate-pulse text-bond-muted">\n            {copy.translatingCharacter}\n          </p>\n        </section>\n      </main>\n    );\n  }\n\n  // EVERBOND_CHAT_INTRO_ENGLISH_FALLBACK\n  const renderedCharacter =\n    language !== "EN" && !localized ? baseCharacter : character;\n\n  return (\n    <ChatShell\n      key={\`\${renderedCharacter.id}:\${language}:\${renderedCharacter.tagline}\`}\n      character={renderedCharacter}\n    />\n  );`,
   "non-blocking chat intro fallback"
 );
 
@@ -233,16 +79,8 @@ let legacy = read(legacyPath);
 
 legacy = replaceRequired(
   legacy,
-  `    const characters = await localizeCharacters(
-      result.characters,
-      parsed.data.language as CharacterContentLanguage,
-      { translateTags: true }
-    );`,
-  `    const characters = await localizeCharacters(
-      result.characters,
-      parsed.data.language as CharacterContentLanguage,
-      { translateTags: true, allowProvider: false }
-    );`,
+  `    const characters = await localizeCharacters(\n      result.characters,\n      parsed.data.language as CharacterContentLanguage,\n      { translateTags: true }\n    );`,
+  `    const characters = await localizeCharacters(\n      result.characters,\n      parsed.data.language as CharacterContentLanguage,\n      { translateTags: true, allowProvider: false }\n    );`,
   "legacy localized endpoint provider guard"
 );
 
@@ -261,14 +99,50 @@ if (!legacy.includes("allowProvider: false")) {
 const spanishRows = JSON.parse(
   fs.readFileSync(path.join(root, spanishDataPath), "utf8")
 );
-const spanishCount = Object.keys(spanishRows).length;
+const frenchRows = JSON.parse(
+  fs.readFileSync(path.join(root, frenchDataPath), "utf8")
+);
 
-if (spanishCount !== 2674) {
+function validateStaticRows(label, rows) {
+  const ids = Object.keys(rows);
+  if (ids.length !== 2674) {
+    throw new Error(`Expected 2674 exact ${label} chat intros, found ${ids.length}.`);
+  }
+
+  for (const [id, row] of Object.entries(rows)) {
+    const openingScenario =
+      typeof row?.openingScenario === "string" ? row.openingScenario.trim() : "";
+    const firstMessage =
+      typeof row?.firstMessage === "string" ? row.firstMessage.trim() : "";
+    if (!openingScenario || !firstMessage) {
+      throw new Error(`${label} static chat intro is incomplete for ${id}.`);
+    }
+    const extraKeys = Object.keys(row).filter(
+      (key) => key !== "openingScenario" && key !== "firstMessage"
+    );
+    if (extraKeys.length) {
+      throw new Error(
+        `${label} static chat intro has unexpected fields for ${id}: ${extraKeys.join(", ")}`
+      );
+    }
+  }
+
+  return ids;
+}
+
+const spanishIds = validateStaticRows("Spanish", spanishRows);
+const frenchIds = validateStaticRows("French", frenchRows);
+const spanishIdSet = new Set(spanishIds);
+const frenchIdSet = new Set(frenchIds);
+
+const missingFrenchIds = spanishIds.filter((id) => !frenchIdSet.has(id));
+const extraFrenchIds = frenchIds.filter((id) => !spanishIdSet.has(id));
+if (missingFrenchIds.length || extraFrenchIds.length) {
   throw new Error(
-    `Expected 2674 exact Spanish chat intros, found ${spanishCount}.`
+    `French/Spanish static ID mismatch: missingFrench=${missingFrenchIds.length} extraFrench=${extraFrenchIds.length}`
   );
 }
 
 console.log(
-  `EVERBOND_EXACT_CHAT_TRANSLATION spanish=${spanishCount}/2674 source=static-json fields=opening-scenario+first-message provider=off missing=english-fallback legacy-provider-route=off`
+  `EVERBOND_EXACT_CHAT_TRANSLATION spanish=${spanishIds.length}/2674 french=${frenchIds.length}/2674 source=static-json fields=opening-scenario+first-message provider=off missing=english-fallback legacy-provider-route=off`
 );
