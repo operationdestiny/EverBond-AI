@@ -1,16 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { ImageIcon, Phone, ShoppingBag } from "lucide-react";
+import { ImageIcon, ShoppingBag } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Character } from "@/types/character";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { InsufficientEverCoinModal } from "@/components/media/InsufficientEverCoinModal";
-import { VoiceCallModal } from "@/components/media/VoiceCallModal";
 import { useSiteLanguage } from "@/lib/site-language";
-import { MEDIA_COPY } from "@/lib/media-language";
 import { MEDIA_GALLERY_COPY } from "@/lib/media-gallery-language";
 import { EVERSHOP_COPY } from "@/lib/evershop-language";
 
@@ -28,7 +25,6 @@ export function ChatMediaBridge() {
   const pathname = usePathname();
   const slug = chatSlug(pathname);
   const { language } = useSiteLanguage();
-  const copy = MEDIA_COPY[language] ?? MEDIA_COPY.EN;
   const galleryCopy = MEDIA_GALLERY_COPY[language] ?? MEDIA_GALLERY_COPY.EN;
   const shopCopy = EVERSHOP_COPY[language] ?? EVERSHOP_COPY.EN;
   const {
@@ -40,8 +36,6 @@ export function ChatMediaBridge() {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [character, setCharacter] = useState<Character | null>(null);
   const [displayImage, setDisplayImage] = useState("");
-  const [callOpen, setCallOpen] = useState(false);
-  const [coinModal, setCoinModal] = useState(false);
 
   useEffect(() => {
     if (!slug) {
@@ -201,7 +195,7 @@ export function ChatMediaBridge() {
       candidates.forEach((image) => {
         const belongsToChatPortrait =
           image.closest("aside") ||
-          image.closest(".lg\\:hidden") ||
+          image.closest(".lg\:hidden") ||
           image.closest('[role="dialog"]');
 
         if (belongsToChatPortrait && image.src !== resolvedDisplayImage) {
@@ -241,15 +235,6 @@ export function ChatMediaBridge() {
 
   const toolbar = (
     <>
-      <button
-        type="button"
-        onClick={() => requireSession(() => setCallOpen(true))}
-        className="bond-pink-button inline-flex shrink-0 items-center gap-2 rounded-full border border-bond-rose/60 bg-bond-rose/10 px-5 py-2.5 text-sm font-bold text-white"
-      >
-        <Phone size={16} />
-        {copy.callCharacter(character.name)}
-      </button>
-
       <Link
         href={session ? `/character/${character.slug}/gallery` : "#"}
         onClick={(event) => {
@@ -274,31 +259,5 @@ export function ChatMediaBridge() {
     </>
   );
 
-  return (
-    <>
-      {createPortal(toolbar, mountNode)}
-
-      {session && (
-        <VoiceCallModal
-          open={callOpen}
-          character={character}
-          displayImage={displayImage || character.image}
-          session={session}
-          onInsufficientCoins={() => setCoinModal(true)}
-          onClose={(hadTurns) => {
-            setCallOpen(false);
-
-            if (hadTurns) {
-              window.location.reload();
-            }
-          }}
-        />
-      )}
-
-      <InsufficientEverCoinModal
-        open={coinModal}
-        onClose={() => setCoinModal(false)}
-      />
-    </>
-  );
+  return <>{createPortal(toolbar, mountNode)}</>;
 }

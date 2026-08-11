@@ -6,8 +6,7 @@ import {
   Gift,
   ImageIcon,
   LoaderCircle,
-  MessageCircleMore,
-  Phone
+  MessageCircleMore
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -58,7 +57,6 @@ function CoinsPageContent() {
   const { session, authReady, openAuthModal } = useAuth();
   const [busyPack, setBusyPack] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [callCost, setCallCost] = useState(30);
   const [imageCost, setImageCost] = useState(15);
   const [videoCost, setVideoCost] = useState(199);
 
@@ -70,13 +68,9 @@ function CoinsPageContent() {
         const payload = await response.json().catch(() => ({}));
         if (cancelled || !response.ok) return;
 
-        const nextCallCost = Number(payload?.callCostPerMinute);
         const nextImageCost = Number(payload?.imageCost);
         const nextVideoCost = Number(payload?.videoCost);
 
-        if (Number.isFinite(nextCallCost) && nextCallCost > 0) {
-          setCallCost(Math.trunc(nextCallCost));
-        }
         if (Number.isFinite(nextImageCost) && nextImageCost > 0) {
           setImageCost(Math.trunc(nextImageCost));
         }
@@ -116,12 +110,6 @@ function CoinsPageContent() {
       body: pageCopy.videosBody,
       rate:
         `${pageCopy.about} ${videoCost} EverCoin / ${pageCopy.videoUnit}`
-    },
-    {
-      icon: Phone,
-      title: pageCopy.voiceCallsTitle,
-      body: pageCopy.voiceCallsBody,
-      rate: `${callCost} EverCoin / ${pageCopy.minuteUnit}`
     }
   ];
 
@@ -244,7 +232,7 @@ function CoinsPageContent() {
         </p>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {items.map((item) => {
           const Icon = item.icon;
 
