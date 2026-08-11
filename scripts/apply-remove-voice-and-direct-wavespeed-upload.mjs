@@ -145,6 +145,41 @@ function removeVoiceMarketingCopy() {
   write(path, source);
 }
 
+function removeVoiceFromCoinsPage() {
+  const path = "src/app/coins/page.tsx";
+  if (!exists(path)) return;
+
+  let source = read(path);
+
+  source = source.replace(/,\n\s*Phone/g, "");
+  source = source.replace(/\n\s*const \[callCost, setCallCost\] = useState\(30\);/, "");
+  source = source.replace(/\n\s*const nextCallCost = Number\(payload\?\.callCostPerMinute\);/, "");
+  source = source.replace(
+    /\n\s*if \(Number\.isFinite\(nextCallCost\) && nextCallCost > 0\) \{\n\s*setCallCost\(Math\.trunc\(nextCallCost\)\);\n\s*\}/,
+    ""
+  );
+  source = source.replace(
+    /,\n\s*\{\n\s*icon: Phone,\n\s*title: pageCopy\.voiceCallsTitle,[\s\S]*?rate: `\$\{callCost\} EverCoin \/ \$\{pageCopy\.minuteUnit\}`\n\s*\}/,
+    ""
+  );
+
+  for (const forbidden of [
+    "Phone",
+    "callCost",
+    "setCallCost",
+    "nextCallCost",
+    "voiceCallsTitle",
+    "voiceCallsBody",
+    "minuteUnit"
+  ]) {
+    if (source.includes(forbidden)) {
+      throw new Error(`VOICE_REMOVE_VALIDATION_FAILED:coins-page:${forbidden}`);
+    }
+  }
+
+  write(path, source);
+}
+
 function directUploadHelperSource() {
   return String.raw`async function uploadReferenceImage(apiKey: string, dataUrl: string) {
   const reference = parseReferenceDataUrl(dataUrl);
@@ -241,6 +276,7 @@ removeVoiceFromChatToolbar();
 stubVoiceModal();
 simplifyMediaCopy();
 removeVoiceMarketingCopy();
+removeVoiceFromCoinsPage();
 applyWaveSpeedDirectUpload();
 
 console.log(
