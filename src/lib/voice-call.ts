@@ -14,22 +14,22 @@ export function voiceCallLimits() {
       Math.min(integerEnv("VOICE_CALL_IDLE_TIMEOUT_SECONDS", 90, 90), 90)
     ),
     maxAudioSeconds: Math.max(
-      4,
-      Math.min(integerEnv("VOICE_TURN_MAX_AUDIO_SECONDS", 12, 12), 18)
+      5,
+      Math.min(integerEnv("VOICE_TURN_MAX_AUDIO_SECONDS", 30, 30), 30)
     ),
     maxTurnsPerMinute: Math.max(
       1,
-      Math.min(integerEnv("VOICE_TURN_MAX_PER_MINUTE", 5, 5), 6)
+      Math.min(integerEnv("VOICE_TURN_MAX_PER_MINUTE", 4, 4), 4)
     ),
     maxReplyCharacters: Math.max(
-      80,
-      Math.min(integerEnv("VOICE_REPLY_MAX_CHARACTERS", 220, 220), 280)
+      120,
+      Math.min(integerEnv("VOICE_REPLY_MAX_CHARACTERS", 600, 600), 600)
     ),
     maxTtsCharactersPerMinute: Math.max(
-      220,
+      300,
       Math.min(
-        integerEnv("VOICE_TTS_MAX_CHARACTERS_PER_MINUTE", 520, 520),
-        700
+        integerEnv("VOICE_TTS_MAX_CHARACTERS_PER_MINUTE", 900, 900),
+        900
       )
     )
   };
@@ -125,7 +125,7 @@ export function limitVoiceReply(text: string, maximumCharacters: number) {
 
   if (
     last?.index !== undefined &&
-    last.index >= Math.floor(maximumCharacters * 0.35)
+    last.index >= Math.floor(maximumCharacters * 0.45)
   ) {
     return clipped.slice(0, last.index + last[0].length).trim();
   }
@@ -198,7 +198,7 @@ export async function removeCallAudio(userId: string, callId: string) {
 
   const paths = (data ?? [])
     .map((row) => row.audio_storage_path as string | null)
-    .filter((value): value is string => Boolean(value) && !value.startsWith("inline:"));
+    .filter((value): value is string => Boolean(value));
 
   if (paths.length) {
     const { error: removeError } = await supabase.storage
