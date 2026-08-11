@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 export function ChatLayoutCleanup() {
   const pathname = usePathname();
 
-  if (!pathname.startsWith("/chat/")) {
+  if (!pathname || !pathname.startsWith("/chat/")) {
     return null;
   }
 

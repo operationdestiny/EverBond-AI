@@ -11,9 +11,17 @@ import { useSiteLanguage } from "@/lib/site-language";
 import { MEDIA_GALLERY_COPY } from "@/lib/media-gallery-language";
 import { EVERSHOP_COPY } from "@/lib/evershop-language";
 
-function chatSlug(pathname: string) {
+function chatSlug(pathname: string | null) {
+  if (!pathname) return "";
+
   const match = pathname.match(/^\/chat\/([^/?#]+)\/?$/);
-  return match ? decodeURIComponent(match[1]) : "";
+  if (!match) return "";
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
 }
 
 type GalleryPayload = {
@@ -27,11 +35,7 @@ export function ChatMediaBridge() {
   const { language } = useSiteLanguage();
   const galleryCopy = MEDIA_GALLERY_COPY[language] ?? MEDIA_GALLERY_COPY.EN;
   const shopCopy = EVERSHOP_COPY[language] ?? EVERSHOP_COPY.EN;
-  const {
-    session,
-    authReady,
-    openCharacterAuthModal
-  } = useAuth();
+  const { session, authReady, openCharacterAuthModal } = useAuth();
 
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [character, setCharacter] = useState<Character | null>(null);
@@ -43,48 +47,52 @@ export function ChatMediaBridge() {
       return;
     }
 
-    let observer: MutationObserver | null = null;
+    let cancelled = false;
 
-    function attach() {
-      const input = document.querySelector<HTMLElement>(".bond-chat-input");
-      const footer = input?.parentElement;
+    function attachToolbar() {
+      if (cancelled) return;
 
-      if (!input || !footer) return false;
+      try {
+        const input = document.querySelector<HTMLElement>(".bond-chat-input");
+        const footer = input?.parentElement;
 
-      let mount = footer.querySelector<HTMLElement>(
-        '[data-everbond-media-toolbar="true"]'
-      );
+        if (!input || !footer || !footer.contains(input)) return;
 
-      if (!mount) {
-        mount = document.createElement("div");
-        mount.dataset.everbondMediaToolbar = "true";
-        mount.className =
-          "no-scrollbar mx-auto mb-2 flex max-w-4xl flex-nowrap items-center gap-2 overflow-x-auto";
-        footer.insertBefore(mount, input);
+        let mount = footer.querySelector<HTMLElement>(
+          '[data-everbond-media-toolbar="true"]'
+        );
+
+        if (!mount) {
+          mount = document.createElement("div");
+          mount.dataset.everbondMediaToolbar = "true";
+          mount.className =
+            "no-scrollbar mx-auto mb-2 flex max-w-4xl flex-nowrap items-center gap-2 overflow-x-auto";
+          footer.insertBefore(mount, input);
+        }
+
+        setMountNode((current) => (current === mount ? current : mount));
+      } catch (error) {
+        console.warn("EVERBOND_CHAT_MEDIA_TOOLBAR_ATTACH_FAILED", error);
       }
-
-      setMountNode(mount);
-      return true;
     }
 
-    if (!attach()) {
-      observer = new MutationObserver(() => {
-        if (attach()) observer?.disconnect();
-      });
-
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true
-      });
-    }
+    attachToolbar();
+    const interval = window.setInterval(attachToolbar, 500);
 
     return () => {
-      observer?.disconnect();
-      document
-        .querySelector<HTMLElement>(
-          '[data-everbond-media-toolbar="true"]'
-        )
-        ?.remove();
+      cancelled = true;
+      window.clearInterval(interval);
+      setMountNode(null);
+
+      try {
+        document
+          .querySelector<HTMLElement>(
+            '[data-everbond-media-toolbar="true"]'
+          )
+          ?.remove();
+      } catch {
+        // Optional toolbar cleanup must never take down the chat page.
+      }
     };
   }, [slug]);
 
@@ -105,10 +113,12 @@ export function ChatMediaBridge() {
         if (!cancelled && response.ok && payload?.character) {
           const nextCharacter = payload.character as Character;
           setCharacter(nextCharacter);
-          setDisplayImage(nextCharacter.image);
+          setDisplayImage(nextCharacter.image || "");
         }
       })
-      .catch(() => undefined);
+      .catch((error) => {
+        console.warn("EVERBOND_CHAT_MEDIA_CHARACTER_LOAD_FAILED", error);
+      });
 
     return () => {
       cancelled = true;
@@ -138,21 +148,24 @@ export function ChatMediaBridge() {
           )
         : null;
 
-      setDisplayImage(selected?.url || character.image);
-    } catch {
-      setDisplayImage(character.image);
+      setDisplayImage(selected?.url || character.image || "");
+    } catch (error) {
+      console.warn("EVERBOND_CHAT_SELECTED_IMAGE_LOAD_FAILED", error);
+      setDisplayImage(character.image || "");
     }
   }, [character, session?.access_token, slug]);
 
   useEffect(() => {
     void loadSelectedImage();
 
+    if (!slug || !session?.access_token || !character) return;
+
     const interval = window.setInterval(() => {
       void loadSelectedImage();
     }, 45 * 60 * 1000);
 
     return () => window.clearInterval(interval);
-  }, [loadSelectedImage]);
+  }, [character, loadSelectedImage, session?.access_token, slug]);
 
   useEffect(() => {
     function refreshSelectedImage(event: Event) {
@@ -180,52 +193,75 @@ export function ChatMediaBridge() {
   useEffect(() => {
     if (!slug || !displayImage || !character?.name) return;
 
-    const resolvedDisplayImage = new URL(
-      displayImage,
-      window.location.href
-    ).href;
+    let resolvedDisplayImage = displayImage;
+
+    try {
+      resolvedDisplayImage = new URL(
+        displayImage,
+        window.location.href
+      ).href;
+    } catch {
+      // A malformed optional image URL should never crash the chat page.
+    }
 
     const updateImages = () => {
-      const candidates = Array.from(
-        document.querySelectorAll<HTMLImageElement>(
-          `.v18-main img[alt="${CSS.escape(character.name)}"]`
-        )
-      );
+      try {
+        const candidates = Array.from(
+          document.querySelectorAll<HTMLImageElement>(".v18-main img")
+        ).filter((image) => image.alt === character.name);
 
-      candidates.forEach((image) => {
-        const belongsToChatPortrait =
-          image.closest("aside") ||
-          image.closest(".lg\:hidden") ||
-          image.closest('[role="dialog"]');
+        candidates.forEach((image) => {
+          const belongsToChatPortrait =
+            image.closest("aside") ||
+            image.closest(".lg\\:hidden") ||
+            image.closest('[role="dialog"]');
 
-        if (belongsToChatPortrait && image.src !== resolvedDisplayImage) {
-          image.src = displayImage;
-        }
-      });
+          if (
+            belongsToChatPortrait &&
+            image.src !== resolvedDisplayImage
+          ) {
+            image.src = displayImage;
+          }
+        });
+      } catch (error) {
+        console.warn("EVERBOND_CHAT_PORTRAIT_SYNC_FAILED", error);
+      }
     };
 
     updateImages();
 
     const observer = new MutationObserver(updateImages);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["src"]
-    });
+
+    try {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["src"]
+      });
+    } catch (error) {
+      console.warn("EVERBOND_CHAT_PORTRAIT_OBSERVER_FAILED", error);
+    }
 
     return () => observer.disconnect();
   }, [character?.name, displayImage, slug]);
 
-  if (!slug || !character || !mountNode) return null;
+  if (
+    !slug ||
+    !character ||
+    !mountNode ||
+    !mountNode.isConnected
+  ) {
+    return null;
+  }
 
   function requireSession(action: () => void) {
-    if (!authReady) return;
+    if (!authReady || !character) return;
 
     if (!session) {
       openCharacterAuthModal({
-        name: character!.name,
-        image: displayImage || character!.image
+        name: character.name,
+        image: displayImage || character.image
       });
       return;
     }
@@ -259,5 +295,10 @@ export function ChatMediaBridge() {
     </>
   );
 
-  return <>{createPortal(toolbar, mountNode)}</>;
+  try {
+    return <>{createPortal(toolbar, mountNode)}</>;
+  } catch (error) {
+    console.warn("EVERBOND_CHAT_MEDIA_PORTAL_FAILED", error);
+    return null;
+  }
 }
