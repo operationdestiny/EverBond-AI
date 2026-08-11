@@ -167,69 +167,71 @@ function applyWaveSpeedDirectUploadToTemplate() {
     "src/lib/wavespeed-video.ts"
   ];
 
-  const replacement = String.raw`async function uploadReferenceImage(apiKey: string, dataUrl: string) {
-  const reference = parseReferenceDataUrl(dataUrl);
-
-  const ticketResponse = await fetch(`${WAVESPEED_API_BASE}/media/uploads`, {
-    method: "POST",
-    headers: providerHeaders(apiKey),
-    body: JSON.stringify({
-      filename: reference.filename,
-      size: reference.bytes.length,
-      content_type: reference.contentType
-    }),
-    signal: AbortSignal.timeout(30_000)
-  });
-
-  const ticketPayload = await ticketResponse.json().catch(() => null);
-  if (!ticketResponse.ok || Number(ticketPayload?.code ?? 200) !== 200) {
-    const detail = String(
-      ticketPayload?.message ?? `HTTP_${ticketResponse.status}`
-    ).slice(0, 300);
-    throw new Error(`WAVESPEED_UPLOAD_TICKET_FAILED:${detail}`);
-  }
-
-  const ticket = ticketPayload?.data;
-  const upload = ticket?.upload;
-  const uploadUrl = typeof upload?.url === "string" ? upload.url : "";
-  const uploadMethod =
-    typeof upload?.method === "string" ? upload.method.toUpperCase() : "PUT";
-  const uploadHeaders =
-    upload?.headers && typeof upload.headers === "object" ? upload.headers : {};
-
-  if (!uploadUrl || !uploadUrl.startsWith("https://")) {
-    throw new Error("WAVESPEED_UPLOAD_URL_MISSING");
-  }
-
-  const uploadResponse = await fetch(uploadUrl, {
-    method: uploadMethod,
-    headers: uploadHeaders as HeadersInit,
-    body: new Uint8Array(reference.bytes),
-    signal: AbortSignal.timeout(180_000)
-  });
-
-  if (!uploadResponse.ok) {
-    const detail = (await uploadResponse.text().catch(() => "")).slice(0, 300);
-    throw new Error(
-      `WAVESPEED_DIRECT_UPLOAD_FAILED:${uploadResponse.status}:${detail}`
-    );
-  }
-
-  const url =
-    typeof ticket?.download_url === "string"
-      ? ticket.download_url
-      : typeof ticket?.url === "string"
-        ? ticket.url
-        : "";
-
-  if (!url || !url.startsWith("https://")) {
-    throw new Error("WAVESPEED_UPLOAD_URL_MISSING");
-  }
-
-  return url;
-}
-
-function safetyFieldRejected`;
+  const replacement = [
+    "async function uploadReferenceImage(apiKey: string, dataUrl: string) {",
+    "  const reference = parseReferenceDataUrl(dataUrl);",
+    "",
+    "  const ticketResponse = await fetch(`${WAVESPEED_API_BASE}/media/uploads`, {",
+    "    method: \"POST\",",
+    "    headers: providerHeaders(apiKey),",
+    "    body: JSON.stringify({",
+    "      filename: reference.filename,",
+    "      size: reference.bytes.length,",
+    "      content_type: reference.contentType",
+    "    }),",
+    "    signal: AbortSignal.timeout(30_000)",
+    "  });",
+    "",
+    "  const ticketPayload = await ticketResponse.json().catch(() => null);",
+    "  if (!ticketResponse.ok || Number(ticketPayload?.code ?? 200) !== 200) {",
+    "    const detail = String(",
+    "      ticketPayload?.message ?? `HTTP_${ticketResponse.status}`",
+    "    ).slice(0, 300);",
+    "    throw new Error(`WAVESPEED_UPLOAD_TICKET_FAILED:${detail}`);",
+    "  }",
+    "",
+    "  const ticket = ticketPayload?.data;",
+    "  const upload = ticket?.upload;",
+    "  const uploadUrl = typeof upload?.url === \"string\" ? upload.url : \"\";",
+    "  const uploadMethod =",
+    "    typeof upload?.method === \"string\" ? upload.method.toUpperCase() : \"PUT\";",
+    "  const uploadHeaders =",
+    "    upload?.headers && typeof upload.headers === \"object\" ? upload.headers : {};",
+    "",
+    "  if (!uploadUrl || !uploadUrl.startsWith(\"https://\")) {",
+    "    throw new Error(\"WAVESPEED_UPLOAD_URL_MISSING\");",
+    "  }",
+    "",
+    "  const uploadResponse = await fetch(uploadUrl, {",
+    "    method: uploadMethod,",
+    "    headers: uploadHeaders as HeadersInit,",
+    "    body: new Uint8Array(reference.bytes),",
+    "    signal: AbortSignal.timeout(180_000)",
+    "  });",
+    "",
+    "  if (!uploadResponse.ok) {",
+    "    const detail = (await uploadResponse.text().catch(() => \"\")).slice(0, 300);",
+    "    throw new Error(",
+    "      `WAVESPEED_DIRECT_UPLOAD_FAILED:${uploadResponse.status}:${detail}`",
+    "    );",
+    "  }",
+    "",
+    "  const url =",
+    "    typeof ticket?.download_url === \"string\"",
+    "      ? ticket.download_url",
+    "      : typeof ticket?.url === \"string\"",
+    "        ? ticket.url",
+    "        : \"\";",
+    "",
+    "  if (!url || !url.startsWith(\"https://\")) {",
+    "    throw new Error(\"WAVESPEED_UPLOAD_URL_MISSING\");",
+    "  }",
+    "",
+    "  return url;",
+    "}",
+    "",
+    "function safetyFieldRejected"
+  ].join("\n");
 
   for (const relativePath of paths) {
     if (!exists(relativePath)) continue;
