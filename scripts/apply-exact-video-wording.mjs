@@ -38,6 +38,10 @@ function removeVoiceMarketingFromWhyEverBond() {
     /\n\s*\{\n\s*"key": "live-video-calls",[\s\S]*?\n\s*\},(?=\n\s*\{\n\s*"key": "video-generation")/g,
     ""
   );
+  source = source.replace(
+    /\n\s*"live-video-calls": "live-video-calls\.webp",/g,
+    ""
+  );
 
   const replacements = [
     ["unrestricted private chats, uncensored image and video creation, live uncensored voice video calls, meaningful gifts", "unrestricted private chats, uncensored image and video creation, meaningful gifts"],
