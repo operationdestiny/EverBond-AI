@@ -126,8 +126,9 @@ function removeVoiceMarketingCopy() {
     source = source.split(before).join(after);
   }
 
+  // Do not treat the internal image key name live-video-calls as public copy.
+  // It can remain in static asset maps without showing voice-call wording to users.
   for (const forbidden of [
-    "live-video-calls",
     "voice calls",
     "voice video calls",
     "voice-call",
