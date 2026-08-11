@@ -9,25 +9,22 @@ import {
   failVoiceCallTurn,
   prepareVoiceCallTurn
 } from "@/lib/evercoin";
-import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getCharacterBySlugForUser } from "@/lib/user-characters";
 import {
   createVoiceAudioSignedUrl,
   inspectPcmWav,
-  VOICE_CALL_AUDIO_BUCKET,
   voiceCallLimits,
   voiceMinuteTtsBudget
 } from "@/lib/voice-call";
 import {
-  generateVoiceCharacterDraft,
-  normalizeVoiceTranscript,
-  updateVoiceMemoryAfterCommit
-} from "@/lib/voice-chat";
+  generateFastVoiceCharacterDraft,
+  normalizeFastVoiceTranscript
+} from "@/lib/voice-fast-chat";
 import type { SupportedLanguage } from "@/lib/ai/prompts";
 import { veniceApiUrl } from "@/lib/venice-media";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 30;
 
 const SupportedLanguageSchema = z.enum([
   "English",
@@ -65,6 +62,16 @@ function providerMessage(payload: unknown, fallback: string) {
   return fallback;
 }
 
+function timeoutMs(name: string, fallback: number) {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(4_000, Math.min(Math.trunc(value), 20_000));
+}
+
+function audioDataUrl(buffer: Buffer, contentType: string) {
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
+}
+
 async function transcribeAudio(audio: File, language: SupportedLanguage) {
   const apiKey = process.env.VENICE_API_KEY;
   if (!apiKey) throw new Error("VENICE_NOT_CONFIGURED");
@@ -79,15 +86,12 @@ async function transcribeAudio(audio: File, language: SupportedLanguage) {
   providerForm.set("timestamps", "false");
   providerForm.set("language", STT_LANGUAGE[language]);
 
-  const response = await fetch(
-    veniceApiUrl("audio/transcriptions"),
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: providerForm,
-      signal: AbortSignal.timeout(45_000)
-    }
-  );
+  const response = await fetch(veniceApiUrl("audio/transcriptions"), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: providerForm,
+    signal: AbortSignal.timeout(timeoutMs("VOICE_STT_TIMEOUT_MS", 12_000))
+  });
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -97,7 +101,7 @@ async function transcribeAudio(audio: File, language: SupportedLanguage) {
   }
 
   const text = typeof payload?.text === "string" ? payload.text.trim() : "";
-  return normalizeVoiceTranscript(text);
+  return normalizeFastVoiceTranscript(text);
 }
 
 async function synthesizeSpeech(values: {
@@ -127,13 +131,13 @@ async function synthesizeSpeech(values: {
       input: values.text,
       language: values.language,
       prompt: voice.prompt,
-      speed: voice.speed,
+      speed: Math.max(Number(voice.speed ?? 1), 1.02),
       temperature: voice.temperature,
       top_p: voice.topP,
       streaming: false,
       response_format: "opus"
     }),
-    signal: AbortSignal.timeout(45_000)
+    signal: AbortSignal.timeout(timeoutMs("VOICE_TTS_TIMEOUT_MS", 12_000))
   });
 
   if (!response.ok) {
@@ -149,7 +153,7 @@ async function synthesizeSpeech(values: {
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());
-  if (!buffer.length || buffer.length > 5 * 1024 * 1024) {
+  if (!buffer.length || buffer.length > 4 * 1024 * 1024) {
     throw new Error("SPEECH_INVALID_FILE");
   }
 
@@ -164,6 +168,13 @@ async function existingTurnResponse(values: {
   inputTokens: number;
   outputTokens: number;
 }) {
+  if (values.audioPath.startsWith("inline:")) {
+    return NextResponse.json(
+      { error: "VOICE_TURN_REPLAY_UNAVAILABLE" },
+      { status: 409, headers: { "Cache-Control": "private, no-store" } }
+    );
+  }
+
   return NextResponse.json(
     {
       ok: true,
@@ -186,7 +197,6 @@ export async function POST(request: Request) {
   let callId = "";
   let requestId = "";
   let claimed = false;
-  let uploadedPath = "";
 
   try {
     const user = await getAuthenticatedUser(request);
@@ -332,7 +342,7 @@ export async function POST(request: Request) {
       maximumCharacters: limits.maxTtsCharactersPerMinute
     });
 
-    if (ttsBudget.remaining < 80) {
+    if (ttsBudget.remaining < 60) {
       await failVoiceCallTurn({
         userId: user.id,
         callId,
@@ -341,10 +351,7 @@ export async function POST(request: Request) {
       }).catch(() => undefined);
 
       return NextResponse.json(
-        {
-          error: "RATE_LIMITED",
-          retryAfter: ttsBudget.retryAfterSeconds
-        },
+        { error: "RATE_LIMITED", retryAfter: ttsBudget.retryAfterSeconds },
         {
           status: 429,
           headers: { "Retry-After": String(ttsBudget.retryAfterSeconds) }
@@ -353,16 +360,14 @@ export async function POST(request: Request) {
     }
 
     const transcript = await transcribeAudio(audio, parsed.data.language);
-    const generated = await generateVoiceCharacterDraft({
+    const generated = await generateFastVoiceCharacterDraft({
       userId: user.id,
+      callId,
       character,
       transcript,
       language: parsed.data.language,
       conversationId: parsed.data.conversationId,
-      maxReplyCharacters: Math.min(
-        limits.maxReplyCharacters,
-        ttsBudget.remaining
-      )
+      maxReplyCharacters: Math.min(limits.maxReplyCharacters, ttsBudget.remaining)
     });
     const speech = await synthesizeSpeech({
       characterSlug: parsed.data.characterSlug,
@@ -371,17 +376,7 @@ export async function POST(request: Request) {
       language: parsed.data.language
     });
 
-    uploadedPath = `${user.id}/${callId}/${requestId}.opus`;
-    const upload = await getSupabaseServiceClient().storage
-      .from(VOICE_CALL_AUDIO_BUCKET)
-      .upload(uploadedPath, speech.buffer, {
-        contentType: speech.contentType,
-        upsert: false,
-        cacheControl: "900"
-      });
-
-    if (upload.error) throw upload.error;
-
+    const inlineAudioPath = `inline:${requestId}`;
     const completed = await completeVoiceCallTurn({
       userId: user.id,
       callId,
@@ -389,18 +384,12 @@ export async function POST(request: Request) {
       conversationId: generated.conversationId,
       transcript,
       reply: generated.reply,
-      audioPath: uploadedPath,
+      audioPath: inlineAudioPath,
       inputTokens: generated.inputTokens,
       outputTokens: generated.outputTokens
     });
 
     if (!completed) throw new Error("VOICE_TURN_COMPLETION_FAILED");
-
-    const memoryUsage = await updateVoiceMemoryAfterCommit({
-      userId: user.id,
-      character,
-      draft: generated
-    });
 
     return NextResponse.json(
       {
@@ -408,15 +397,15 @@ export async function POST(request: Request) {
         transcript,
         reply: generated.reply,
         conversationId: generated.conversationId,
-        audioUrl: await createVoiceAudioSignedUrl(uploadedPath),
+        audioUrl: audioDataUrl(speech.buffer, speech.contentType),
         billing: {
           minute: billing.currentMinute,
           newlyCharged: billing.newlyCharged,
           balance: billing.balance
         },
         usage: {
-          inputTokens: generated.inputTokens + memoryUsage.inputTokens,
-          outputTokens: generated.outputTokens + memoryUsage.outputTokens,
+          inputTokens: generated.inputTokens,
+          outputTokens: generated.outputTokens,
           provider: generated.provider,
           model: generated.model,
           audioSeconds: Number(wavInfo.durationSeconds.toFixed(2))
@@ -428,20 +417,13 @@ export async function POST(request: Request) {
     const errorCode =
       error instanceof Error ? error.message.slice(0, 200) : "VOICE_TURN_FAILED";
 
-    if (uploadedPath) {
-      await getSupabaseServiceClient().storage
-        .from(VOICE_CALL_AUDIO_BUCKET)
-        .remove([uploadedPath])
-        .catch(() => undefined);
-    }
-
     if (claimed && userId && callId && requestId) {
       await failVoiceCallTurn({ userId, callId, requestId, errorCode }).catch(
         () => undefined
       );
     }
 
-    console.error("Voice turn failed:", error);
+    console.error("Fast voice turn failed:", error);
     return NextResponse.json(
       { error: "VOICE_TURN_FAILED" },
       { status: 500 }
