@@ -30,7 +30,7 @@ export const EVERCOIN_PAGE_COPY: Record<
   EN: {
     title: "One currency for everything on EverBond.",
     description:
-      "Use EverCoin for uncensored messages, gifts, uncensored companion images, uncensored companion videos, and live uncensored voice calls.",
+      "Use EverCoin for uncensored messages, gifts, uncensored companion images and uncensored companion videos.",
     messagesTitle: "Messages",
     messagesBody:
       "Say what you actually mean. Explore romance, intimacy, fantasy, comfort, conflict, and roleplay without refusals or watered-down replies.",
@@ -56,7 +56,7 @@ export const EVERCOIN_PAGE_COPY: Record<
   ES: {
     title: "Una moneda para todo en EverBond.",
     description:
-      "Usa EverCoin para mensajes sin censura, regalos, imágenes sin censura de tu compañero, vídeos sin censura de tu compañero y videollamadas de voz en directo sin censura.",
+      "Usa EverCoin para mensajes sin censura, regalos, imágenes sin censura de tu compañero y vídeos sin censura de tu compañero.",
     messagesTitle: "Mensajes",
     messagesBody:
       "Di lo que realmente quieres decir. Explora romance, intimidad, fantasía, consuelo, conflicto y rol sin rechazos ni respuestas diluidas.",
@@ -83,7 +83,7 @@ export const EVERCOIN_PAGE_COPY: Record<
   FR: {
     title: "Une seule monnaie pour tout sur EverBond.",
     description:
-      "Utilisez EverCoin pour les messages non censurés, les cadeaux, les images de compagnon non censurées, les vidéos de compagnon non censurées et les appels vidéo vocaux en direct non censurés.",
+      "Utilisez EverCoin pour les messages non censurés, les cadeaux, les images de compagnon non censurées et les vidéos de compagnon non censurées.",
     messagesTitle: "Messages",
     messagesBody:
       "Dites ce que vous pensez vraiment. Explorez la romance, l’intimité, la fantaisie, le réconfort, le conflit et le jeu de rôle sans refus ni réponses édulcorées.",
@@ -111,7 +111,7 @@ export const EVERCOIN_PAGE_COPY: Record<
   DE: {
     title: "Eine Währung für alles auf EverBond.",
     description:
-      "Nutze EverCoin für unzensierte Nachrichten, Geschenke, unzensierte Begleiterbilder, unzensierte Begleitervideos und unzensierte Live-Voice-Videoanrufe.",
+      "Nutze EverCoin für unzensierte Nachrichten, Geschenke, unzensierte Begleiterbilder und unzensierte Begleitervideos.",
     messagesTitle: "Nachrichten",
     messagesBody:
       "Sag, was du wirklich meinst. Erlebe Romantik, Intimität, Fantasie, Trost, Konflikte und Rollenspiel ohne Ablehnungen oder verwässerte Antworten.",
@@ -137,7 +137,7 @@ export const EVERCOIN_PAGE_COPY: Record<
   JA: {
     title: "EverBondのすべてに使えるひとつの通貨。",
     description:
-      "EverCoinは、無検閲のメッセージ、ギフト、無検閲のコンパニオン画像、無検閲のコンパニオン動画、無検閲のライブ音声ビデオ通話に使えます。",
+      "EverCoinは、無検閲のメッセージ、ギフト、無検閲のコンパニオン画像、無検閲のコンパニオン動画に使えます。",
     messagesTitle: "メッセージ",
     messagesBody:
       "本当に言いたいことを伝えましょう。拒否や薄められた返答なしで、ロマンス、親密さ、ファンタジー、癒やし、対立、ロールプレイを楽しめます。",
@@ -164,7 +164,7 @@ export const EVERCOIN_PAGE_COPY: Record<
   KO: {
     title: "EverBond의 모든 기능을 위한 하나의 화폐.",
     description:
-      "EverCoin으로 무검열 메시지, 선물, 무검열 컴패니언 이미지, 무검열 컴패니언 동영상, 무검열 라이브 음성 영상 통화를 이용하세요.",
+      "EverCoin으로 무검열 메시지, 선물, 무검열 컴패니언 이미지와 무검열 컴패니언 동영상을 이용하세요.",
     messagesTitle: "메시지",
     messagesBody:
       "정말 하고 싶은 말을 하세요. 거절이나 약해진 답변 없이 로맨스, 친밀함, 판타지, 위로, 갈등, 역할극을 즐길 수 있습니다.",
