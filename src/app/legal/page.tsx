@@ -2,7 +2,19 @@
 
 import { AppShell } from "@/components/layout/AppShell";
 import { LEGAL_PAGE_COPY } from "@/lib/legal-page-language";
-import { useSiteLanguage } from "@/lib/site-language";
+import {
+  useSiteLanguage,
+  type LanguageCode
+} from "@/lib/site-language";
+
+const LLC_OPERATOR_COPY: Record<LanguageCode, string> = {
+  EN: "EverBond is operated by EverBond LLC. In these policies, references to EverBond mean the EverBond service operated by EverBond LLC.",
+  ES: "EverBond es operado por EverBond LLC. En estas políticas, las referencias a EverBond se refieren al servicio EverBond operado por EverBond LLC.",
+  FR: "EverBond est exploité par EverBond LLC. Dans les présentes politiques, les références à EverBond désignent le service EverBond exploité par EverBond LLC.",
+  DE: "EverBond wird von EverBond LLC betrieben. In diesen Richtlinien beziehen sich Verweise auf EverBond auf den von EverBond LLC betriebenen EverBond-Dienst.",
+  JA: "EverBondはEverBond LLCによって運営されています。本ポリシーにおけるEverBondへの言及は、EverBond LLCが運営するEverBondサービスを指します。",
+  KO: "EverBond는 EverBond LLC가 운영합니다. 본 정책에서 EverBond에 대한 언급은 EverBond LLC가 운영하는 EverBond 서비스를 의미합니다."
+};
 
 export default function LegalPage() {
   const { language } = useSiteLanguage();
@@ -54,6 +66,10 @@ export default function LegalPage() {
                     {section.title}
                   </h2>
                   <div className="mt-5 space-y-5 text-base leading-8 text-bond-muted">
+                    {section.id === "terms" && (
+                      <p>{LLC_OPERATOR_COPY[language]}</p>
+                    )}
+
                     {section.paragraphs.map(
                       (paragraph, index) => (
                         <p key={`${section.id}-${index}`}>
@@ -87,7 +103,7 @@ export default function LegalPage() {
 
                 <div className="mt-3 grid gap-x-8 gap-y-0.5 sm:grid-cols-2">
                   <p>{copy.dmcaAgent.department}</p>
-                  <p>{copy.dmcaAgent.organization}</p>
+                  <p>EverBond LLC</p>
                   <p>{copy.dmcaAgent.addressLine1}</p>
                   <p>{copy.dmcaAgent.addressLine2}</p>
                   <p>
