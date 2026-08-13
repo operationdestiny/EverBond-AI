@@ -4,7 +4,7 @@ import sourceRows from "@/data/chat-intro-translations/ja-source.json";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 type SourceRow = {
   id: string;
@@ -22,8 +22,8 @@ const SOURCE = sourceRows as SourceRow[];
 const JOB_TOKEN_SHA256 = "cddb4a3722bb559f048fe6a7996962813d59d18d744d48280ae2bd8cfea22553";
 const LANGUAGE = "JA";
 const TRANSLATOR = "venice:one-time-ja-intro-v1";
-const BATCH_SIZE = 6;
-const CONCURRENCY = 3;
+const BATCH_SIZE = 4;
+const CONCURRENCY = 20;
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -131,10 +131,7 @@ function validateTranslated(
 async function translateOnce(source: SourceRow[]) {
   const apiKey =
     process.env.VENICE_API_KEY || process.env.VENICE_INFERENCE_KEY;
-  const model =
-    process.env.VENICE_TRANSLATION_MODEL ||
-    process.env.VENICE_CHAT_MODEL ||
-    "venice-uncensored-role-play";
+  const model = "venice-uncensored";
 
   if (!apiKey) throw new Error("VENICE_NOT_CONFIGURED");
 
@@ -164,7 +161,8 @@ async function translateOnce(source: SourceRow[]) {
       ],
       temperature: 0.1,
       top_p: 0.9,
-      max_tokens: 12000,
+      max_completion_tokens: 6000,
+      response_format: { type: "json_object" },
       venice_parameters: {
         include_venice_system_prompt: false,
         enable_web_search: "off"
@@ -355,8 +353,8 @@ export async function GET(request: Request) {
     }
 
     if (action === "run") {
-      const rawLimit = Number(url.searchParams.get("limit") || 36);
-      const limit = Math.min(Math.max(Math.trunc(rawLimit), 1), 48);
+      const rawLimit = Number(url.searchParams.get("limit") || 80);
+      const limit = Math.min(Math.max(Math.trunc(rawLimit), 1), 80);
       return NextResponse.json(await runBatch(limit), {
         headers: { "Cache-Control": "private, no-store" }
       });
