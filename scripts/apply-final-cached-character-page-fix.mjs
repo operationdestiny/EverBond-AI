@@ -33,7 +33,7 @@ const helperPath = "src/lib/chat-intro-localization.ts";
 
 write(
   helperPath,
-  `import spanishChatIntros from "@/data/chat-intro-translations/es.json";\nimport frenchChatIntros from "@/data/chat-intro-translations/fr.json";\nimport { getSupabaseServiceClient } from "@/lib/supabase/server";\nimport type { Character } from "@/types/character";\n\nexport type ChatIntroLanguage = "EN" | "ES" | "FR" | "DE" | "JA" | "KO";\n\ntype ChatIntroTranslationRow = {\n  opening_scenario: string | null;\n  first_message: string | null;\n};\n\ntype StaticChatIntro = {\n  openingScenario: string;\n  firstMessage: string;\n};\n\ntype StaticChatIntroMap = Record<string, StaticChatIntro>;\n\nconst STATIC_CHAT_INTROS: Partial<Record<ChatIntroLanguage, StaticChatIntroMap>> = {\n  ES: spanishChatIntros as StaticChatIntroMap,\n  FR: frenchChatIntros as StaticChatIntroMap\n};\n\nfunction applyChatIntro(\n  character: Character,\n  openingScenario: string,\n  firstMessage: string\n): Character {\n  return {\n    ...character,\n    description: openingScenario,\n    openingScenario,\n    openingMessage: firstMessage,\n    firstMessage\n  };\n}\n\nexport async function localizeCharacterChatIntroFromCache(\n  character: Character,\n  language: ChatIntroLanguage\n): Promise<Character> {\n  if (language === "EN") return character;\n\n  // Exact static translations for catalog languages shipped with the app.\n  // No translation provider and no Supabase read are needed for these rows.\n  const staticRows = STATIC_CHAT_INTROS[language];\n  if (staticRows) {\n    const exact = staticRows[String(character.id)];\n    const openingScenario =\n      typeof exact?.openingScenario === "string"\n        ? exact.openingScenario.trim()\n        : "";\n    const firstMessage =\n      typeof exact?.firstMessage === "string"\n        ? exact.firstMessage.trim()\n        : "";\n\n    if (openingScenario && firstMessage) {\n      return applyChatIntro(character, openingScenario, firstMessage);\n    }\n  }\n\n  // Keep the lightweight cache for future languages or any manually cached\n  // non-catalog character. This never calls a translation provider.\n  const supabase = getSupabaseServiceClient();\n  const { data, error } = await supabase\n    .from("character_chat_translations")\n    .select("opening_scenario,first_message")\n    .eq("character_id", character.id)\n    .eq("language", language)\n    .maybeSingle();\n\n  if (!error) {\n    const row = data as ChatIntroTranslationRow | null;\n    const openingScenario =\n      typeof row?.opening_scenario === "string"\n        ? row.opening_scenario.trim()\n        : "";\n    const firstMessage =\n      typeof row?.first_message === "string"\n        ? row.first_message.trim()\n        : "";\n\n    if (openingScenario && firstMessage) {\n      return applyChatIntro(character, openingScenario, firstMessage);\n    }\n  } else {\n    console.warn("EVERBOND_CHAT_INTRO_TRANSLATION_CACHE_READ_FAILED", {\n      characterId: character.id,\n      language,\n      error: error.message\n    });\n  }\n\n  // Missing static/cache translation: keep the English intro.\n  // ChatShell still sends the selected language to the normal AI chat API.\n  return character;\n}\n`
+  `import spanishChatIntros from "@/data/chat-intro-translations/es.json";\nimport frenchChatIntros from "@/data/chat-intro-translations/fr.json";\nimport { getSupabaseServiceClient } from "@/lib/supabase/server";\nimport type { Character } from "@/types/character";\n\nexport type ChatIntroLanguage = "EN" | "ES" | "FR" | "DE" | "JA" | "KO";\n\ntype ChatIntroTranslationRow = {\n  opening_scenario: string | null;\n  first_message: string | null;\n};\n\ntype StaticChatIntro = {\n  openingScenario: string;\n  firstMessage: string;\n};\n\ntype StaticChatIntroMap = Record<string, StaticChatIntro>;\n\nconst STATIC_CHAT_INTROS: Partial<Record<ChatIntroLanguage, StaticChatIntroMap>> = {\n  ES: spanishChatIntros as StaticChatIntroMap,\n  FR: frenchChatIntros as StaticChatIntroMap\n};\n\nfunction applyChatIntro(\n  character: Character,\n  openingScenario: string,\n  firstMessage: string\n): Character {\n  return {\n    ...character,\n    description: openingScenario,\n    openingScenario,\n    openingMessage: firstMessage,\n    firstMessage\n  };\n}\n\nexport async function localizeCharacterChatIntroFromCache(\n  character: Character,\n  language: ChatIntroLanguage\n): Promise<Character> {\n  if (language === "EN") return character;\n\n  // Exact static translations shipped with the app.\n  // These require no translation provider and no network translation call.\n  const staticRows = STATIC_CHAT_INTROS[language];\n  if (staticRows) {\n    const exact = staticRows[String(character.id)];\n    const openingScenario =\n      typeof exact?.openingScenario === "string"\n        ? exact.openingScenario.trim()\n        : "";\n    const firstMessage =\n      typeof exact?.firstMessage === "string"\n        ? exact.firstMessage.trim()\n        : "";\n\n    if (openingScenario && firstMessage) {\n      return applyChatIntro(character, openingScenario, firstMessage);\n    }\n  }\n\n  // Japanese and any future cached language rows are read from Supabase.\n  // This never calls Venice or any translation provider.\n  const supabase = getSupabaseServiceClient();\n  const { data, error } = await supabase\n    .from("character_chat_translations")\n    .select("opening_scenario,first_message")\n    .eq("character_id", character.id)\n    .eq("language", language)\n    .maybeSingle();\n\n  if (!error) {\n    const row = data as ChatIntroTranslationRow | null;\n    const openingScenario =\n      typeof row?.opening_scenario === "string"\n        ? row.opening_scenario.trim()\n        : "";\n    const firstMessage =\n      typeof row?.first_message === "string"\n        ? row.first_message.trim()\n        : "";\n\n    if (openingScenario && firstMessage) {\n      return applyChatIntro(character, openingScenario, firstMessage);\n    }\n  } else {\n    console.warn("EVERBOND_CHAT_INTRO_TRANSLATION_CACHE_READ_FAILED", {\n      characterId: character.id,\n      language,\n      error: error.message\n    });\n  }\n\n  return character;\n}\n`
 );
 
 const routePath = "src/app/api/characters/[slug]/route.ts";
@@ -62,17 +62,34 @@ route = replaceRequired(
 
 write(routePath, route);
 
+// IMPORTANT: Do not replace LocalizedChatShell with an English fallback.
+// When ES/FR/JA is selected, the chat must wait for the matching localized
+// character rather than rendering the English base character.
 const chatPath = "src/components/chat/LocalizedChatShell.tsx";
-let chat = read(chatPath);
+const chat = read(chatPath);
+const blockingLanguageGate =
+  `  if (language !== "EN" && (loading || !localized)) {`;
 
-chat = replaceRequired(
-  chat,
-  `  if (language !== "EN" && (loading || !localized)) {\n    return (\n      <main className="flex h-[calc(100dvh-64px)] items-center justify-center px-4">\n        <section className="w-full max-w-2xl rounded-[2rem] border border-bond-rose/35 bg-white/[0.035] p-8 text-center shadow-[0_0_34px_rgba(255,92,168,0.08)]">\n          <p className={loading ? "animate-pulse text-bond-muted" : "text-bond-muted"}>\n            {loading ? copy.translatingCharacter : copy.translationUnavailable}\n          </p>\n        </section>\n      </main>\n    );\n  }\n\n  return (\n    <ChatShell\n      key={\`\${character.id}:\${language}:\${character.tagline}\`}\n      character={character}\n    />\n  );`,
-  `  if (language !== "EN" && loading) {\n    return (\n      <main className="flex h-[calc(100dvh-64px)] items-center justify-center px-4">\n        <section className="w-full max-w-2xl rounded-[2rem] border border-bond-rose/35 bg-white/[0.035] p-8 text-center shadow-[0_0_34px_rgba(255,92,168,0.08)]">\n          <p className="animate-pulse text-bond-muted">\n            {copy.translatingCharacter}\n          </p>\n        </section>\n      </main>\n    );\n  }\n\n  // EVERBOND_CHAT_INTRO_ENGLISH_FALLBACK\n  const renderedCharacter =\n    language !== "EN" && !localized ? baseCharacter : character;\n\n  return (\n    <ChatShell\n      key={\`\${renderedCharacter.id}:\${language}:\${renderedCharacter.tagline}\`}\n      character={renderedCharacter}\n    />\n  );`,
-  "non-blocking chat intro fallback"
+if (!chat.includes(blockingLanguageGate)) {
+  throw new Error(
+    "Localized chat must block English fallback while a non-English language is selected."
+  );
+}
+
+// Keep the first visible chat message synchronized with the localized
+// character prop. This makes a language switch update the intro even when
+// ChatShell stays mounted with existing client state.
+const chatShellPath = "src/components/chat/ChatShell.tsx";
+let chatShell = read(chatShellPath);
+
+chatShell = replaceRequired(
+  chatShell,
+  `  const [messages, setMessages] = useState<Message[]>([\n    { role: "character", content: initialCharacterMessage }\n  ]);\n  const [input, setInput] = useState("");`,
+  `  const [messages, setMessages] = useState<Message[]>([\n    { role: "character", content: initialCharacterMessage }\n  ]);\n\n  // EVERBOND_SELECTED_LANGUAGE_INTRO_SYNC\n  useEffect(() => {\n    setMessages((current) => {\n      if (!current.length) {\n        return [{ role: "character", content: initialCharacterMessage }];\n      }\n\n      if (current[0]?.role !== "character") return current;\n      if (current[0].content === initialCharacterMessage) return current;\n\n      const next = [...current];\n      next[0] = {\n        ...next[0],\n        content: initialCharacterMessage\n      };\n      return next;\n    });\n  }, [initialCharacterMessage]);\n\n  const [input, setInput] = useState("");`,
+  "selected language intro state sync"
 );
 
-write(chatPath, chat);
+write(chatShellPath, chatShell);
 
 const legacyPath = "src/app/api/characters-localized/route.ts";
 let legacy = read(legacyPath);
@@ -89,8 +106,11 @@ write(legacyPath, legacy);
 if (!route.includes("EVERBOND_EXACT_STATIC_CHAT_INTRO_TRANSLATION")) {
   throw new Error("Selected route validation failed.");
 }
-if (!chat.includes("EVERBOND_CHAT_INTRO_ENGLISH_FALLBACK")) {
-  throw new Error("Chat fallback validation failed.");
+if (!chat.includes(blockingLanguageGate)) {
+  throw new Error("Non-English blocking gate validation failed.");
+}
+if (!chatShell.includes("EVERBOND_SELECTED_LANGUAGE_INTRO_SYNC")) {
+  throw new Error("Chat intro state sync validation failed.");
 }
 if (!legacy.includes("allowProvider: false")) {
   throw new Error("Legacy provider guard validation failed.");
@@ -131,15 +151,13 @@ function validateStaticRows(label, rows, expectedCount) {
 }
 
 const spanishIds = validateStaticRows("Spanish", spanishRows, 2674);
-// French intentionally covers the full 2,864-row master catalog so every
-// active Spanish ID is guaranteed to have a static French intro even when
-// retired catalog entries remain as harmless unused keys.
 const frenchIds = validateStaticRows("French", frenchRows, 2864);
 const spanishIdSet = new Set(spanishIds);
 const frenchIdSet = new Set(frenchIds);
 
 const missingFrenchIds = spanishIds.filter((id) => !frenchIdSet.has(id));
 const extraFrenchIds = frenchIds.filter((id) => !spanishIdSet.has(id));
+
 if (missingFrenchIds.length) {
   throw new Error(
     `French static coverage is incomplete: missingSpanishActiveIds=${missingFrenchIds.length}`
@@ -147,5 +165,5 @@ if (missingFrenchIds.length) {
 }
 
 console.log(
-  `EVERBOND_EXACT_CHAT_TRANSLATION spanish=${spanishIds.length}/2674 french=${frenchIds.length}/2864 active-french-coverage=${spanishIds.length}/2674 unused-french-extra=${extraFrenchIds.length} source=static-json fields=opening-scenario+first-message provider=off missing=english-fallback legacy-provider-route=off`
+  `EVERBOND_EXACT_CHAT_TRANSLATION spanish=${spanishIds.length}/2674 french=${frenchIds.length}/2864 active-french-coverage=${spanishIds.length}/2674 unused-french-extra=${extraFrenchIds.length} source=static-json+supabase-cache fields=opening-scenario+first-message provider=off non-english-fallback=blocked client-intro-sync=on`
 );
