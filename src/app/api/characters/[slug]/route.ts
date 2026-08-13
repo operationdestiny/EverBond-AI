@@ -4,6 +4,9 @@ import {
   localizeCharacter,
   type CharacterContentLanguage
 } from "@/lib/character-localization";
+import {
+  localizeCharacterChatIntroFromCache
+} from "@/lib/chat-intro-localization";
 import { getCharacterBySlugForUser } from "@/lib/user-characters";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
@@ -92,11 +95,14 @@ export async function GET(
   }
 
   try {
-    const localized = await localizeCharacter(
-      character,
-      languageResult.data as CharacterContentLanguage,
-      { translateTags: true, allowProvider: false }
-    );
+    const localized =
+      languageResult.data === "JA"
+        ? await localizeCharacterChatIntroFromCache(character, "JA")
+        : await localizeCharacter(
+            character,
+            languageResult.data as CharacterContentLanguage,
+            { translateTags: true, allowProvider: false }
+          );
 
     const selectedImage = userId
       ? await selectedCharacterImageUrl(userId, character.id)
