@@ -211,18 +211,29 @@ function chunksOf<T>(items: T[], size: number) {
 
 async function readyHashes() {
   const supabase = getSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from("character_chat_translations")
-    .select("character_id,source_hash")
-    .eq("language", LANGUAGE);
+  const rows: { character_id: string; source_hash: string }[] = [];
 
-  if (error) throw error;
-  return new Map(
-    (data ?? []).map((row: { character_id: string; source_hash: string }) => [
-      row.character_id,
-      row.source_hash
-    ])
-  );
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from("character_chat_translations")
+      .select("character_id,source_hash")
+      .eq("language", LANGUAGE)
+      .order("character_id", { ascending: true })
+      .range(from, from + 999);
+
+    if (error) throw error;
+
+    const page = (data ?? []) as {
+      character_id: string;
+      source_hash: string;
+    }[];
+
+    rows.push(...page);
+
+    if (page.length < 1000) break;
+  }
+
+  return new Map(rows.map((row) => [row.character_id, row.source_hash]));
 }
 
 async function statusPayload() {
