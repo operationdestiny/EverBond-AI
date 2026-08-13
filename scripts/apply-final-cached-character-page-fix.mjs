@@ -21,19 +21,16 @@ function replaceRequired(source, from, to, label) {
 }
 
 const spanishDataPath = "src/data/chat-intro-translations/es.json";
-const frenchDataPath = "src/data/chat-intro-translations/fr.json";
 
-for (const dataPath of [spanishDataPath, frenchDataPath]) {
-  if (!fs.existsSync(path.join(root, dataPath))) {
-    throw new Error(`Missing exact static chat intro data: ${dataPath}`);
-  }
+if (!fs.existsSync(path.join(root, spanishDataPath))) {
+  throw new Error(`Missing exact static chat intro data: ${spanishDataPath}`);
 }
 
 const helperPath = "src/lib/chat-intro-localization.ts";
 
 write(
   helperPath,
-  `import spanishChatIntros from "@/data/chat-intro-translations/es.json";\nimport frenchChatIntros from "@/data/chat-intro-translations/fr.json";\nimport { getSupabaseServiceClient } from "@/lib/supabase/server";\nimport type { Character } from "@/types/character";\n\nexport type ChatIntroLanguage = "EN" | "ES" | "FR" | "DE" | "JA" | "KO";\n\ntype ChatIntroTranslationRow = {\n  opening_scenario: string | null;\n  first_message: string | null;\n};\n\ntype StaticChatIntro = {\n  openingScenario: string;\n  firstMessage: string;\n};\n\ntype StaticChatIntroMap = Record<string, StaticChatIntro>;\n\nconst STATIC_CHAT_INTROS: Partial<Record<ChatIntroLanguage, StaticChatIntroMap>> = {\n  ES: spanishChatIntros as StaticChatIntroMap,\n  FR: frenchChatIntros as StaticChatIntroMap\n};\n\nfunction applyChatIntro(\n  character: Character,\n  openingScenario: string,\n  firstMessage: string\n): Character {\n  return {\n    ...character,\n    description: openingScenario,\n    openingScenario,\n    openingMessage: firstMessage,\n    firstMessage\n  };\n}\n\nexport async function localizeCharacterChatIntroFromCache(\n  character: Character,\n  language: ChatIntroLanguage\n): Promise<Character> {\n  if (language === "EN") return character;\n\n  // Exact static translations shipped with the app.\n  // These require no translation provider and no network translation call.\n  const staticRows = STATIC_CHAT_INTROS[language];\n  if (staticRows) {\n    const exact = staticRows[String(character.id)];\n    const openingScenario =\n      typeof exact?.openingScenario === "string"\n        ? exact.openingScenario.trim()\n        : "";\n    const firstMessage =\n      typeof exact?.firstMessage === "string"\n        ? exact.firstMessage.trim()\n        : "";\n\n    if (openingScenario && firstMessage) {\n      return applyChatIntro(character, openingScenario, firstMessage);\n    }\n  }\n\n  // Japanese and any future cached language rows are read from Supabase.\n  // This never calls Venice or any translation provider.\n  const supabase = getSupabaseServiceClient();\n  const { data, error } = await supabase\n    .from("character_chat_translations")\n    .select("opening_scenario,first_message")\n    .eq("character_id", character.id)\n    .eq("language", language)\n    .maybeSingle();\n\n  if (!error) {\n    const row = data as ChatIntroTranslationRow | null;\n    const openingScenario =\n      typeof row?.opening_scenario === "string"\n        ? row.opening_scenario.trim()\n        : "";\n    const firstMessage =\n      typeof row?.first_message === "string"\n        ? row.first_message.trim()\n        : "";\n\n    if (openingScenario && firstMessage) {\n      return applyChatIntro(character, openingScenario, firstMessage);\n    }\n  } else {\n    console.warn("EVERBOND_CHAT_INTRO_TRANSLATION_CACHE_READ_FAILED", {\n      characterId: character.id,\n      language,\n      error: error.message\n    });\n  }\n\n  return character;\n}\n`
+  `import spanishChatIntros from "@/data/chat-intro-translations/es.json";\nimport { getSupabaseServiceClient } from "@/lib/supabase/server";\nimport type { Character } from "@/types/character";\n\nexport type ChatIntroLanguage = "EN" | "ES" | "FR" | "DE" | "JA" | "KO";\n\ntype ChatIntroTranslationRow = {\n  opening_scenario: string | null;\n  first_message: string | null;\n};\n\ntype StaticChatIntro = {\n  openingScenario: string;\n  firstMessage: string;\n};\n\ntype StaticChatIntroMap = Record<string, StaticChatIntro>;\n\nconst STATIC_CHAT_INTROS: Partial<Record<ChatIntroLanguage, StaticChatIntroMap>> = {\n  ES: spanishChatIntros as StaticChatIntroMap\n};\n\nfunction applyChatIntro(\n  character: Character,\n  openingScenario: string,\n  firstMessage: string\n): Character {\n  return {\n    ...character,\n    description: openingScenario,\n    openingScenario,\n    openingMessage: firstMessage,\n    firstMessage\n  };\n}\n\nexport async function localizeCharacterChatIntroFromCache(\n  character: Character,\n  language: ChatIntroLanguage\n): Promise<Character> {\n  if (language === "EN") return character;\n\n  // Spanish is shipped as exact static JSON.\n  // This requires no translation provider and no network translation call.\n  const staticRows = STATIC_CHAT_INTROS[language];\n  if (staticRows) {\n    const exact = staticRows[String(character.id)];\n    const openingScenario =\n      typeof exact?.openingScenario === "string"\n        ? exact.openingScenario.trim()\n        : "";\n    const firstMessage =\n      typeof exact?.firstMessage === "string"\n        ? exact.firstMessage.trim()\n        : "";\n\n    if (openingScenario && firstMessage) {\n      return applyChatIntro(character, openingScenario, firstMessage);\n    }\n  }\n\n  // French, Japanese, and future cached languages are read from the completed\n  // Supabase cache by exact character ID. This never calls any translation provider.\n  const supabase = getSupabaseServiceClient();\n  const { data, error } = await supabase\n    .from("character_chat_translations")\n    .select("opening_scenario,first_message")\n    .eq("character_id", character.id)\n    .eq("language", language)\n    .maybeSingle();\n\n  if (!error) {\n    const row = data as ChatIntroTranslationRow | null;\n    const openingScenario =\n      typeof row?.opening_scenario === "string"\n        ? row.opening_scenario.trim()\n        : "";\n    const firstMessage =\n      typeof row?.first_message === "string"\n        ? row.first_message.trim()\n        : "";\n\n    if (openingScenario && firstMessage) {\n      return applyChatIntro(character, openingScenario, firstMessage);\n    }\n  } else {\n    console.warn("EVERBOND_CHAT_INTRO_TRANSLATION_CACHE_READ_FAILED", {\n      characterId: character.id,\n      language,\n      error: error.message\n    });\n  }\n\n  return character;\n}\n`
 );
 
 const routePath = "src/app/api/characters/[slug]/route.ts";
@@ -119,9 +116,6 @@ if (!legacy.includes("allowProvider: false")) {
 const spanishRows = JSON.parse(
   fs.readFileSync(path.join(root, spanishDataPath), "utf8")
 );
-const frenchRows = JSON.parse(
-  fs.readFileSync(path.join(root, frenchDataPath), "utf8")
-);
 
 function validateStaticRows(label, rows, expectedCount) {
   const ids = Object.keys(rows);
@@ -151,19 +145,7 @@ function validateStaticRows(label, rows, expectedCount) {
 }
 
 const spanishIds = validateStaticRows("Spanish", spanishRows, 2674);
-const frenchIds = validateStaticRows("French", frenchRows, 2864);
-const spanishIdSet = new Set(spanishIds);
-const frenchIdSet = new Set(frenchIds);
-
-const missingFrenchIds = spanishIds.filter((id) => !frenchIdSet.has(id));
-const extraFrenchIds = frenchIds.filter((id) => !spanishIdSet.has(id));
-
-if (missingFrenchIds.length) {
-  throw new Error(
-    `French static coverage is incomplete: missingSpanishActiveIds=${missingFrenchIds.length}`
-  );
-}
 
 console.log(
-  `EVERBOND_EXACT_CHAT_TRANSLATION spanish=${spanishIds.length}/2674 french=${frenchIds.length}/2864 active-french-coverage=${spanishIds.length}/2674 unused-french-extra=${extraFrenchIds.length} source=static-json+supabase-cache fields=opening-scenario+first-message provider=off non-english-fallback=blocked client-intro-sync=on`
+  `EVERBOND_EXACT_CHAT_TRANSLATION spanish=${spanishIds.length}/2674 french=supabase-cache japanese=supabase-cache source=static-json+supabase-cache fields=opening-scenario+first-message provider=off non-english-fallback=blocked client-intro-sync=on`
 );
