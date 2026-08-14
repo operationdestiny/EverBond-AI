@@ -17,8 +17,8 @@ const DEV_FALLBACK =
   'She glances over for a second, trying not to smile too much. "I heard you. I just need a minute to figure out what to say."';
 
 const AI_REPLY_MAX_TOKENS = 80;
-const DEFAULT_WAVESPEED_LLM_BASE_URL = "https://llm.wavespeed.ai/v1";
-const DEFAULT_WAVESPEED_CHAT_MODEL = "thedrummer/cydonia-24b-v4.1";
+const DEFAULT_VENICE_BASE_URL = "https://api.venice.ai/api/v1";
+const DEFAULT_VENICE_CHAT_MODEL = "venice-uncensored-role-play";
 
 function cleanBaseUrl(value: string) {
   return value.replace(/\/$/, "");
@@ -36,14 +36,14 @@ function buildChatCompletionsEndpoint(baseUrl: string) {
 
 function getProviderConfig() {
   return {
-    provider: "wavespeed",
+    provider: "venice",
     apiBaseUrl:
-      process.env.WAVESPEED_LLM_BASE_URL?.trim() ||
-      DEFAULT_WAVESPEED_LLM_BASE_URL,
-    apiKey: process.env.WAVESPEED_API_KEY?.trim() || "",
+      process.env.VENICE_BASE_URL?.trim() ||
+      DEFAULT_VENICE_BASE_URL,
+    apiKey: process.env.VENICE_API_KEY?.trim() || "",
     model:
-      process.env.WAVESPEED_CHAT_MODEL?.trim() ||
-      DEFAULT_WAVESPEED_CHAT_MODEL
+      process.env.VENICE_CHAT_MODEL?.trim() ||
+      DEFAULT_VENICE_CHAT_MODEL
   };
 }
 
@@ -224,6 +224,15 @@ function messagesWithAntiRepeatCorrection(messages: EverBondMessage[]) {
   );
 }
 
+function veniceParameters() {
+  return {
+    include_venice_system_prompt: false,
+    enable_web_search: "off",
+    enable_web_scraping: false,
+    enable_web_citations: false
+  };
+}
+
 async function postChatCompletion(
   endpoint: string,
   apiKey: string,
@@ -256,6 +265,14 @@ export async function callEverBondModel(
   const maxTokens = 110;
   const temperature = getNumberEnv("AI_TEMPERATURE", 0.85);
   const topP = getNumberEnv("AI_TOP_P", 0.9);
+  const frequencyPenalty = getNumberEnv(
+    "AI_FREQUENCY_PENALTY",
+    0.12
+  );
+  const repetitionPenalty = getNumberEnv(
+    "AI_REPETITION_PENALTY",
+    1.06
+  );
 
   if (!config.apiBaseUrl || !config.apiKey || !config.model) {
     return {
@@ -275,7 +292,10 @@ export async function callEverBondModel(
     messages: requestMessages,
     max_tokens: maxTokens,
     temperature,
-    top_p: topP
+    top_p: topP,
+    frequency_penalty: frequencyPenalty,
+    repetition_penalty: repetitionPenalty,
+    venice_parameters: veniceParameters()
   });
 
   const firstData: any = await postChatCompletion(
@@ -357,7 +377,8 @@ export async function callEverBondMemoryModel(
       messages: [{ role: "system", content: prompt }],
       max_tokens: 600,
       temperature: 0.1,
-      top_p: 0.95
+      top_p: 0.95,
+      venice_parameters: veniceParameters()
     }
   );
 
