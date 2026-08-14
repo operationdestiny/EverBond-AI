@@ -23,19 +23,19 @@ const packages = [
     code: "500" as const,
     amount: 500,
     price: "$4.99",
-    image: "/assets/everbond-v19-real-coin-hero.png"
+    image: "/assets/evercoin-1000.png"
   },
   {
     code: "1000" as const,
     amount: 1_000,
     price: "$9.99",
-    image: "/assets/evercoin-1000.png"
+    image: "/assets/evercoin-5000.png"
   },
   {
     code: "5000" as const,
     amount: 5_000,
     price: "$44.99",
-    image: "/assets/evercoin-5000.png"
+    image: "/assets/evercoin-10000.png"
   }
 ];
 
