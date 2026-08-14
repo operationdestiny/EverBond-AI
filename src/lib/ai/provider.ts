@@ -17,6 +17,8 @@ const DEV_FALLBACK =
   'She glances over for a second, trying not to smile too much. "I heard you. I just need a minute to figure out what to say."';
 
 const AI_REPLY_MAX_TOKENS = 80;
+const DEFAULT_WAVESPEED_LLM_BASE_URL = "https://llm.wavespeed.ai/v1";
+const DEFAULT_WAVESPEED_CHAT_MODEL = "thedrummer/cydonia-24b-v4.1";
 
 function cleanBaseUrl(value: string) {
   return value.replace(/\/$/, "");
@@ -33,30 +35,15 @@ function buildChatCompletionsEndpoint(baseUrl: string) {
 }
 
 function getProviderConfig() {
-  const provider = process.env.AI_PROVIDER || "venice";
-
-  if (provider === "venice") {
-    return {
-      provider: "venice",
-      apiBaseUrl:
-        process.env.VENICE_BASE_URL ||
-        "https://api.venice.ai/api/v1",
-      apiKey:
-        process.env.VENICE_API_KEY ||
-        "",
-      model:
-        process.env.VENICE_CHAT_MODEL ||
-        "venice-uncensored-role-play",
-      useVeniceParameters: true
-    };
-  }
-
   return {
-    provider,
-    apiBaseUrl: process.env.AI_API_BASE_URL || "",
-    apiKey: process.env.AI_API_KEY || "",
-    model: process.env.AI_MODEL_ID || "everbond-model-not-configured",
-    useVeniceParameters: false
+    provider: "wavespeed",
+    apiBaseUrl:
+      process.env.WAVESPEED_LLM_BASE_URL?.trim() ||
+      DEFAULT_WAVESPEED_LLM_BASE_URL,
+    apiKey: process.env.WAVESPEED_API_KEY?.trim() || "",
+    model:
+      process.env.WAVESPEED_CHAT_MODEL?.trim() ||
+      DEFAULT_WAVESPEED_CHAT_MODEL
   };
 }
 
@@ -186,13 +173,8 @@ function isTooSimilarToPreviousReply(
   const candidateNormalized = normalizeForSimilarity(candidate);
   const previousNormalized = normalizeForSimilarity(previousReply);
 
-  if (!candidateNormalized || !previousNormalized) {
-    return false;
-  }
-
-  if (candidateNormalized === previousNormalized) {
-    return true;
-  }
+  if (!candidateNormalized || !previousNormalized) return false;
+  if (candidateNormalized === previousNormalized) return true;
 
   const candidateTokens = candidateNormalized.split(" ");
   const previousTokens = previousNormalized.split(" ");
@@ -204,16 +186,11 @@ function isTooSimilarToPreviousReply(
   const candidateNgrams = ngramSet(candidateTokens, 3);
   const previousNgrams = ngramSet(previousTokens, 3);
 
-  if (!candidateNgrams.size || !previousNgrams.size) {
-    return false;
-  }
+  if (!candidateNgrams.size || !previousNgrams.size) return false;
 
   let shared = 0;
-
   for (const value of candidateNgrams) {
-    if (previousNgrams.has(value)) {
-      shared += 1;
-    }
+    if (previousNgrams.has(value)) shared += 1;
   }
 
   const containment =
@@ -222,9 +199,7 @@ function isTooSimilarToPreviousReply(
   return containment >= 0.62;
 }
 
-function messagesWithAntiRepeatCorrection(
-  messages: EverBondMessage[]
-) {
+function messagesWithAntiRepeatCorrection(messages: EverBondMessage[]) {
   const correction =
     "RETRY CORRECTION: The draft repeated the character's previous reply. " +
     "Respond to the user's newest message from the exact current action. " +
@@ -237,20 +212,14 @@ function messagesWithAntiRepeatCorrection(
 
   if (firstSystemIndex < 0) {
     return [
-      {
-        role: "system" as const,
-        content: correction
-      },
+      { role: "system" as const, content: correction },
       ...messages
     ];
   }
 
   return messages.map((message, index) =>
     index === firstSystemIndex
-      ? {
-          ...message,
-          content: `${message.content}\n\n${correction}`
-        }
+      ? { ...message, content: `${message.content}\n\n${correction}` }
       : message
   );
 }
@@ -266,13 +235,14 @@ async function postChatCompletion(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(60_000)
   });
 
   if (!response.ok) {
     const text = await response.text();
     throw new Error(
-      `EverBond AI provider request failed: ${response.status} ${text}`
+      `EverBond AI provider request failed: ${response.status} ${text.slice(0, 500)}`
     );
   }
 
@@ -283,25 +253,11 @@ export async function callEverBondModel(
   messages: EverBondMessage[]
 ): Promise<EverBondModelResult> {
   const config = getProviderConfig();
-
   const maxTokens = 110;
   const temperature = getNumberEnv("AI_TEMPERATURE", 0.85);
   const topP = getNumberEnv("AI_TOP_P", 0.9);
-  const frequencyPenalty = getNumberEnv(
-    "AI_FREQUENCY_PENALTY",
-    0.12
-  );
-  const repetitionPenalty = getNumberEnv(
-    "AI_REPETITION_PENALTY",
-    1.06
-  );
 
-  if (
-    !config.apiBaseUrl ||
-    !config.apiKey ||
-    !config.model ||
-    config.model === "everbond-model-not-configured"
-  ) {
+  if (!config.apiBaseUrl || !config.apiKey || !config.model) {
     return {
       content: DEV_FALLBACK,
       inputTokens: 0,
@@ -312,29 +268,15 @@ export async function callEverBondModel(
   }
 
   const endpoint = buildChatCompletionsEndpoint(config.apiBaseUrl);
-
   const buildRequestBody = (
     requestMessages: EverBondMessage[]
-  ): Record<string, unknown> => {
-    const requestBody: Record<string, unknown> = {
-      model: config.model,
-      messages: requestMessages,
-      max_tokens: maxTokens,
-      temperature,
-      top_p: topP,
-      frequency_penalty: frequencyPenalty,
-      repetition_penalty: repetitionPenalty
-    };
-
-    if (config.useVeniceParameters) {
-      requestBody.venice_parameters = {
-        include_venice_system_prompt: false,
-        enable_web_search: "off"
-      };
-    }
-
-    return requestBody;
-  };
+  ): Record<string, unknown> => ({
+    model: config.model,
+    messages: requestMessages,
+    max_tokens: maxTokens,
+    temperature,
+    top_p: topP
+  });
 
   const firstData: any = await postChatCompletion(
     endpoint,
@@ -356,18 +298,12 @@ export async function callEverBondModel(
 
   if (
     previousAssistantReply &&
-    isTooSimilarToPreviousReply(
-      firstContent,
-      previousAssistantReply
-    )
+    isTooSimilarToPreviousReply(firstContent, previousAssistantReply)
   ) {
-    const retryMessages =
-      messagesWithAntiRepeatCorrection(messages);
-
     const retryData: any = await postChatCompletion(
       endpoint,
       config.apiKey,
-      buildRequestBody(retryMessages)
+      buildRequestBody(messagesWithAntiRepeatCorrection(messages))
     );
 
     const retryChoice = retryData.choices?.[0];
@@ -403,12 +339,7 @@ export async function callEverBondMemoryModel(
 ): Promise<EverBondModelResult> {
   const config = getProviderConfig();
 
-  if (
-    !config.apiBaseUrl ||
-    !config.apiKey ||
-    !config.model ||
-    config.model === "everbond-model-not-configured"
-  ) {
+  if (!config.apiBaseUrl || !config.apiKey || !config.model) {
     return {
       content: "",
       inputTokens: 0,
@@ -418,32 +349,16 @@ export async function callEverBondMemoryModel(
     };
   }
 
-  const endpoint = buildChatCompletionsEndpoint(config.apiBaseUrl);
-
-  const requestBody: Record<string, unknown> = {
-    model: config.model,
-    messages: [
-      {
-        role: "system",
-        content: prompt
-      }
-    ],
-    max_tokens: 600,
-    temperature: 0.1,
-    top_p: 0.95
-  };
-
-  if (config.useVeniceParameters) {
-    requestBody.venice_parameters = {
-      include_venice_system_prompt: false,
-      enable_web_search: "off"
-    };
-  }
-
   const data: any = await postChatCompletion(
-    endpoint,
+    buildChatCompletionsEndpoint(config.apiBaseUrl),
     config.apiKey,
-    requestBody
+    {
+      model: config.model,
+      messages: [{ role: "system", content: prompt }],
+      max_tokens: 600,
+      temperature: 0.1,
+      top_p: 0.95
+    }
   );
 
   const content =

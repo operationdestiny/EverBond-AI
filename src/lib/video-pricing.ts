@@ -1,6 +1,4 @@
-import { veniceApiUrl } from "@/lib/venice-media";
-
-const DEFAULT_VIDEO_MODEL = "wan-2-7-reference-to-video";
+const DEFAULT_VIDEO_MODEL = "bytedance/seedance-v1.5-pro/image-to-video-spicy";
 const DEFAULT_DURATION_SECONDS = 8;
 const DEFAULT_RESOLUTION = "720p";
 const DEFAULT_ASPECT_RATIO = "9:16";
@@ -9,14 +7,9 @@ const DEFAULT_BASELINE_QUOTE_USD = 1.12;
 const DEFAULT_BASELINE_EVERCOIN = 199;
 const DISPLAY_ROUNDING_INCREMENT = 10;
 
-// Margin protection:
-// - The largest EverCoin pack is the lowest-value coin pack.
-// - At $84.99 / 10,000 EverCoin and Paddle's standard 5% + $0.50 fee,
-//   125 EverCoin recovers about $1.00 of provider cost after checkout fees.
-// - 59 additional EverCoin preserves roughly the old ~$0.48 contribution
-//   from the $1.12 -> 199 EverCoin baseline.
-// - The existing proportional formula is still kept as a second floor, so
-//   provider-cost increases cannot reduce the old markup relationship.
+// Keep the existing EverCoin pricing floor during the provider migration.
+// WaveSpeed's selected Seedance model is cheaper than the previous baseline,
+// but switching providers should not silently change customer-facing pricing.
 const VIDEO_PROVIDER_COST_RECOVERY_EVERCOIN_PER_USD = 125;
 const VIDEO_TARGET_CONTRIBUTION_EVERCOIN = 59;
 const VIDEO_CHARGE_ROUNDING_INCREMENT = 5;
@@ -27,17 +20,14 @@ function positiveNumberEnv(name: string, fallback: number) {
 }
 
 function positiveIntegerEnv(name: string, fallback: number) {
-  return Math.max(
-    Math.trunc(positiveNumberEnv(name, fallback)),
-    1
-  );
+  return Math.max(Math.trunc(positiveNumberEnv(name, fallback)), 1);
 }
 
 export function videoPricingInputs(
   durationSeconds = DEFAULT_DURATION_SECONDS
 ) {
   const configuredResolution =
-    process.env.VENICE_VIDEO_RESOLUTION?.trim().toLowerCase();
+    process.env.WAVESPEED_VIDEO_RESOLUTION?.trim().toLowerCase();
   const resolution = new Set(["480p", "720p", "1080p"]).has(
     configuredResolution || ""
   )
@@ -45,11 +35,9 @@ export function videoPricingInputs(
     : DEFAULT_RESOLUTION;
 
   const configuredAspectRatio =
-    process.env.VENICE_VIDEO_ASPECT_RATIO?.trim();
+    process.env.WAVESPEED_VIDEO_ASPECT_RATIO?.trim();
   const aspectRatio = new Set([
     "1:1",
-    "2:3",
-    "3:2",
     "3:4",
     "4:3",
     "9:16",
@@ -61,19 +49,44 @@ export function videoPricingInputs(
 
   return {
     model:
-      process.env.VENICE_VIDEO_MODEL?.trim() ||
+      process.env.WAVESPEED_VIDEO_MODEL?.trim() ||
       DEFAULT_VIDEO_MODEL,
-    durationSeconds: Math.max(Math.trunc(durationSeconds), 1),
-    duration: `${Math.max(Math.trunc(durationSeconds), 1)}s`,
+    durationSeconds: Math.min(
+      Math.max(Math.trunc(durationSeconds), 4),
+      12
+    ),
+    duration: `${Math.min(Math.max(Math.trunc(durationSeconds), 4), 12)}s`,
     resolution,
     aspectRatio,
     audio: DEFAULT_AUDIO_ENABLED
   };
 }
 
+function seedanceQuoteUsd(values: {
+  resolution: string;
+  durationSeconds: number;
+  audio: boolean;
+}) {
+  const fiveSecondAudioOff: Record<string, number> = {
+    "480p": 0.06,
+    "720p": 0.13,
+    "1080p": 0.26
+  };
+
+  const baseFiveSecond = fiveSecondAudioOff[values.resolution];
+  if (!baseFiveSecond) return null;
+
+  const audioMultiplier = values.audio ? 2 : 1;
+  return (
+    baseFiveSecond *
+    (values.durationSeconds / 5) *
+    audioMultiplier
+  );
+}
+
 export function everCoinVideoCostFromQuote(quoteUsd: number) {
   const baselineQuoteUsd = positiveNumberEnv(
-    "VENICE_VIDEO_BASELINE_QUOTE_USD",
+    "WAVESPEED_VIDEO_BASELINE_QUOTE_USD",
     DEFAULT_BASELINE_QUOTE_USD
   );
   const baselineEverCoin = positiveIntegerEnv(
@@ -86,26 +99,23 @@ export function everCoinVideoCostFromQuote(quoteUsd: number) {
       : baselineQuoteUsd;
 
   const proportionalCost = Math.ceil(
-    (normalizedQuote * baselineEverCoin) /
-      baselineQuoteUsd
+    (normalizedQuote * baselineEverCoin) / baselineQuoteUsd
   );
-
   const contributionProtectedCost =
     Math.ceil(
-      normalizedQuote *
-        VIDEO_PROVIDER_COST_RECOVERY_EVERCOIN_PER_USD
+      normalizedQuote * VIDEO_PROVIDER_COST_RECOVERY_EVERCOIN_PER_USD
     ) + VIDEO_TARGET_CONTRIBUTION_EVERCOIN;
 
   const protectedCost = Math.max(
+    baselineEverCoin,
     proportionalCost,
     contributionProtectedCost,
     1
   );
 
   return (
-    Math.ceil(
-      protectedCost / VIDEO_CHARGE_ROUNDING_INCREMENT
-    ) * VIDEO_CHARGE_ROUNDING_INCREMENT
+    Math.ceil(protectedCost / VIDEO_CHARGE_ROUNDING_INCREMENT) *
+    VIDEO_CHARGE_ROUNDING_INCREMENT
   );
 }
 
@@ -122,68 +132,24 @@ export async function quoteEverCoinVideoCost(
 ) {
   const inputs = videoPricingInputs(durationSeconds);
   const fallbackQuoteUsd = positiveNumberEnv(
-    "VENICE_VIDEO_FALLBACK_QUOTE_USD",
+    "WAVESPEED_VIDEO_FALLBACK_QUOTE_USD",
     DEFAULT_BASELINE_QUOTE_USD
   );
+  const quoteUsd =
+    inputs.model === DEFAULT_VIDEO_MODEL
+      ? seedanceQuoteUsd({
+          resolution: inputs.resolution,
+          durationSeconds: inputs.durationSeconds,
+          audio: inputs.audio
+        }) ?? fallbackQuoteUsd
+      : fallbackQuoteUsd;
+  const everCoinCost = everCoinVideoCostFromQuote(quoteUsd);
 
-  function result(
-    quoteUsd: number,
-    source: "venice" | "fallback"
-  ) {
-    const everCoinCost = everCoinVideoCostFromQuote(quoteUsd);
-
-    return {
-      ...inputs,
-      quoteUsd,
-      everCoinCost,
-      displayCost: roundedVideoDisplayCost(everCoinCost),
-      source
-    };
-  }
-
-  const apiKey = process.env.VENICE_API_KEY?.trim();
-  if (!apiKey) {
-    return result(fallbackQuoteUsd, "fallback");
-  }
-
-  try {
-    const response = await fetch(veniceApiUrl("video/quote"), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: inputs.model,
-        duration: inputs.duration,
-        resolution: inputs.resolution,
-        aspect_ratio: inputs.aspectRatio,
-        audio: inputs.audio
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(15_000)
-    });
-
-    if (!response.ok) {
-      const detail = (await response.text()).slice(0, 300);
-      throw new Error(
-        `VIDEO_QUOTE_FAILED:${response.status}:${detail}`
-      );
-    }
-
-    const payload = await response.json().catch(() => null);
-    const quoteUsd = Number(payload?.quote);
-
-    if (!Number.isFinite(quoteUsd) || quoteUsd <= 0) {
-      throw new Error("VIDEO_QUOTE_INVALID");
-    }
-
-    return result(quoteUsd, "venice");
-  } catch (error) {
-    console.error(
-      "Venice video quote unavailable; using the profitable fallback price:",
-      error
-    );
-    return result(fallbackQuoteUsd, "fallback");
-  }
+  return {
+    ...inputs,
+    quoteUsd,
+    everCoinCost,
+    displayCost: roundedVideoDisplayCost(everCoinCost),
+    source: inputs.model === DEFAULT_VIDEO_MODEL ? "wavespeed" : "fallback"
+  } as const;
 }

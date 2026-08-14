@@ -9,14 +9,20 @@ import {
 } from "@/lib/evercoin";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getCharacterBySlugForUser } from "@/lib/user-characters";
-import { veniceApiUrl } from "@/lib/venice-media";
 import { activeCharacterReferenceDataUrl } from "@/lib/character-media-reference";
+import {
+  downloadWaveSpeedOutput,
+  submitWaveSpeedPrediction,
+  waitForWaveSpeedPrediction,
+  wavespeedApiKey
+} from "@/lib/wavespeed-media";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const GALLERY_LIMIT = 7;
 const MAX_GENERATED_IMAGE_BYTES = 10 * 1024 * 1024;
+const DEFAULT_IMAGE_MODEL = "bytedance/seedream-v5.0-pro/edit";
 const ALLOWED_SOURCE_MIME_TYPES = new Set([
   "image/png",
   "image/jpeg",
@@ -31,24 +37,9 @@ const GenerateBody = z
   .strict();
 
 const ActionBody = z.discriminatedUnion("action", [
-  z
-    .object({
-      action: z.literal("select"),
-      imageId: z.string().uuid()
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal("deselect"),
-      imageId: z.string().uuid()
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal("delete"),
-      imageId: z.string().uuid()
-    })
-    .strict()
+  z.object({ action: z.literal("select"), imageId: z.string().uuid() }).strict(),
+  z.object({ action: z.literal("deselect"), imageId: z.string().uuid() }).strict(),
+  z.object({ action: z.literal("delete"), imageId: z.string().uuid() }).strict()
 ]);
 
 type GalleryRow = {
@@ -57,6 +48,12 @@ type GalleryRow = {
   prompt: string;
   created_at: string;
 };
+
+function imageResolution() {
+  return process.env.WAVESPEED_IMAGE_RESOLUTION?.trim().toLowerCase() === "2k"
+    ? "2k"
+    : "1k";
+}
 
 async function signedUrl(path: string) {
   const { data, error } = await getSupabaseServiceClient()
@@ -179,9 +176,7 @@ export async function POST(
     }
     userId = user.id;
 
-    const parsed = GenerateBody.safeParse(
-      await request.json().catch(() => null)
-    );
+    const parsed = GenerateBody.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json({ error: "INVALID_PROMPT" }, { status: 400 });
     }
@@ -254,10 +249,11 @@ export async function POST(
       );
     }
 
-    const apiKey = process.env.VENICE_API_KEY;
-    if (!apiKey) throw new Error("VENICE_NOT_CONFIGURED");
+    const apiKey = wavespeedApiKey();
+    if (!apiKey) throw new Error("WAVESPEED_NOT_CONFIGURED");
 
-    const model = process.env.VENICE_IMAGE_MODEL || "seedream-v5-pro-edit";
+    const model =
+      process.env.WAVESPEED_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
     const referenceImage = await activeCharacterReferenceDataUrl({
       request,
       userId: user.id,
@@ -265,63 +261,57 @@ export async function POST(
       fallbackImage: character.image
     });
 
-    const providerResponse = await fetch(
-      veniceApiUrl("image/edit"),
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model,
-          image: referenceImage,
-          aspect_ratio: "4:5",
-          prompt:
-            `Preserve the exact identity, adult age, face, and recognizable appearance of the fictional character ${character.name}. ` +
-            `Create a polished private companion portrait matching this request: ${parsed.data.prompt}`
-        }),
-        signal: AbortSignal.timeout(55_000)
-      }
-    );
+    const identityPrompt =
+      `The supplied reference image defines the exact visual identity of the fictional adult character ${character.name}. ` +
+      "Preserve the same recognizable person: face and facial proportions, adult age appearance, eye color, hair color and hairstyle, skin tone, body proportions, tattoos, scars, and permanent identifying features. " +
+      "Do not substitute a different person or redesign the character. Keep identity consistent even when changing pose, expression, clothing state, location, lighting, camera angle, or scene. " +
+      `Follow the user's requested image closely: ${parsed.data.prompt}`;
 
-    if (!providerResponse.ok) {
-      const detail = (await providerResponse.text()).slice(0, 500);
-      throw new Error(
-        `IMAGE_PROVIDER_FAILED:${providerResponse.status}:${detail}`
-      );
-    }
+    const submitted = await submitWaveSpeedPrediction({
+      apiKey,
+      model,
+      input: {
+        prompt: identityPrompt,
+        images: [referenceImage],
+        aspect_ratio: "4:5",
+        resolution: imageResolution(),
+        output_format: "jpeg"
+      },
+      timeoutMs: 60_000
+    });
 
-    const contentType =
-      providerResponse.headers
-        .get("content-type")
-        ?.split(";")[0]
-        .trim()
-        .toLowerCase() || "image/png";
-    if (!ALLOWED_SOURCE_MIME_TYPES.has(contentType)) {
-      throw new Error("IMAGE_PROVIDER_RETURNED_INVALID_FILE");
-    }
+    const prediction = await waitForWaveSpeedPrediction({
+      apiKey,
+      predictionId: submitted.id,
+      maximumWaitMs: 145_000,
+      pollIntervalMs: 2_000
+    });
+    const outputUrl = prediction.outputs[0];
+    if (!outputUrl) throw new Error("IMAGE_PROVIDER_OUTPUT_MISSING");
 
-    const imageBytes = Buffer.from(await providerResponse.arrayBuffer());
-    if (!imageBytes.length || imageBytes.length > MAX_GENERATED_IMAGE_BYTES) {
-      throw new Error("IMAGE_PROVIDER_RETURNED_INVALID_FILE");
-    }
+    const downloaded = await downloadWaveSpeedOutput({
+      url: outputUrl,
+      maximumBytes: MAX_GENERATED_IMAGE_BYTES,
+      allowedContentTypes: ALLOWED_SOURCE_MIME_TYPES,
+      fallbackContentType: "image/jpeg",
+      timeoutMs: 45_000
+    });
 
     const imageId = crypto.randomUUID();
     insertedImageId = imageId;
     const extension =
-      contentType === "image/jpeg"
-        ? "jpg"
-        : contentType === "image/webp"
+      downloaded.contentType === "image/png"
+        ? "png"
+        : downloaded.contentType === "image/webp"
           ? "webp"
-          : "png";
+          : "jpg";
     uploadedPath = `${user.id}/${character.id}/${imageId}.${extension}`;
     const supabase = getSupabaseServiceClient();
 
     const upload = await supabase.storage
       .from("character-gallery")
-      .upload(uploadedPath, imageBytes, {
-        contentType,
+      .upload(uploadedPath, downloaded.bytes, {
+        contentType: downloaded.contentType,
         upsert: false,
         cacheControl: "31536000"
       });
@@ -335,8 +325,8 @@ export async function POST(
         character_id: character.id,
         storage_path: uploadedPath,
         prompt: parsed.data.prompt,
-        provider: "venice",
-        model,
+        provider: "wavespeed",
+        model: submitted.model,
         evercoin_charge: cost
       })
       .select("id,storage_path,prompt,created_at")
@@ -424,9 +414,7 @@ export async function PATCH(
       );
     }
 
-    const parsed = ActionBody.safeParse(
-      await request.json().catch(() => null)
-    );
+    const parsed = ActionBody.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
     }

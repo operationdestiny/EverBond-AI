@@ -3,74 +3,29 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const STATUS_SOURCES = [
-  "https://veniceai-status.com",
-  "https://veniceai.statuspage.io"
-] as const;
+const STATUS_URL = "https://api.wavespeed.ai/public/v3/summary.json";
 
-const CONFIRMED_OUTAGE_STATUSES = new Set([
-  "partial_outage",
-  "major_outage"
-]);
-
-type StatusComponent = {
-  id?: unknown;
-  name?: unknown;
-  status?: unknown;
-};
-
-type StatusSummary = {
+type WaveSpeedStatus = {
   page?: {
-    id?: unknown;
     name?: unknown;
-    updated_at?: unknown;
+    url?: unknown;
+    status?: unknown;
   };
-  components?: StatusComponent[];
+  activeIncidents?: unknown[];
+  activeMaintenances?: unknown[];
 };
 
-type StatusIncident = {
-  id?: unknown;
-  name?: unknown;
-  status?: unknown;
-  resolved_at?: unknown;
-  components?: StatusComponent[];
-};
-
-type StatusIncidents = {
-  page?: {
-    id?: unknown;
-    name?: unknown;
-    updated_at?: unknown;
-  };
-  incidents?: StatusIncident[];
-};
-
-type SourceCheck = {
-  source: string;
-  available: boolean;
-  apiStatus: string | null;
-  hasMatchingIncident: boolean;
-  incidentName: string | null;
-};
-
-function normalizedText(value: unknown) {
+function normalizedStatus(value: unknown) {
   return typeof value === "string"
-    ? value.trim().toLocaleLowerCase()
+    ? value.trim().toLocaleUpperCase()
     : "";
 }
 
-function componentIsVeniceApi(component: StatusComponent) {
-  return normalizedText(component.name) === "venice api";
-}
+export async function GET() {
+  const checkedAt = new Date().toISOString();
 
-function outageStatus(value: unknown) {
-  const status = normalizedText(value);
-  return CONFIRMED_OUTAGE_STATUSES.has(status);
-}
-
-async function fetchStatusJson<T>(url: string): Promise<T | null> {
   try {
-    const response = await fetch(url, {
+    const response = await fetch(`${STATUS_URL}?eb=${Date.now().toString(36)}`, {
       cache: "no-store",
       headers: {
         Accept: "application/json",
@@ -80,133 +35,27 @@ async function fetchStatusJson<T>(url: string): Promise<T | null> {
       signal: AbortSignal.timeout(4_000)
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) throw new Error(`STATUS_HTTP_${response.status}`);
 
-    const payload = await response.json().catch(() => null);
-    if (!payload || typeof payload !== "object") return null;
-
-    return payload as T;
-  } catch {
-    return null;
-  }
-}
-
-async function checkSource(source: string): Promise<SourceCheck> {
-  const cacheBust = Date.now().toString(36);
-  const [summary, unresolved] = await Promise.all([
-    fetchStatusJson<StatusSummary>(
-      `${source}/api/v2/summary.json?eb=${cacheBust}`
-    ),
-    fetchStatusJson<StatusIncidents>(
-      `${source}/api/v2/incidents/unresolved.json?eb=${cacheBust}`
-    )
-  ]);
-
-  if (!summary || !unresolved) {
-    return {
-      source,
-      available: false,
-      apiStatus: null,
-      hasMatchingIncident: false,
-      incidentName: null
-    };
-  }
-
-  const apiComponent = Array.isArray(summary.components)
-    ? summary.components.find(componentIsVeniceApi)
-    : undefined;
-
-  const apiStatus =
-    typeof apiComponent?.status === "string"
-      ? apiComponent.status.trim().toLocaleLowerCase()
+    const payload = (await response.json()) as WaveSpeedStatus;
+    const status = normalizedStatus(payload?.page?.status);
+    const confirmedOutage = Boolean(status && status !== "UP");
+    const activeIncident = Array.isArray(payload?.activeIncidents)
+      ? payload.activeIncidents[0]
       : null;
-
-  if (!apiStatus) {
-    return {
-      source,
-      available: false,
-      apiStatus: null,
-      hasMatchingIncident: false,
-      incidentName: null
-    };
-  }
-
-  const incidents = Array.isArray(unresolved.incidents)
-    ? unresolved.incidents
-    : [];
-
-  const matchingIncident = incidents.find((incident) => {
-    if (incident.resolved_at) return false;
-
-    const incidentStatus = normalizedText(incident.status);
-    if (incidentStatus === "resolved" || incidentStatus === "postmortem") {
-      return false;
-    }
-
-    const components = Array.isArray(incident.components)
-      ? incident.components
-      : [];
-
-    return components.some(
-      (component) =>
-        componentIsVeniceApi(component) &&
-        outageStatus(component.status)
-    );
-  });
-
-  return {
-    source,
-    available: true,
-    apiStatus,
-    hasMatchingIncident: Boolean(matchingIncident),
-    incidentName:
-      typeof matchingIncident?.name === "string"
-        ? matchingIncident.name.trim()
-        : null
-  };
-}
-
-export async function GET() {
-  const checkedAt = new Date().toISOString();
-
-  try {
-    const checks = await Promise.all(
-      STATUS_SOURCES.map((source) => checkSource(source))
-    );
-
-    // Intentionally fail open. EverBond warns only when BOTH official
-    // Statuspage domains independently agree on the outage and BOTH expose
-    // an unresolved Venice API incident. Any disagreement or monitor failure
-    // means "do not warn".
-    const confirmedOutage =
-      checks.length === STATUS_SOURCES.length &&
-      checks.every(
-        (check) =>
-          check.available &&
-          outageStatus(check.apiStatus) &&
-          check.hasMatchingIncident
-      );
-
-    const incidentNames = Array.from(
-      new Set(
-        checks
-          .map((check) => check.incidentName)
-          .filter(
-            (value): value is string =>
-              typeof value === "string" && value.length > 0
-          )
-      )
-    );
+    const incidentName =
+      activeIncident &&
+      typeof activeIncident === "object" &&
+      typeof (activeIncident as Record<string, unknown>).name === "string"
+        ? String((activeIncident as Record<string, unknown>).name).trim()
+        : null;
 
     return NextResponse.json(
       {
         confirmedOutage,
-        sourceAvailable: checks.every((check) => check.available),
+        sourceAvailable: true,
         providerStatus: confirmedOutage ? "outage" : "not_confirmed",
-        incidentName:
-          confirmedOutage && incidentNames.length === 1
-            ? incidentNames[0]
-            : null,
+        incidentName: confirmedOutage ? incidentName : null,
         checkedAt
       },
       {
@@ -219,6 +68,7 @@ export async function GET() {
       }
     );
   } catch {
+    // Fail open so a status-page problem never blocks EverBond chat/media.
     return NextResponse.json(
       {
         confirmedOutage: false,

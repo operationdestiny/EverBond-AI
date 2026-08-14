@@ -11,7 +11,12 @@ import {
 } from "@/lib/evercoin";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getCharacterBySlugForUser } from "@/lib/user-characters";
-import { veniceApiUrl } from "@/lib/venice-media";
+import {
+  downloadWaveSpeedOutput,
+  getWaveSpeedPrediction,
+  submitWaveSpeedPrediction,
+  wavespeedApiKey
+} from "@/lib/wavespeed-media";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -20,7 +25,8 @@ const VIDEO_LIMIT = 5;
 const VIDEO_PROMPT_MAX_CHARACTERS = 1_000;
 const MAX_GENERATED_VIDEO_BYTES = 100 * 1024 * 1024;
 const VIDEO_DURATIONS = [8] as const;
-const TERMINAL_PROVIDER_STATUSES = new Set(["FAILED", "ERROR", "CANCELLED"]);
+const DEFAULT_VIDEO_MODEL = "bytedance/seedance-v1.5-pro/image-to-video-spicy";
+const VIDEO_CONTENT_TYPES = new Set(["video/mp4", "application/octet-stream"]);
 
 const GenerateBody = z
   .object({
@@ -57,26 +63,36 @@ type VideoRequestRow = {
 };
 
 function videoModel() {
-  return (
-    process.env.VENICE_VIDEO_MODEL?.trim() ||
-    "wan-2-7-reference-to-video"
-  );
+  return process.env.WAVESPEED_VIDEO_MODEL?.trim() || DEFAULT_VIDEO_MODEL;
 }
 
 function videoResolution() {
-  const value = process.env.VENICE_VIDEO_RESOLUTION?.trim().toLowerCase();
+  const value = process.env.WAVESPEED_VIDEO_RESOLUTION?.trim().toLowerCase();
   return new Set(["480p", "720p", "1080p"]).has(value || "")
     ? value!
     : "720p";
 }
 
 function videoAspectRatio() {
-  const value = process.env.VENICE_VIDEO_ASPECT_RATIO?.trim();
-  return new Set(["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"]).has(
+  const value = process.env.WAVESPEED_VIDEO_ASPECT_RATIO?.trim();
+  return new Set(["1:1", "3:4", "4:3", "9:16", "16:9", "21:9"]).has(
     value || ""
   )
     ? value!
     : "9:16";
+}
+
+function naturalMotionPrompt(characterName: string, userPrompt: string) {
+  return (
+    `The input image is the exact fictional adult character ${characterName}. ` +
+    "Preserve the same recognizable face, adult age appearance, hair, body proportions, anatomy, skin tone, scene, lighting, and overall identity throughout the entire clip. " +
+    "Animate one continuous realistic shot with natural body movement, hand movement, gravity, and fabric physics. " +
+    "If clothing is visibly already being opened, lifted, lowered, pulled aside, or removed in the input image, or the user request clearly asks for that clothing action, continue it gradually and naturally. " +
+    "Hands should interact with the garment, fabric should slide and fold progressively, and any change in coverage should happen in small continuous steps. " +
+    "Do not rip, tear, snap, teleport, dissolve, instantly remove, or abruptly replace clothing. Do not begin unrelated clothing changes that are neither requested nor already underway. " +
+    "Keep motion physically coherent: no face drift, body morphing, extra limbs or fingers, abrupt pose jumps, jump cuts, sudden scene changes, or wardrobe teleportation. " +
+    `User direction: ${userPrompt}`
+  );
 }
 
 async function signedVideoUrl(path: string) {
@@ -109,168 +125,81 @@ async function videoResponse(videoId: string, userId: string) {
   };
 }
 
-function providerHeaders(apiKey: string) {
-  return {
-    Authorization: `Bearer ${apiKey}`,
-    "Content-Type": "application/json"
-  };
-}
-
-async function providerCleanup(values: {
-  apiKey: string;
-  model: string;
-  queueId: string;
-}) {
-  await fetch(veniceApiUrl("video/complete"), {
-    method: "POST",
-    headers: providerHeaders(values.apiKey),
-    body: JSON.stringify({
-      model: values.model,
-      queue_id: values.queueId
-    }),
-    signal: AbortSignal.timeout(20_000)
-  }).catch(() => undefined);
-}
-
-async function downloadProviderUrl(urlValue: string) {
-  const url = new URL(urlValue);
-  if (url.protocol !== "https:") {
-    throw new Error("VIDEO_DOWNLOAD_URL_INVALID");
-  }
-
-  const response = await fetch(url, {
-    cache: "no-store",
-    redirect: "follow",
-    signal: AbortSignal.timeout(120_000)
-  });
-
-  if (!response.ok) {
-    throw new Error(`VIDEO_DOWNLOAD_FAILED:${response.status}`);
-  }
-
-  const contentLength = Number(response.headers.get("content-length"));
-  if (
-    Number.isFinite(contentLength) &&
-    contentLength > MAX_GENERATED_VIDEO_BYTES
-  ) {
-    throw new Error("VIDEO_PROVIDER_RETURNED_INVALID_FILE");
-  }
-
-  const contentType =
-    response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ||
-    "video/mp4";
-  if (contentType !== "video/mp4" && contentType !== "application/octet-stream") {
-    throw new Error("VIDEO_PROVIDER_RETURNED_INVALID_FILE");
-  }
-
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (!bytes.length || bytes.length > MAX_GENERATED_VIDEO_BYTES) {
-    throw new Error("VIDEO_PROVIDER_RETURNED_INVALID_FILE");
-  }
-
-  return bytes;
-}
-
 async function retrieveProviderVideo(values: {
   apiKey: string;
-  model: string;
   queueId: string;
-  downloadUrl: string | null;
 }) {
-  const response = await fetch(veniceApiUrl("video/retrieve"), {
-    method: "POST",
-    headers: providerHeaders(values.apiKey),
-    body: JSON.stringify({
-      model: values.model,
-      queue_id: values.queueId,
-      delete_media_on_completion: false
-    }),
-    signal: AbortSignal.timeout(60_000)
-  });
+  try {
+    const prediction = await getWaveSpeedPrediction({
+      apiKey: values.apiKey,
+      predictionId: values.queueId,
+      timeoutMs: 30_000
+    });
 
-  const contentType =
-    response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ||
-    "";
+    if (prediction.status === "completed") {
+      const outputUrl = prediction.outputs[0];
+      if (!outputUrl) {
+        return {
+          state: "failed" as const,
+          errorCode: "VIDEO_PROVIDER_OUTPUT_MISSING"
+        };
+      }
 
-  if (!response.ok) {
-    const detail = (await response.text()).slice(0, 500);
-    const terminal = [400, 401, 402, 403, 404, 410, 413, 415, 422].includes(
-      response.status
-    );
-    const errorCode = `VIDEO_PROVIDER_FAILED:${response.status}:${detail}`;
-
-    if (terminal) {
-      return { state: "failed" as const, errorCode };
+      try {
+        const downloaded = await downloadWaveSpeedOutput({
+          url: outputUrl,
+          maximumBytes: MAX_GENERATED_VIDEO_BYTES,
+          allowedContentTypes: VIDEO_CONTENT_TYPES,
+          fallbackContentType: "video/mp4",
+          timeoutMs: 120_000
+        });
+        return { state: "completed" as const, bytes: downloaded.bytes };
+      } catch (error) {
+        return {
+          state: "failed" as const,
+          errorCode:
+            error instanceof Error ? error.message : "VIDEO_DOWNLOAD_FAILED"
+        };
+      }
     }
 
-    return { state: "processing" as const, errorCode };
-  }
-
-  if (contentType === "video/mp4" || contentType === "application/octet-stream") {
-    const contentLength = Number(response.headers.get("content-length"));
     if (
-      Number.isFinite(contentLength) &&
-      contentLength > MAX_GENERATED_VIDEO_BYTES
+      prediction.status === "failed" ||
+      prediction.status === "cancelled" ||
+      prediction.status === "timeout"
     ) {
       return {
         state: "failed" as const,
-        errorCode: "VIDEO_PROVIDER_RETURNED_INVALID_FILE"
-      };
-    }
-
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (!bytes.length || bytes.length > MAX_GENERATED_VIDEO_BYTES) {
-      return {
-        state: "failed" as const,
-        errorCode: "VIDEO_PROVIDER_RETURNED_INVALID_FILE"
-      };
-    }
-
-    return { state: "completed" as const, bytes };
-  }
-
-  const payload = await response.json().catch(() => null);
-  const status = String(payload?.status ?? "PROCESSING").toUpperCase();
-
-  if (status === "COMPLETED") {
-    const downloadUrl =
-      typeof payload?.download_url === "string"
-        ? payload.download_url
-        : values.downloadUrl;
-
-    if (!downloadUrl) {
-      return {
-        state: "failed" as const,
-        errorCode: "VIDEO_DOWNLOAD_URL_MISSING"
-      };
-    }
-
-    try {
-      return {
-        state: "completed" as const,
-        bytes: await downloadProviderUrl(downloadUrl)
-      };
-    } catch (error) {
-      return {
-        state: "failed" as const,
         errorCode:
-          error instanceof Error ? error.message : "VIDEO_DOWNLOAD_FAILED"
+          prediction.error || `VIDEO_PROVIDER_${prediction.status.toUpperCase()}`
       };
     }
-  }
 
-  if (TERMINAL_PROVIDER_STATUSES.has(status)) {
+    const rawInference = Number(prediction.timings?.inference ?? 0);
+    const executionDuration = Number.isFinite(rawInference)
+      ? rawInference > 100
+        ? rawInference / 1000
+        : rawInference
+      : 0;
+
     return {
-      state: "failed" as const,
-      errorCode: String(payload?.error ?? payload?.message ?? status).slice(0, 200)
+      state: "processing" as const,
+      averageExecutionTime: 0,
+      executionDuration
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (/WAVESPEED_RESULT_FAILED:(400|401|402|403|404|410|422):/.test(message)) {
+      return { state: "failed" as const, errorCode: message.slice(0, 200) };
+    }
+
+    // Temporary result-query failures should not refund a still-running job.
+    return {
+      state: "processing" as const,
+      averageExecutionTime: 0,
+      executionDuration: 0
     };
   }
-
-  return {
-    state: "processing" as const,
-    averageExecutionTime: Number(payload?.average_execution_time ?? 0),
-    executionDuration: Number(payload?.execution_duration ?? 0)
-  };
 }
 
 async function finalizeVideo(values: {
@@ -306,7 +235,7 @@ async function finalizeVideo(values: {
         storage_path: storagePath,
         prompt: values.prompt,
         duration_seconds: values.durationSeconds,
-        provider: "venice",
+        provider: "wavespeed",
         model: values.model,
         evercoin_charge: values.cost
       },
@@ -413,14 +342,12 @@ export async function GET(
         return NextResponse.json({ status: "processing" });
       }
 
-      const apiKey = process.env.VENICE_API_KEY?.trim();
-      if (!apiKey) throw new Error("VENICE_NOT_CONFIGURED");
+      const apiKey = wavespeedApiKey();
+      if (!apiKey) throw new Error("WAVESPEED_NOT_CONFIGURED");
 
       const retrieved = await retrieveProviderVideo({
         apiKey,
-        model: current.provider_model,
-        queueId: current.provider_queue_id,
-        downloadUrl: current.provider_download_url
+        queueId: current.provider_queue_id
       });
 
       if (retrieved.state === "processing") {
@@ -439,11 +366,6 @@ export async function GET(
           userId: user.id,
           requestId: current.request_id,
           errorCode: retrieved.errorCode
-        });
-        await providerCleanup({
-          apiKey,
-          model: current.provider_model,
-          queueId: current.provider_queue_id
         });
 
         return NextResponse.json({
@@ -470,12 +392,6 @@ export async function GET(
         model: current.provider_model,
         cost: Number(requestDetails.evercoin_charge),
         bytes: retrieved.bytes
-      });
-
-      await providerCleanup({
-        apiKey,
-        model: current.provider_model,
-        queueId: current.provider_queue_id
       });
 
       return NextResponse.json(
@@ -552,8 +468,6 @@ export async function POST(
 ) {
   let userId = "";
   let requestId = "";
-  let queuedModel = "";
-  let queuedId = "";
 
   try {
     const user = await getAuthenticatedUser(request);
@@ -562,9 +476,7 @@ export async function POST(
     }
     userId = user.id;
 
-    const parsed = GenerateBody.safeParse(
-      await request.json().catch(() => null)
-    );
+    const parsed = GenerateBody.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json({ error: "INVALID_PROMPT" }, { status: 400 });
     }
@@ -647,8 +559,8 @@ export async function POST(
       );
     }
 
-    const apiKey = process.env.VENICE_API_KEY?.trim();
-    if (!apiKey) throw new Error("VENICE_NOT_CONFIGURED");
+    const apiKey = wavespeedApiKey();
+    if (!apiKey) throw new Error("WAVESPEED_NOT_CONFIGURED");
 
     const referenceImage = await activeCharacterReferenceDataUrl({
       request,
@@ -657,55 +569,28 @@ export async function POST(
       fallbackImage: character.image
     });
 
-    const providerResponse = await fetch(veniceApiUrl("video/queue"), {
-      method: "POST",
-      headers: providerHeaders(apiKey),
-      body: JSON.stringify({
-        model,
-        prompt:
-          `@Image1 is the exact fictional adult character ${character.name}. ` +
-          `Preserve the same face, identity, age, body, and recognizable appearance throughout the video. ` +
-          parsed.data.prompt,
-        duration: `${parsed.data.durationSeconds}s`,
+    const submitted = await submitWaveSpeedPrediction({
+      apiKey,
+      model,
+      input: {
+        image: referenceImage,
+        prompt: naturalMotionPrompt(character.name, parsed.data.prompt),
+        duration: parsed.data.durationSeconds,
         resolution: videoResolution(),
         aspect_ratio: videoAspectRatio(),
-        audio: false,
-        reference_image_urls: [referenceImage],
-        negative_prompt:
-          "identity drift, different person, face distortion, low resolution, blur, watermark, text, duplicate body parts"
-      }),
-      signal: AbortSignal.timeout(60_000)
+        generate_audio: false,
+        camera_fixed: false,
+        seed: -1
+      },
+      timeoutMs: 60_000
     });
-
-    if (!providerResponse.ok) {
-      const detail = (await providerResponse.text()).slice(0, 500);
-      throw new Error(
-        `VIDEO_PROVIDER_QUEUE_FAILED:${providerResponse.status}:${detail}`
-      );
-    }
-
-    const payload = await providerResponse.json();
-    queuedModel =
-      typeof payload?.model === "string" && payload.model.trim()
-        ? payload.model.trim()
-        : model;
-    queuedId =
-      typeof payload?.queue_id === "string"
-        ? payload.queue_id
-        : typeof payload?.id === "string"
-          ? payload.id
-          : "";
-    const downloadUrl =
-      typeof payload?.download_url === "string" ? payload.download_url : null;
-
-    if (!queuedId) throw new Error("VIDEO_PROVIDER_QUEUE_ID_MISSING");
 
     const recorded = await setCharacterVideoQueue({
       userId: user.id,
       requestId,
-      providerModel: queuedModel,
-      providerQueueId: queuedId,
-      providerDownloadUrl: downloadUrl
+      providerModel: submitted.model,
+      providerQueueId: submitted.id,
+      providerDownloadUrl: null
     });
     if (!recorded) throw new Error("VIDEO_QUEUE_RECORD_FAILED");
 
@@ -730,15 +615,6 @@ export async function POST(
       }).catch(() => undefined);
     }
 
-    const apiKey = process.env.VENICE_API_KEY?.trim();
-    if (apiKey && queuedModel && queuedId) {
-      await providerCleanup({
-        apiKey,
-        model: queuedModel,
-        queueId: queuedId
-      });
-    }
-
     console.error("Character video queue failed:", error);
     return NextResponse.json(
       { error: "VIDEO_GENERATION_FAILED" },
@@ -757,9 +633,7 @@ export async function PATCH(
       return NextResponse.json({ error: "SIGNUP_REQUIRED" }, { status: 401 });
     }
 
-    const parsed = DeleteBody.safeParse(
-      await request.json().catch(() => null)
-    );
+    const parsed = DeleteBody.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
     }
