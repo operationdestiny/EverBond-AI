@@ -7,7 +7,7 @@ import {
 } from "@/lib/billing/evercoin-packs";
 
 const Body = z
-  .object({ pack: z.enum(["1000", "5000", "10000"]) })
+  .object({ pack: z.enum(["500", "1000", "5000"]) })
   .strict();
 
 export async function POST(request: Request) {
@@ -39,9 +39,18 @@ export async function POST(request: Request) {
       );
     }
 
+    const configuredSiteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL?.trim();
+    const requestOrigin = new URL(request.url).origin;
+
     const url = await createEverCoinCheckout({
       pack,
-      userId: user.id
+      userId: user.id,
+      email:
+        typeof user.email === "string"
+          ? user.email
+          : null,
+      siteUrl: configuredSiteUrl || requestOrigin
     });
 
     return NextResponse.json(
@@ -58,17 +67,16 @@ export async function POST(request: Request) {
         ? error.message
         : "CHECKOUT_FAILED";
 
-    console.error("EverCoin checkout failed:", error);
+    console.error("EverCoin Stripe checkout failed:", error);
 
-    const sandbox =
-      process.env.PADDLE_ENVIRONMENT !== "production";
+    const safeToExpose =
+      process.env.NODE_ENV !== "production" ||
+      process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_");
 
     return NextResponse.json(
       {
         error: "CHECKOUT_FAILED",
-        // Detailed Paddle configuration errors are useful while testing,
-        // but are intentionally not exposed from the production environment.
-        message: sandbox ? detail : undefined
+        message: safeToExpose ? detail : undefined
       },
       { status: 500 }
     );

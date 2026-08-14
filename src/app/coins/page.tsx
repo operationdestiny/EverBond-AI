@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { PaddleCheckoutBridge } from "@/components/billing/PaddleCheckoutBridge";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useSiteLanguage } from "@/lib/site-language";
 import { EVERCOIN_PAGE_COPY } from "@/lib/evercoin-page-language";
@@ -21,9 +20,15 @@ import {
 
 const packages = [
   {
+    code: "500" as const,
+    amount: 500,
+    price: "$4.99",
+    image: "/assets/everbond-v19-real-coin-hero.png"
+  },
+  {
     code: "1000" as const,
     amount: 1_000,
-    price: "$10.99",
+    price: "$9.99",
     image: "/assets/evercoin-1000.png"
   },
   {
@@ -31,19 +36,12 @@ const packages = [
     amount: 5_000,
     price: "$44.99",
     image: "/assets/evercoin-5000.png"
-  },
-  {
-    code: "10000" as const,
-    amount: 10_000,
-    price: "$84.99",
-    image: "/assets/evercoin-10000.png"
   }
 ];
 
 export default function CoinsPage() {
   return (
     <AppShell>
-      <PaddleCheckoutBridge />
       <CoinsPageContent />
     </AppShell>
   );
@@ -57,8 +55,8 @@ function CoinsPageContent() {
   const { session, authReady, openAuthModal } = useAuth();
   const [busyPack, setBusyPack] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [imageCost, setImageCost] = useState(15);
-  const [videoCost, setVideoCost] = useState(199);
+  const [imageCost, setImageCost] = useState(20);
+  const [videoCost, setVideoCost] = useState(90);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,23 +106,12 @@ function CoinsPageContent() {
       icon: Clapperboard,
       title: pageCopy.videosTitle,
       body: pageCopy.videosBody,
-      rate:
-        `${pageCopy.about} ${videoCost} EverCoin / ${pageCopy.videoUnit}`
+      rate: `${videoCost} EverCoin / ${pageCopy.videoUnit}`
     }
   ];
 
   async function buyPack(pack: (typeof packages)[number]) {
     if (!authReady || busyPack) return;
-
-    const paddleClientToken =
-      process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN?.trim() ?? "";
-
-    if (!paddleClientToken) {
-      setError(
-        "PADDLE_CONFIG: NEXT_PUBLIC_PADDLE_CLIENT_TOKEN is missing from this deployment."
-      );
-      return;
-    }
 
     if (!session?.access_token) {
       openAuthModal();
@@ -146,17 +133,17 @@ function CoinsPageContent() {
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok || typeof payload?.url !== "string") {
-        const sandboxDetail =
+        const providerDetail =
           typeof payload?.message === "string" &&
           (
-            payload.message.startsWith("PADDLE_") ||
-            payload.message.startsWith("PADDLE_CONFIG:")
+            payload.message.startsWith("STRIPE_") ||
+            payload.message.startsWith("STRIPE_CONFIG:")
           )
             ? payload.message
             : "";
 
         throw new Error(
-          sandboxDetail ||
+          providerDetail ||
             localizedErrorMessage(
               payload?.message ?? payload?.error,
               language,
