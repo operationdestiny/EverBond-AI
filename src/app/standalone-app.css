@@ -122,6 +122,11 @@
     line-height: 1.2 !important;
   }
 
+  /*
+   * Installed app chat portrait: show only the character name.
+   * Hide the short archetype/introduction line under the name.
+   * This does not affect the opening scenario, first message, or Discover cards.
+   */
   html.everbond-standalone
     .everbond-chat-page
     > div
@@ -130,9 +135,7 @@
     > button:first-child
     > div
     > p {
-    margin-top: 2px !important;
-    font-size: 0.75rem !important;
-    line-height: 1.2 !important;
+    display: none !important;
   }
 
   /*
