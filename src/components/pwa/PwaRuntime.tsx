@@ -2,29 +2,60 @@
 
 import { useEffect } from "react";
 
+function isStandaloneDisplay() {
+  if (typeof window === "undefined") return false;
+
+  const navigatorWithStandalone = navigator as Navigator & {
+    standalone?: boolean;
+  };
+
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    navigatorWithStandalone.standalone === true
+  );
+}
+
 export function PwaRuntime() {
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") return;
-    if (!("serviceWorker" in navigator)) return;
+    const standaloneMedia = window.matchMedia("(display-mode: standalone)");
+
+    const syncStandaloneClass = () => {
+      document.documentElement.classList.toggle(
+        "everbond-standalone",
+        isStandaloneDisplay()
+      );
+    };
+
+    syncStandaloneClass();
+    standaloneMedia.addEventListener?.("change", syncStandaloneClass);
 
     let cancelled = false;
 
-    navigator.serviceWorker
-      .register("/sw.js", {
-        scope: "/",
-        updateViaCache: "none"
-      })
-      .then((registration) => {
-        if (!cancelled) {
-          void registration.update();
-        }
-      })
-      .catch((error) => {
-        console.error("EverBond PWA service worker registration failed:", error);
-      });
+    if (
+      process.env.NODE_ENV === "production" &&
+      "serviceWorker" in navigator
+    ) {
+      navigator.serviceWorker
+        .register("/sw.js", {
+          scope: "/",
+          updateViaCache: "none"
+        })
+        .then((registration) => {
+          if (!cancelled) {
+            void registration.update();
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "EverBond PWA service worker registration failed:",
+            error
+          );
+        });
+    }
 
     return () => {
       cancelled = true;
+      standaloneMedia.removeEventListener?.("change", syncStandaloneClass);
     };
   }, []);
 

@@ -85,7 +85,13 @@ export function LocalizedChatShell({
     return (
       <main className="flex h-[calc(100dvh-64px)] items-center justify-center px-4">
         <section className="w-full max-w-2xl rounded-[2rem] border border-bond-rose/35 bg-white/[0.035] p-8 text-center shadow-[0_0_34px_rgba(255,92,168,0.08)]">
-          <p className={loading ? "animate-pulse text-bond-muted" : "text-bond-muted"}>
+          <p
+            className={
+              loading
+                ? "animate-pulse text-bond-muted"
+                : "text-bond-muted"
+            }
+          >
             {loading ? copy.translatingCharacter : copy.translationUnavailable}
           </p>
         </section>
@@ -94,9 +100,11 @@ export function LocalizedChatShell({
   }
 
   return (
-    <ChatShell
-      key={`${character.id}:${language}:${character.tagline}`}
-      character={character}
-    />
+    <div className="everbond-chat-page">
+      <ChatShell
+        key={`${character.id}:${language}:${character.tagline}`}
+        character={character}
+      />
+    </div>
   );
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import { PwaRuntime } from "@/components/pwa/PwaRuntime";
 import "./globals.css";
+import "./standalone-app.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const space = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
@@ -41,11 +42,24 @@ try {
 } catch (_) {}
 `;
 
+const INITIAL_STANDALONE_SCRIPT = `
+try {
+  var isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true;
+
+  if (isStandalone) {
+    document.documentElement.classList.add("everbond-standalone");
+  }
+} catch (_) {}
+`;
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${inter.variable} ${space.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: INITIAL_LANGUAGE_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: INITIAL_STANDALONE_SCRIPT }} />
       </head>
       <body>
         <PwaRuntime />
