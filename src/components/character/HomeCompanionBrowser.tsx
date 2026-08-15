@@ -8,6 +8,7 @@ import { useCharacterBrowser } from "@/components/character/useCharacterBrowser"
 import { characterCategories } from "@/lib/characters";
 import { useSiteLanguage } from "@/lib/site-language";
 import { LocalizedBannerImage } from "@/components/ui/LocalizedBannerImage";
+import { PwaInstallButton } from "@/components/pwa/PwaInstallButton";
 import {
   CHARACTER_TAG_KEY_MAP,
   type CharacterTag
@@ -189,7 +190,11 @@ export function HomeCompanionBrowser({
             </button>
           </div>
 
-          <div className="mb-3 flex min-w-0 flex-wrap items-start gap-2 xl:col-span-2">
+          <div className="min-w-0 xl:col-start-3 xl:row-start-2 xl:self-start">
+            <PwaInstallButton />
+          </div>
+
+          <div className="mb-3 flex min-w-0 flex-wrap items-start gap-2 xl:col-span-2 xl:col-start-1 xl:row-start-2">
             {characterCategories.map((item) => (
               <button
                 key={item.id}

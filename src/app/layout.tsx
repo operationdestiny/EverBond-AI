@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
+import { PwaRuntime } from "@/components/pwa/PwaRuntime";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -11,10 +12,16 @@ export const metadata: Metadata = {
   title: `EverBond — ${EVERBOND_SLOGAN}`,
   description: "Start chatting instantly with truly unrestricted AI companions built around Living Memory, story continuity, and emotional roleplay.",
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://everbond.ai"),
+  manifest: "/manifest.webmanifest",
   icons: {
     icon: "/favicon.png",
     shortcut: "/favicon.png",
-    apple: "/favicon.png"
+    apple: "/pwa/icon-192.png"
+  },
+  appleWebApp: {
+    capable: true,
+    title: "EverBond",
+    statusBarStyle: "black-translucent"
   },
   openGraph: {
     title: "EverBond",
@@ -40,7 +47,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         <script dangerouslySetInnerHTML={{ __html: INITIAL_LANGUAGE_SCRIPT }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <PwaRuntime />
+        {children}
+      </body>
     </html>
   );
 }
