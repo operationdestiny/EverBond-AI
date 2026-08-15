@@ -1,20 +1,43 @@
 "use client";
 
-import { LogIn, LogOut } from "lucide-react";
+import { LogIn, LogOut, Menu } from "lucide-react";
 import { LanguageSelector } from "@/components/layout/LanguageSelector";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useSiteLanguage } from "@/lib/site-language";
 import { MY_BOND_COPY } from "@/lib/my-bond-language";
 import styles from "./NavBar.module.css";
 
-export function NavBar() {
+const MENU_COPY = {
+  EN: "Open menu",
+  ES: "Abrir menú",
+  FR: "Ouvrir le menu",
+  DE: "Menü öffnen",
+  JA: "メニューを開く",
+  KO: "메뉴 열기"
+} as const;
+
+export function NavBar({
+  onOpenMobileMenu
+}: {
+  onOpenMobileMenu: () => void;
+}) {
   const { language } = useSiteLanguage();
   const { session, authReady, openAuthModal, signOut } = useAuth();
   const copy = MY_BOND_COPY[language] ?? MY_BOND_COPY.EN;
+  const menuLabel = MENU_COPY[language] ?? MENU_COPY.EN;
 
   return (
     <header className="v20-topbar">
       <div className="v51-topbar-inner">
+        <button
+          type="button"
+          onClick={onOpenMobileMenu}
+          className="v18-control mr-2 inline-flex h-10 w-10 shrink-0 items-center justify-center text-white lg:hidden"
+          aria-label={menuLabel}
+        >
+          <Menu size={20} />
+        </button>
+
         <div className="v74-top-actions ml-auto flex items-center gap-2">
           <LanguageSelector />
 

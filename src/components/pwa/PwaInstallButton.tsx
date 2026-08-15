@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import {
-  CheckCircle2,
   Download,
   Share2,
   X
@@ -19,7 +18,6 @@ type InstallPromptEvent = Event & {
 const INSTALL_COPY = {
   EN: {
     download: "Download the app!",
-    installed: "EverBond app installed",
     title: "Install EverBond",
     ios:
       "On iPhone or iPad, tap the Share button in Safari, choose “Add to Home Screen,” then tap “Add.”",
@@ -29,7 +27,6 @@ const INSTALL_COPY = {
   },
   ES: {
     download: "¡Descarga la app!",
-    installed: "App de EverBond instalada",
     title: "Instalar EverBond",
     ios:
       "En iPhone o iPad, toca Compartir en Safari, elige “Añadir a pantalla de inicio” y luego toca “Añadir”.",
@@ -39,7 +36,6 @@ const INSTALL_COPY = {
   },
   FR: {
     download: "Téléchargez l’app !",
-    installed: "Application EverBond installée",
     title: "Installer EverBond",
     ios:
       "Sur iPhone ou iPad, touchez Partager dans Safari, choisissez « Sur l’écran d’accueil », puis « Ajouter ».",
@@ -49,7 +45,6 @@ const INSTALL_COPY = {
   },
   DE: {
     download: "App herunterladen!",
-    installed: "EverBond-App installiert",
     title: "EverBond installieren",
     ios:
       "Tippe auf iPhone oder iPad in Safari auf Teilen, wähle „Zum Home-Bildschirm“ und dann „Hinzufügen“.",
@@ -59,7 +54,6 @@ const INSTALL_COPY = {
   },
   JA: {
     download: "アプリをダウンロード！",
-    installed: "EverBondアプリをインストール済み",
     title: "EverBondをインストール",
     ios:
       "iPhoneまたはiPadでは、Safariの共有ボタンをタップし、「ホーム画面に追加」を選んでから「追加」をタップしてください。",
@@ -69,7 +63,6 @@ const INSTALL_COPY = {
   },
   KO: {
     download: "앱 다운로드!",
-    installed: "EverBond 앱 설치됨",
     title: "EverBond 설치",
     ios:
       "iPhone 또는 iPad에서는 Safari의 공유 버튼을 누르고 “홈 화면에 추가”를 선택한 다음 “추가”를 누르세요.",
@@ -106,12 +99,18 @@ export function PwaInstallButton() {
   const copy = INSTALL_COPY[language] ?? INSTALL_COPY.EN;
   const [installPrompt, setInstallPrompt] =
     useState<InstallPromptEvent | null>(null);
-  const [installed, setInstalled] = useState(false);
+  const [standalone, setStandalone] = useState<boolean | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [prompting, setPrompting] = useState(false);
 
   useEffect(() => {
-    setInstalled(isStandaloneDisplay());
+    setStandalone(isStandaloneDisplay());
+
+    const standaloneMedia = window.matchMedia("(display-mode: standalone)");
+
+    const handleDisplayModeChange = () => {
+      setStandalone(isStandaloneDisplay());
+    };
 
     const handleInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -119,13 +118,14 @@ export function PwaInstallButton() {
     };
 
     const handleInstalled = () => {
-      setInstalled(true);
+      setStandalone(true);
       setInstallPrompt(null);
       setShowHelp(false);
     };
 
     window.addEventListener("beforeinstallprompt", handleInstallPrompt);
     window.addEventListener("appinstalled", handleInstalled);
+    standaloneMedia.addEventListener?.("change", handleDisplayModeChange);
 
     return () => {
       window.removeEventListener(
@@ -133,11 +133,12 @@ export function PwaInstallButton() {
         handleInstallPrompt
       );
       window.removeEventListener("appinstalled", handleInstalled);
+      standaloneMedia.removeEventListener?.("change", handleDisplayModeChange);
     };
   }, []);
 
   async function installEverBond() {
-    if (installed || prompting) return;
+    if (standalone || prompting) return;
 
     if (!installPrompt) {
       setShowHelp(true);
@@ -150,7 +151,7 @@ export function PwaInstallButton() {
       const result = await installPrompt.prompt();
 
       if (result.outcome === "accepted") {
-        setInstalled(true);
+        setStandalone(true);
       }
 
       setInstallPrompt(null);
@@ -159,25 +160,21 @@ export function PwaInstallButton() {
     }
   }
 
+  if (standalone !== false) {
+    return null;
+  }
+
   return (
     <>
       <button
         type="button"
         onClick={() => void installEverBond()}
-        disabled={installed || prompting}
-        className="mb-1.5 flex w-full items-center justify-center gap-1.5 rounded-full border border-bond-rose/75 bg-bond-rose/15 px-3.5 py-2 text-[13px] font-bold text-white shadow-[0_0_18px_rgba(255,92,168,0.10)] transition hover:border-bond-rose hover:bg-bond-rose/25 disabled:cursor-default disabled:border-white/10 disabled:bg-white/[0.035] disabled:text-bond-muted"
+        disabled={prompting}
+        className="mb-1.5 flex w-full items-center justify-center gap-1.5 rounded-full border border-bond-rose/75 bg-bond-rose/15 px-3.5 py-2 text-[13px] font-bold text-white shadow-[0_0_18px_rgba(255,92,168,0.10)] transition hover:border-bond-rose hover:bg-bond-rose/25 disabled:cursor-default disabled:opacity-60"
       >
-        {installed ? (
-          <CheckCircle2 size={15} />
-        ) : (
-          <Download size={15} />
-        )}
+        <Download size={15} />
         <span>
-          {installed
-            ? copy.installed
-            : prompting
-              ? `${copy.title}...`
-              : copy.download}
+          {prompting ? `${copy.title}...` : copy.download}
         </span>
       </button>
 
