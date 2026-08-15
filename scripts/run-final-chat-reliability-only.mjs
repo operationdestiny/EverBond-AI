@@ -13,6 +13,11 @@ const runtimePath = path.join(
   "scripts",
   ".apply-final-chat-reliability-only.runtime.mjs"
 );
+const languagePatchPath = path.join(
+  root,
+  "scripts",
+  "apply-chat-language-lock.mjs"
+);
 
 const legacy = fs.readFileSync(legacyPath, "utf8");
 const marker = [
@@ -69,3 +74,7 @@ try {
 } finally {
   fs.rmSync(runtimePath, { force: true });
 }
+
+await import(
+  `${pathToFileURL(languagePatchPath).href}?build=${Date.now()}`
+);
