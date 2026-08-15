@@ -14,9 +14,9 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://everbond.ai"),
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/favicon.png",
-    shortcut: "/favicon.png",
-    apple: "/pwa/icon-192.png"
+    icon: "/everbond-logo.png",
+    shortcut: "/everbond-logo.png",
+    apple: "/pwa/everbond-icon-192.png"
   },
   appleWebApp: {
     capable: true,

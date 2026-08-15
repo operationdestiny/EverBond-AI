@@ -165,12 +165,12 @@ export function PwaInstallButton() {
         type="button"
         onClick={() => void installEverBond()}
         disabled={installed || prompting}
-        className="flex w-full items-center justify-center gap-2 rounded-full border border-bond-rose/75 bg-bond-rose/15 px-4 py-2.5 text-sm font-bold text-white shadow-[0_0_18px_rgba(255,92,168,0.10)] transition hover:border-bond-rose hover:bg-bond-rose/25 disabled:cursor-default disabled:border-white/10 disabled:bg-white/[0.035] disabled:text-bond-muted"
+        className="mb-1.5 flex w-full items-center justify-center gap-1.5 rounded-full border border-bond-rose/75 bg-bond-rose/15 px-3.5 py-2 text-[13px] font-bold text-white shadow-[0_0_18px_rgba(255,92,168,0.10)] transition hover:border-bond-rose hover:bg-bond-rose/25 disabled:cursor-default disabled:border-white/10 disabled:bg-white/[0.035] disabled:text-bond-muted"
       >
         {installed ? (
-          <CheckCircle2 size={17} />
+          <CheckCircle2 size={15} />
         ) : (
-          <Download size={17} />
+          <Download size={15} />
         )}
         <span>
           {installed
