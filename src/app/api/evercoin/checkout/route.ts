@@ -2,83 +2,68 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import {
-  createEverCoinCheckout,
-  getEverCoinPack
-} from "@/lib/billing/evercoin-packs";
+  configuredPaymentRails,
+  createEverCoinPaymentCheckout
+} from "@/lib/billing/evercoin-payment-router";
+
+export const runtime = "nodejs";
+export const maxDuration = 30;
 
 const Body = z
-  .object({ pack: z.enum(["500", "1000", "5000"]) })
+  .object({
+    rail: z.enum(["card", "crypto"]),
+    pack: z.enum(["500", "1200", "2000", "5000"])
+  })
   .strict();
+
+export async function GET() {
+  return NextResponse.json(
+    { rails: configuredPaymentRails() },
+    { headers: { "Cache-Control": "private, no-store" } }
+  );
+}
 
 export async function POST(request: Request) {
   try {
     const user = await getAuthenticatedUser(request);
     if (!user) {
-      return NextResponse.json(
-        { error: "SIGNUP_REQUIRED" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "SIGNUP_REQUIRED" }, { status: 401 });
     }
 
-    const parsed = Body.safeParse(
-      await request.json().catch(() => null)
-    );
-
+    const parsed = Body.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_REQUEST" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
     }
 
-    const pack = getEverCoinPack(parsed.data.pack);
-    if (!pack) {
-      return NextResponse.json(
-        { error: "INVALID_PACK" },
-        { status: 400 }
-      );
+    const email = typeof user.email === "string" ? user.email.trim() : "";
+    if (!email) {
+      return NextResponse.json({ error: "ACCOUNT_EMAIL_REQUIRED" }, { status: 400 });
     }
 
-    const configuredSiteUrl =
-      process.env.NEXT_PUBLIC_SITE_URL?.trim();
-    const requestOrigin = new URL(request.url).origin;
-
-    const url = await createEverCoinCheckout({
-      pack,
+    const checkout = await createEverCoinPaymentCheckout({
+      rail: parsed.data.rail,
+      packCode: parsed.data.pack,
       userId: user.id,
-      email:
-        typeof user.email === "string"
-          ? user.email
-          : null,
-      siteUrl: configuredSiteUrl || requestOrigin
+      email
     });
 
-    return NextResponse.json(
-      { url },
-      {
-        headers: {
-          "Cache-Control": "private, no-store"
-        }
-      }
-    );
+    return NextResponse.json(checkout, {
+      headers: { "Cache-Control": "private, no-store" }
+    });
   } catch (error) {
-    const detail =
-      error instanceof Error
-        ? error.message
-        : "CHECKOUT_FAILED";
+    const detail = error instanceof Error ? error.message : "CHECKOUT_FAILED";
+    console.error("EverCoin payment-router checkout failed:", error);
 
-    console.error("EverCoin Stripe checkout failed:", error);
-
-    const safeToExpose =
-      process.env.NODE_ENV !== "production" ||
-      process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_");
+    const notConfigured =
+      detail === "PAYRAM_NOT_CONFIGURED" ||
+      detail === "BTCPAY_NOT_CONFIGURED";
 
     return NextResponse.json(
       {
-        error: "CHECKOUT_FAILED",
-        message: safeToExpose ? detail : undefined
+        error: notConfigured ? "PAYMENT_RAIL_NOT_CONFIGURED" : "CHECKOUT_FAILED",
+        message: process.env.NODE_ENV === "production" ? undefined : detail
       },
-      { status: 500 }
+      { status: notConfigured ? 503 : 500 }
     );
   }
 }
