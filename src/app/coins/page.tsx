@@ -225,25 +225,14 @@ function CoinsPageContent() {
   }
 
   function PaymentSection({
-    title,
-    description,
     packages,
     enabled
   }: {
-    title: string;
-    description: string;
     packages: Pack[];
     enabled: boolean;
   }) {
     return (
       <section className="mx-auto mb-12 max-w-6xl">
-        <div className="mb-5 text-center">
-          <h2 className="font-display text-3xl font-bold text-white">{title}</h2>
-          <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-bond-muted">
-            {description}
-          </p>
-        </div>
-
         <div className="grid gap-4 md:grid-cols-3">
           {packages.map((pack) => {
             const key = `card:${pack.code}`;
@@ -305,8 +294,6 @@ function CoinsPageContent() {
       )}
 
       <PaymentSection
-        title={paymentCopy.cardTitle}
-        description={paymentCopy.cardDescription}
         packages={paymentPackages}
         enabled={paymentReady}
       />
