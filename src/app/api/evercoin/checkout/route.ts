@@ -54,9 +54,7 @@ export async function POST(request: Request) {
     const detail = error instanceof Error ? error.message : "CHECKOUT_FAILED";
     console.error("EverCoin payment-router checkout failed:", error);
 
-    const notConfigured =
-      detail === "PAYRAM_NOT_CONFIGURED" ||
-      detail === "BTCPAY_NOT_CONFIGURED";
+    const notConfigured = detail === "PAYRAM_NOT_CONFIGURED";
 
     return NextResponse.json(
       {

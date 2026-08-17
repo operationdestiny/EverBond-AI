@@ -7,7 +7,7 @@ import {
 } from "@/lib/billing/evercoin-packs";
 
 export type EverCoinPaymentRail = "card" | "crypto";
-export type EverCoinPaymentProvider = "payram" | "btcpay";
+export type EverCoinPaymentProvider = "payram";
 
 type PaymentOrder = {
   id: string;
@@ -33,11 +33,6 @@ type CheckoutResult = {
 
 function cleanBaseUrl(value: string) {
   return value.trim().replace(/\/+$/, "");
-}
-
-function siteUrl() {
-  const value = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  return value ? cleanBaseUrl(value) : "";
 }
 
 function decimalFromMinor(amountMinor: number) {
@@ -83,21 +78,26 @@ function payRamConfig(rail: EverCoinPaymentRail) {
   return { baseUrl: normalized, apiKey };
 }
 
-function btcPayConfig() {
-  const baseUrl = process.env.BTCPAY_BASE_URL?.trim();
-  const storeId = process.env.BTCPAY_STORE_ID?.trim();
-  const apiKey = process.env.BTCPAY_API_KEY?.trim();
-  if (!baseUrl || !storeId || !apiKey) return null;
+function validPayRamCheckoutUrl(baseUrl: string, value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return "";
 
-  const normalized = cleanBaseUrl(baseUrl);
-  if (
-    process.env.NODE_ENV === "production" &&
-    !normalized.startsWith("https://")
-  ) {
-    throw new Error("BTCPAY_HTTPS_REQUIRED");
+  try {
+    const checkout = new URL(value.trim());
+    const base = new URL(baseUrl);
+
+    if (checkout.protocol !== "https:" && process.env.NODE_ENV === "production") {
+      return "";
+    }
+    if (checkout.protocol !== "https:" && checkout.protocol !== "http:") return "";
+
+    // PayRam may expose its API on :8443 while serving the hosted payment page
+    // on standard HTTPS. Require the same hostname but allow the port to differ.
+    if (checkout.hostname.toLowerCase() !== base.hostname.toLowerCase()) return "";
+
+    return checkout.toString();
+  } catch {
+    return "";
   }
-
-  return { baseUrl: normalized, storeId, apiKey };
 }
 
 async function insertOrder(values: {
@@ -179,9 +179,9 @@ async function createPayRamCheckout(values: {
         : typeof payload?.referenceID === "string"
           ? payload.referenceID.trim()
           : "";
-    const url = typeof payload?.url === "string" ? payload.url.trim() : "";
+    const url = validPayRamCheckoutUrl(config.baseUrl, payload?.url);
 
-    if (!response.ok || !reference || !/^https?:\/\//i.test(url)) {
+    if (!response.ok || !reference || !url) {
       throw new Error(`PAYRAM_CREATE_FAILED:${response.status}`);
     }
 
@@ -207,84 +207,6 @@ async function createPayRamCheckout(values: {
   }
 }
 
-async function createBtcPayCheckout(values: {
-  pack: EverCoinPack;
-  userId: string;
-  email: string;
-}): Promise<CheckoutResult> {
-  const config = btcPayConfig();
-  if (!config) throw new Error("BTCPAY_NOT_CONFIGURED");
-
-  const order = await insertOrder({
-    userId: values.userId,
-    rail: "crypto",
-    provider: "btcpay",
-    pack: values.pack
-  });
-
-  try {
-    const redirectURL = siteUrl() ? `${siteUrl()}/coins?payment=return` : undefined;
-    const response = await fetch(
-      `${config.baseUrl}/api/v1/stores/${encodeURIComponent(config.storeId)}/invoices`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `token ${config.apiKey}`,
-          "Content-Type": "application/json",
-          Accept: "application/json"
-        },
-        body: JSON.stringify({
-          amount: decimalFromMinor(values.pack.amountMinor),
-          currency: "USD",
-          metadata: {
-            orderId: order.id,
-            userId: values.userId,
-            buyerEmail: values.email,
-            itemDesc: `${values.pack.coins} EverCoin`,
-            packCode: values.pack.code,
-            kind: "evercoin"
-          },
-          checkout: {
-            redirectURL,
-            redirectAutomatically: Boolean(redirectURL)
-          }
-        }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(20_000)
-      }
-    );
-
-    const payload = await response.json().catch(() => null);
-    const reference = typeof payload?.id === "string" ? payload.id.trim() : "";
-    const url =
-      typeof payload?.checkoutLink === "string" ? payload.checkoutLink.trim() : "";
-
-    if (!response.ok || !reference || !/^https?:\/\//i.test(url)) {
-      throw new Error(`BTCPAY_CREATE_FAILED:${response.status}`);
-    }
-
-    await updateOrder(order.id, {
-      provider_reference: reference,
-      checkout_url: url,
-      provider_state: String(payload?.status ?? "New")
-    });
-
-    return {
-      orderId: order.id,
-      mode: "redirect",
-      provider: "btcpay",
-      url
-    };
-  } catch (error) {
-    await updateOrder(order.id, {
-      status: "failed",
-      error_code:
-        error instanceof Error ? error.message.slice(0, 240) : "BTCPAY_CREATE_FAILED"
-    }).catch(() => undefined);
-    throw error;
-  }
-}
-
 export async function createEverCoinPaymentCheckout(values: {
   rail: EverCoinPaymentRail;
   packCode: string;
@@ -293,36 +215,17 @@ export async function createEverCoinPaymentCheckout(values: {
 }) {
   const pack = paymentPack(values.rail, values.packCode);
 
-  if (values.rail === "card") {
-    return createPayRamCheckout({
-      rail: "card",
-      pack,
-      userId: values.userId,
-      email: values.email
-    });
-  }
-
-  // Broad crypto checkout first (USDC/USDT/BTC/etc. as enabled in PayRam).
-  // If that self-hosted gateway is unavailable, BTCPay is an independent
-  // Bitcoin/Lightning fallback with the same EverCoin fulfillment path.
-  try {
-    return await createPayRamCheckout({
-      rail: "crypto",
-      pack,
-      userId: values.userId,
-      email: values.email
-    });
-  } catch (error) {
-    if (!btcPayConfig()) throw error;
-    console.warn("EVERBOND_PAYRAM_CRYPTO_FALLBACK_TO_BTCPAY", {
-      error: error instanceof Error ? error.message : "PAYRAM_CRYPTO_FAILED"
-    });
-    return createBtcPayCheckout({
-      pack,
-      userId: values.userId,
-      email: values.email
-    });
-  }
+  // Both public rails use PayRam, but each rail has its own project API key.
+  // The PayRam dashboard is the enforcement point for which checkout options
+  // are exposed by each project:
+  //   card   -> card/fiat onramp options only
+  //   crypto -> USDC on Base only
+  return createPayRamCheckout({
+    rail: values.rail,
+    pack,
+    userId: values.userId,
+    email: values.email
+  });
 }
 
 async function creditOrder(order: PaymentOrder, transactionId: string) {
@@ -417,63 +320,6 @@ async function refreshPayRamOrder(order: PaymentOrder) {
   return { status: "pending" as const, coins: 0, balance: null };
 }
 
-async function refreshBtcPayOrder(order: PaymentOrder) {
-  const config = btcPayConfig();
-  if (!config || !order.provider_reference) {
-    throw new Error("BTCPAY_ORDER_NOT_CONFIGURED");
-  }
-
-  const response = await fetch(
-    `${config.baseUrl}/api/v1/stores/${encodeURIComponent(config.storeId)}/invoices/${encodeURIComponent(order.provider_reference)}`,
-    {
-      headers: {
-        Authorization: `token ${config.apiKey}`,
-        Accept: "application/json"
-      },
-      cache: "no-store",
-      signal: AbortSignal.timeout(20_000)
-    }
-  );
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload) {
-    throw new Error(`BTCPAY_STATUS_FAILED:${response.status}`);
-  }
-
-  const status = String(payload.status ?? "New");
-  const amountMinor = parseUsdMinor(payload.amount);
-  const currency = String(payload.currency ?? "").toUpperCase();
-  const metadata = payload.metadata ?? {};
-
-  if (amountMinor !== null && amountMinor !== order.amount_minor) {
-    throw new Error("BTCPAY_AMOUNT_MISMATCH");
-  }
-  if (currency && currency !== "USD") {
-    throw new Error("BTCPAY_CURRENCY_MISMATCH");
-  }
-  if (metadata?.orderId && String(metadata.orderId) !== order.id) {
-    throw new Error("BTCPAY_ORDER_MISMATCH");
-  }
-  if (metadata?.userId && String(metadata.userId) !== order.user_id) {
-    throw new Error("BTCPAY_USER_MISMATCH");
-  }
-
-  await updateOrder(order.id, {
-    provider_state: `${status}:${String(payload.additionalStatus ?? "None")}`,
-    last_checked_at: new Date().toISOString()
-  });
-
-  if (status.toLowerCase() === "settled") {
-    return creditOrder(order, `btcpay:${order.provider_reference}`);
-  }
-
-  if (status.toLowerCase() === "expired" || status.toLowerCase() === "invalid") {
-    await updateOrder(order.id, { status: "expired" });
-    return { status: "expired" as const, coins: 0, balance: null };
-  }
-
-  return { status: "pending" as const, coins: 0, balance: null };
-}
-
 export async function getPaymentOrderForUser(orderId: string, userId: string) {
   const { data, error } = await getSupabaseServiceClient()
     .from("evercoin_payment_orders")
@@ -511,14 +357,12 @@ export async function refreshEverCoinPaymentOrder(order: PaymentOrder) {
     return { status: order.status as "expired" | "failed", coins: 0, balance: null };
   }
 
-  return order.provider === "payram"
-    ? refreshPayRamOrder(order)
-    : refreshBtcPayOrder(order);
+  return refreshPayRamOrder(order);
 }
 
 export function configuredPaymentRails() {
   return {
     card: Boolean(payRamConfig("card")),
-    crypto: Boolean(payRamConfig("crypto") || btcPayConfig())
+    crypto: Boolean(payRamConfig("crypto"))
   };
 }
