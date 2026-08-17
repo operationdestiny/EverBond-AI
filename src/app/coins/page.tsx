@@ -19,23 +19,17 @@ import {
   localizedErrorMessage
 } from "@/lib/final-localization-language";
 
-type Rail = "card" | "crypto";
+type Rail = "card";
 type Pack = {
-  code: "500" | "1200" | "2000" | "5000";
+  code: "1200" | "2000" | "5000";
   amount: number;
   price: string;
   image: string;
 };
 
-const cardPackages: Pack[] = [
+const paymentPackages: Pack[] = [
   { code: "1200", amount: 1_200, price: "$12.09", image: "/assets/evercoin-1000.png" },
   { code: "2000", amount: 2_000, price: "$19.99", image: "/assets/evercoin-5000.png" },
-  { code: "5000", amount: 5_000, price: "$44.99", image: "/assets/evercoin-10000.png" }
-];
-
-const cryptoPackages: Pack[] = [
-  { code: "500", amount: 500, price: "$4.99", image: "/assets/evercoin-1000.png" },
-  { code: "1200", amount: 1_200, price: "$12.09", image: "/assets/evercoin-5000.png" },
   { code: "5000", amount: 5_000, price: "$44.99", image: "/assets/evercoin-10000.png" }
 ];
 
@@ -60,7 +54,7 @@ function CoinsPageContent() {
   const [notice, setNotice] = useState("");
   const [imageCost, setImageCost] = useState(20);
   const [videoCost, setVideoCost] = useState(90);
-  const [rails, setRails] = useState({ card: false, crypto: false });
+  const [paymentReady, setPaymentReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,12 +78,7 @@ function CoinsPageContent() {
         setVideoCost(Math.trunc(nextVideoCost));
       }
 
-      if (checkout?.rails && typeof checkout.rails === "object") {
-        setRails({
-          card: checkout.rails.card === true,
-          crypto: checkout.rails.crypto === true
-        });
-      }
+      setPaymentReady(checkout?.rails?.card === true);
     });
 
     return () => {
@@ -236,13 +225,11 @@ function CoinsPageContent() {
   }
 
   function PaymentSection({
-    rail,
     title,
     description,
     packages,
     enabled
   }: {
-    rail: Rail;
     title: string;
     description: string;
     packages: Pack[];
@@ -259,7 +246,7 @@ function CoinsPageContent() {
 
         <div className="grid gap-4 md:grid-cols-3">
           {packages.map((pack) => {
-            const key = `${rail}:${pack.code}`;
+            const key = `card:${pack.code}`;
             const busy = busyKey === key;
             return (
               <div
@@ -282,16 +269,12 @@ function CoinsPageContent() {
 
                 <button
                   type="button"
-                  onClick={() => void buyPack(rail, pack)}
+                  onClick={() => void buyPack("card", pack)}
                   disabled={!authReady || Boolean(busyKey) || !enabled}
                   className="bond-pink-button mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-bond-rose/15 px-5 py-3 text-base font-bold text-bond-rose disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   {busy && <LoaderCircle size={18} className="animate-spin" />}
-                  {enabled
-                    ? rail === "card"
-                      ? paymentCopy.buyCard
-                      : paymentCopy.buyCrypto
-                    : paymentCopy.unavailable}
+                  {enabled ? paymentCopy.buyCard : paymentCopy.unavailable}
                 </button>
               </div>
             );
@@ -322,19 +305,10 @@ function CoinsPageContent() {
       )}
 
       <PaymentSection
-        rail="card"
         title={paymentCopy.cardTitle}
         description={paymentCopy.cardDescription}
-        packages={cardPackages}
-        enabled={rails.card}
-      />
-
-      <PaymentSection
-        rail="crypto"
-        title={paymentCopy.cryptoTitle}
-        description={paymentCopy.cryptoDescription}
-        packages={cryptoPackages}
-        enabled={rails.crypto}
+        packages={paymentPackages}
+        enabled={paymentReady}
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
