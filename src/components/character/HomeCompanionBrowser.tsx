@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown, Filter, Search, Sparkles } from "lucide-react";
 import { Character, CharacterCategory } from "@/types/character";
 import { CharacterGrid } from "@/components/character/CharacterGrid";
+import styles from "@/components/character/PhoneDiscover.module.css";
 import { useCharacterBrowser } from "@/components/character/useCharacterBrowser";
 import { characterCategories } from "@/lib/characters";
 import { useSiteLanguage } from "@/lib/site-language";
@@ -100,7 +101,7 @@ export function HomeCompanionBrowser({
 
   return (
     <main
-      className="v18-page mobile-discover-page"
+      className={`v18-page ${styles.mobileDiscoverPage}`}
       onClickCapture={(event) => {
         const target = event.target;
         if (

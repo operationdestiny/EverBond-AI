@@ -1,0 +1,55 @@
+/*
+  Discover-page phone-only layout.
+  The local .mobileDiscoverPage class keeps this CSS Module valid while
+  targeting the existing global shell/header classes.
+*/
+
+.mobileDiscoverPage {
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  :global(.v18-shell):has(.mobileDiscoverPage) :global(.v20-topbar) {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    z-index: 9998 !important;
+    background: transparent !important;
+    border-bottom: 0 !important;
+    pointer-events: none !important;
+  }
+
+  :global(.v18-shell):has(.mobileDiscoverPage)
+    :global(.v20-topbar .v51-topbar-inner) {
+    width: 100% !important;
+    pointer-events: none !important;
+  }
+
+  :global(.v18-shell):has(.mobileDiscoverPage)
+    :global(.v20-topbar .v51-topbar-inner > button:first-child) {
+    position: fixed !important;
+    top: 8px !important;
+    left: 8px !important;
+    margin: 0 !important;
+    z-index: 10000 !important;
+    pointer-events: auto !important;
+  }
+
+  .mobileDiscoverPage :global(.v19-hero-image) {
+    height: clamp(132px, 37vw, 160px) !important;
+    min-height: 132px !important;
+    max-height: 160px !important;
+    overflow: hidden !important;
+    margin-bottom: 14px !important;
+  }
+
+  .mobileDiscoverPage :global(.v19-hero-image__img) {
+    width: 100% !important;
+    height: 100% !important;
+    max-height: none !important;
+    object-fit: cover !important;
+    object-position: center center !important;
+  }
+}
