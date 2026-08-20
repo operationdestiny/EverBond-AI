@@ -1,6 +1,7 @@
 "use client";
 
 import { LogIn, LogOut, Menu } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { LanguageSelector } from "@/components/layout/LanguageSelector";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useSiteLanguage } from "@/lib/site-language";
@@ -21,13 +22,19 @@ export function NavBar({
 }: {
   onOpenMobileMenu: () => void;
 }) {
+  const pathname = usePathname();
   const { language } = useSiteLanguage();
   const { session, authReady, openAuthModal, signOut } = useAuth();
   const copy = MY_BOND_COPY[language] ?? MY_BOND_COPY.EN;
   const menuLabel = MENU_COPY[language] ?? MENU_COPY.EN;
+  const isDiscoverPage = pathname === "/";
 
   return (
-    <header className="v20-topbar">
+    <header
+      className={`v20-topbar ${
+        isDiscoverPage ? "" : styles.hideOnPhone
+      }`}
+    >
       <div className="v51-topbar-inner">
         <button
           type="button"

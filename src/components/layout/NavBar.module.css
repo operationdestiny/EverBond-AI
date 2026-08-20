@@ -6,3 +6,13 @@ button.authButton::after {
   content: none !important;
   display: none !important;
 }
+
+/*
+  Phone only: the top hamburger / language / auth bar belongs to Discover.
+  Desktop and tablet behavior are left unchanged.
+*/
+@media (max-width: 767px) {
+  .hideOnPhone {
+    display: none !important;
+  }
+}
