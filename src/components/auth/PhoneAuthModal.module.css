@@ -1,0 +1,124 @@
+/*
+  Phone-only polish.
+  Nothing in this file changes tablet/desktop layouts at 768px and above.
+*/
+
+@media (max-width: 767px) {
+  /*
+    DISCOVER HEADER
+    The right-side language/login controls are already fixed by the existing
+    site CSS. Keep the hamburger fixed at the same time, but only while the
+    Discover page is present.
+  */
+  :global(.v18-shell:has(.mobile-discover-page) .v20-topbar) {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    z-index: 9998 !important;
+    background: transparent !important;
+    border-bottom: 0 !important;
+    pointer-events: none !important;
+  }
+
+  :global(.v18-shell:has(.mobile-discover-page) .v20-topbar .v51-topbar-inner) {
+    width: 100% !important;
+    pointer-events: none !important;
+  }
+
+  :global(.v18-shell:has(.mobile-discover-page) .v20-topbar .v51-topbar-inner > button:first-child) {
+    position: fixed !important;
+    top: 8px !important;
+    left: 8px !important;
+    margin: 0 !important;
+    z-index: 10000 !important;
+    pointer-events: auto !important;
+  }
+
+  /*
+    DISCOVER HERO
+    Give the banner enough vertical presence to read immediately on a phone.
+    The crop stays centered and affects only the phone layout.
+  */
+  :global(.mobile-discover-page .v19-hero-image) {
+    height: clamp(132px, 37vw, 160px) !important;
+    min-height: 132px !important;
+    max-height: 160px !important;
+    overflow: hidden !important;
+    margin-bottom: 14px !important;
+  }
+
+  :global(.mobile-discover-page .v19-hero-image__img) {
+    width: 100% !important;
+    height: 100% !important;
+    max-height: none !important;
+    object-fit: cover !important;
+    object-position: center center !important;
+  }
+
+  /*
+    AUTH POPUPS
+    Both the normal login/signup popup and character signup popup are
+    contained inside the phone viewport instead of extending off-screen.
+  */
+  .authModalScope > div {
+    padding: 8px !important;
+    align-items: center !important;
+  }
+
+  .authModalScope > div > div {
+    max-height: calc(100dvh - 16px) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    border-radius: 24px !important;
+  }
+
+  /* Banner / character-image panel. */
+  .authModalScope > div:first-child > div > div:has(> img) {
+    min-height: 0 !important;
+    height: clamp(150px, 24dvh, 185px) !important;
+    max-height: 185px !important;
+  }
+
+  .authModalScope > div:first-child > div > div:has(> img) > img {
+    min-height: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    object-position: center !important;
+  }
+
+  /* Form panel. */
+  .authModalScope > div:first-child > div > div:not(:has(> img)) {
+    padding: 14px 16px 16px !important;
+  }
+
+  .authModalScope > div:first-child > div > div:not(:has(> img)) > p:first-child {
+    font-size: 1.5rem !important;
+    line-height: 1.15 !important;
+  }
+
+  .authModalScope :global(.mt-8) {
+    margin-top: 1rem !important;
+  }
+
+  .authModalScope :global(.my-5) {
+    margin-top: 0.75rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+
+  .authModalScope :global(.mt-5) {
+    margin-top: 0.75rem !important;
+  }
+
+  .authModalScope :global(.mt-4) {
+    margin-top: 0.65rem !important;
+  }
+
+  /* Keep the forgot-password popup safely inside the same viewport too. */
+  .authModalScope > div:nth-child(2) > div {
+    margin-top: auto !important;
+    margin-bottom: auto !important;
+  }
+}

@@ -100,7 +100,7 @@ export function HomeCompanionBrowser({
 
   return (
     <main
-      className="v18-page"
+      className="v18-page mobile-discover-page"
       onClickCapture={(event) => {
         const target = event.target;
         if (

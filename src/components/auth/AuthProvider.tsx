@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { AuthModal } from "@/components/auth/AuthModal";
+import styles from "@/components/auth/PhoneAuthModal.module.css";
 import { MY_BOND_COPY } from "@/lib/my-bond-language";
 import type { LanguageCode } from "@/lib/site-language";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -142,12 +143,14 @@ export function AuthProvider({
   return (
     <AuthContext.Provider value={value}>
       {children}
-      <AuthModal
-        open={authModalOpen}
-        supabase={supabase}
-        character={authCharacter}
-        onClose={closeAuthModal}
-      />
+      <div className={styles.authModalScope}>
+        <AuthModal
+          open={authModalOpen}
+          supabase={supabase}
+          character={authCharacter}
+          onClose={closeAuthModal}
+        />
+      </div>
     </AuthContext.Provider>
   );
 }
