@@ -48,8 +48,7 @@
   }
 
   /*
-    Keep the thicker phone Discover banner, but remove the space beneath it
-    so the category/filter/search controls meet the banner again.
+    Keep the thicker phone Discover banner exactly as it is.
   */
   .mobileDiscoverPage :global(.v19-hero-image) {
     height: clamp(180px, 50vw, 220px) !important;
@@ -67,8 +66,14 @@
     object-position: center center !important;
   }
 
+  /*
+    Phone only: pull the character category / filter / search area upward
+    so it sits close against the bottom of the enlarged Discover banner.
+  */
   .mobileDiscoverPage > :global(section:not(.v19-hero-image)) {
-    margin-top: 0 !important;
+    position: relative;
+    z-index: 1;
+    margin-top: -42px !important;
     padding-top: 0 !important;
   }
 }
