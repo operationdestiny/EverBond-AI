@@ -7,6 +7,7 @@ import {
   isLocalizedCharacterContent,
   useLocalizedCharacter
 } from "@/components/character/useLocalizedCharacter";
+import styles from "@/components/character/DesktopCharacterLayout.module.css";
 import { FINAL_LOCALIZATION_COPY } from "@/lib/final-localization-language";
 import type { Character } from "@/types/character";
 
@@ -100,7 +101,7 @@ export function LocalizedChatShell({
   }
 
   return (
-    <div className="everbond-chat-page">
+    <div className={`${styles.chatPage} everbond-chat-page`}>
       <ChatShell
         key={`${character.id}:${language}:${character.tagline}`}
         character={character}

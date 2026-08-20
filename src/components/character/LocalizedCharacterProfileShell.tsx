@@ -1,6 +1,7 @@
 "use client";
 
 import { CharacterProfileShell } from "@/components/character/CharacterProfileShell";
+import styles from "@/components/character/DesktopCharacterLayout.module.css";
 import { useLocalizedCharacter } from "@/components/character/useLocalizedCharacter";
 import { FINAL_LOCALIZATION_COPY } from "@/lib/final-localization-language";
 import type { Character } from "@/types/character";
@@ -27,9 +28,11 @@ export function LocalizedCharacterProfileShell({
   }
 
   return (
-    <CharacterProfileShell
-      key={`${character.id}:${language}`}
-      character={character}
-    />
+    <div className={styles.profilePage}>
+      <CharacterProfileShell
+        key={`${character.id}:${language}`}
+        character={character}
+      />
+    </div>
   );
 }
