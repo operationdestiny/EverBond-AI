@@ -215,7 +215,7 @@ export function EverShopClient({
               ))}
             </div>
 
-            <section className="mt-5 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <section className="mt-5 grid grid-cols-2 gap-2.5 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {visibleGifts.map((gift) => {
                 const quantity = owned[gift.id] ?? 0;
                 const buying = buyingId === gift.id;
@@ -223,7 +223,7 @@ export function EverShopClient({
                 return (
                   <article
                     key={gift.id}
-                    className="flex overflow-hidden rounded-[1.6rem] border border-white/10 bg-white/[0.03] shadow-[0_0_26px_rgba(255,92,168,0.04)]"
+                    className="flex overflow-hidden rounded-[1.15rem] border border-white/10 bg-white/[0.03] shadow-[0_0_26px_rgba(255,92,168,0.04)] sm:rounded-[1.6rem]"
                   >
                     <div className="flex w-full flex-col">
                       <div className="relative aspect-square overflow-hidden bg-black/30">
@@ -235,28 +235,28 @@ export function EverShopClient({
                         />
 
                         {quantity > 0 && (
-                          <span className="absolute right-3 top-3 rounded-full bg-bond-rose px-3 py-1 text-[11px] font-bold text-white shadow-glow">
+                          <span className="absolute right-2 top-2 rounded-full bg-bond-rose px-2 py-1 text-[9px] font-bold text-white shadow-glow sm:right-3 sm:top-3 sm:px-3 sm:text-[11px]">
                             {copy.owned} × {quantity}
                           </span>
                         )}
                       </div>
 
-                      <div className="flex flex-1 flex-col p-4">
-                        <h2 className="font-display text-lg font-bold leading-tight text-white">
+                      <div className="flex flex-1 flex-col p-2.5 sm:p-4">
+                        <h2 className="font-display text-sm font-bold leading-tight text-white sm:text-lg">
                           {gift.title}
                         </h2>
-                        <p className="mt-3 text-sm leading-6 text-bond-muted">
+                        <p className="mt-2 text-[11px] leading-4 text-bond-muted sm:mt-3 sm:text-sm sm:leading-6">
                           {gift.description}
                         </p>
 
-                        <div className="mt-auto flex items-center justify-between gap-3 pt-5">
+                        <div className="mt-auto flex min-w-0 items-center justify-between gap-1.5 pt-3 sm:gap-3 sm:pt-5">
                           <div
-                            className="flex items-center gap-1.5 font-display text-xl font-bold text-white"
+                            className="flex min-w-0 items-center gap-1 font-display text-base font-bold text-white sm:gap-1.5 sm:text-xl"
                             aria-label={`${gift.price} ${copy.everCoin}`}
                           >
                             <Coins
                               size={18}
-                              className="text-bond-rose"
+                              className="shrink-0 text-bond-rose"
                             />
                             {gift.price}
                           </div>
@@ -265,7 +265,7 @@ export function EverShopClient({
                             type="button"
                             onClick={() => void purchaseGift(gift)}
                             disabled={buyingId !== null}
-                            className="bond-pink-button inline-flex items-center gap-2 rounded-full bg-bond-rose px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            className="bond-pink-button inline-flex shrink-0 items-center gap-1 rounded-full bg-bond-rose px-2 py-2 text-[11px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm"
                           >
                             <Gift size={15} />
                             {buying ? copy.buying : copy.buyGift}

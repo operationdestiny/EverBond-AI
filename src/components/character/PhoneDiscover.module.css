@@ -11,8 +11,6 @@
 @media (max-width: 767px) {
   /*
     Keep the full Discover control row fixed and interactive on phones.
-    This replaces the previous pointer-events:none behavior that prevented
-    Language and Log In / Sign Up from responding reliably.
   */
   :global(.v18-shell):has(.mobileDiscoverPage) :global(.v20-topbar) {
     position: fixed !important;
@@ -50,15 +48,15 @@
   }
 
   /*
-    Make every localized Discover banner substantially thicker on phones.
-    The image stays centered and fills the larger banner area.
+    Keep the thicker phone Discover banner, but remove the space beneath it
+    so the category/filter/search controls meet the banner again.
   */
   .mobileDiscoverPage :global(.v19-hero-image) {
     height: clamp(180px, 50vw, 220px) !important;
     min-height: 180px !important;
     max-height: 220px !important;
     overflow: hidden !important;
-    margin-bottom: 14px !important;
+    margin-bottom: 0 !important;
   }
 
   .mobileDiscoverPage :global(.v19-hero-image__img) {
@@ -67,5 +65,10 @@
     max-height: none !important;
     object-fit: cover !important;
     object-position: center center !important;
+  }
+
+  .mobileDiscoverPage > :global(section:not(.v19-hero-image)) {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
   }
 }
