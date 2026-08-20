@@ -17,23 +17,36 @@ const MENU_COPY = {
   KO: "메뉴 열기"
 } as const;
 
+const PHONE_HEADER_PATHS = new Set([
+  "/",
+  "/create",
+  "/coins",
+  "/shop",
+  "/my-bond",
+  "/why-everbond",
+  "/legal",
+  "/contact"
+]);
+
 export function NavBar({
-  onOpenMobileMenu
+  onOpenMobileMenu,
+  mobileMenuOpen
 }: {
   onOpenMobileMenu: () => void;
+  mobileMenuOpen: boolean;
 }) {
   const pathname = usePathname();
   const { language } = useSiteLanguage();
   const { session, authReady, openAuthModal, signOut } = useAuth();
   const copy = MY_BOND_COPY[language] ?? MY_BOND_COPY.EN;
   const menuLabel = MENU_COPY[language] ?? MENU_COPY.EN;
-  const isDiscoverPage = pathname === "/";
+  const showPhoneHeader = PHONE_HEADER_PATHS.has(pathname);
 
   return (
     <header
       className={`v20-topbar ${
-        isDiscoverPage ? "" : styles.hideOnPhone
-      }`}
+        showPhoneHeader ? styles.phoneAllowed : styles.hideOnPhone
+      } ${mobileMenuOpen ? styles.menuOpenOnPhone : ""}`}
     >
       <div className="v51-topbar-inner">
         <button

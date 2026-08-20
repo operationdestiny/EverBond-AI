@@ -33,7 +33,10 @@ export function AppShell({
           collapsed={collapsed}
           onToggle={() => setCollapsed((value) => !value)}
         />
-        <NavBar onOpenMobileMenu={() => setMobileMenuOpen(true)} />
+        <NavBar
+          onOpenMobileMenu={() => setMobileMenuOpen(true)}
+          mobileMenuOpen={mobileMenuOpen}
+        />
         <MobileNavigation
           open={mobileMenuOpen}
           onClose={() => setMobileMenuOpen(false)}
