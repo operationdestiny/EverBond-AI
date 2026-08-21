@@ -73,10 +73,12 @@ export default function PlaidOauthPage() {
         if (!response.ok || typeof payload?.linkToken !== "string") {
           throw new Error(payload?.error || "LINK_TOKEN_FAILED");
         }
-        token = payload.linkToken;
-        window.localStorage.setItem(LINK_TOKEN_KEY, token);
+        const fetchedToken = payload.linkToken as string;
+        token = fetchedToken;
+        window.localStorage.setItem(LINK_TOKEN_KEY, fetchedToken);
       }
 
+      if (!token) throw new Error("PLAID_LINK_TOKEN_MISSING");
       if (!window.Plaid) throw new Error("PLAID_NOT_LOADED");
 
       const handler = window.Plaid.create({
