@@ -123,17 +123,17 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
+    const rows = (data ?? []) as Array<
+      Parameters<typeof rowToCharacter>[0]
+    >;
+
     return NextResponse.json(
       {
-        characters: (data ?? []).map((row) =>
-          rowToCharacter(
-            row as Parameters<typeof rowToCharacter>[0]
-          )
-        ),
+        characters: rows.map((row) => rowToCharacter(row)),
         hasMore:
           typeof count === "number"
             ? offset + limit < count
-            : (data?.length ?? 0) === limit
+            : rows.length === limit
       },
       {
         headers: {
