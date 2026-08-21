@@ -11,6 +11,18 @@ export type UnificallyTask = {
   costUsd: number | null;
 };
 
+type CreateUnificallyTaskBase = {
+  apiKey: string;
+  model: string;
+  input: Record<string, unknown>;
+  callbackUrl?: string | null;
+  timeoutMs?: number;
+};
+
+type UnificallyDryRunQuote = {
+  readonly costUsd: number;
+};
+
 function cleanBaseUrl(value: string) {
   return value.replace(/\/+$/, "");
 }
@@ -57,7 +69,11 @@ function unwrapData(payload: any) {
   if (payload?.success === false) {
     throw new Error(
       `UNIFICALLY_API_ERROR:${String(
-        payload?.message ?? payload?.error ?? payload?.data?.message ?? payload?.code ?? "unknown"
+        payload?.message ??
+          payload?.error ??
+          payload?.data?.message ??
+          payload?.code ??
+          "unknown"
       ).slice(0, 500)}`
     );
   }
@@ -127,14 +143,24 @@ export async function uploadUnificallyBase64(values: {
   return fileUrl;
 }
 
-export async function createUnificallyTask(values: {
-  apiKey: string;
-  model: string;
-  input: Record<string, unknown>;
-  callbackUrl?: string | null;
-  dryRun?: boolean;
-  timeoutMs?: number;
-}) {
+/*
+  Overloads are intentional:
+  - A normal generation always returns a real UnificallyTask.
+  - A dry_run request returns only its quoted USD cost.
+  This keeps image/video runtime code strongly typed instead of exposing
+  an unnecessary union to every normal task submission.
+*/
+export function createUnificallyTask(
+  values: CreateUnificallyTaskBase & { dryRun: true }
+): Promise<UnificallyDryRunQuote>;
+
+export function createUnificallyTask(
+  values: CreateUnificallyTaskBase & { dryRun?: false | undefined }
+): Promise<UnificallyTask>;
+
+export async function createUnificallyTask(
+  values: CreateUnificallyTaskBase & { dryRun?: boolean }
+): Promise<UnificallyTask | UnificallyDryRunQuote> {
   const body: Record<string, unknown> = {
     model: values.model,
     input: values.input
@@ -155,12 +181,13 @@ export async function createUnificallyTask(values: {
   if (!response.ok) {
     throw new Error(
       `UNIFICALLY_SUBMIT_FAILED:${response.status}:${String(
-        payload?.message ?? payload?.error ?? text
+        payload?.message ?? payload?.error ?? payload?.data?.message ?? text
       ).slice(0, 500)}`
     );
   }
 
   const data = unwrapData(payload);
+
   if (values.dryRun) {
     const cost = Number(data?.cost);
     if (!Number.isFinite(cost) || cost < 0) {
@@ -196,7 +223,7 @@ export async function getUnificallyTask(values: {
   if (!response.ok) {
     throw new Error(
       `UNIFICALLY_TASK_FAILED:${response.status}:${String(
-        payload?.message ?? payload?.error ?? text
+        payload?.message ?? payload?.error ?? payload?.data?.message ?? text
       ).slice(0, 500)}`
     );
   }
@@ -223,6 +250,7 @@ export async function waitForUnificallyTask(values: {
     });
 
     if (task.status === "completed") return task;
+
     if (task.status === "failed") {
       throw new Error(
         `UNIFICALLY_TASK_FAILED:${task.error ?? "generation failed"}`
@@ -302,6 +330,7 @@ export async function downloadUnificallyOutput(values: {
     values.fallbackContentType;
 
   if (contentType === "image/jpg") contentType = "image/jpeg";
+
   if (contentType === "application/octet-stream") {
     contentType = values.fallbackContentType;
   }
@@ -333,7 +362,7 @@ export async function getUnificallyAccount(values: {
   if (!response.ok) {
     throw new Error(
       `UNIFICALLY_ACCOUNT_FAILED:${response.status}:${String(
-        payload?.message ?? payload?.error ?? text
+        payload?.message ?? payload?.error ?? payload?.data?.message ?? text
       ).slice(0, 300)}`
     );
   }
