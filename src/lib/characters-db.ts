@@ -263,14 +263,12 @@ export async function queryCharacters(input: CharacterQuery = {}) {
 
   if (error) throw error;
 
-  const rows = (data ?? []) as CharacterRow[];
-
   return {
-    characters: rows.map(rowToCharacter),
+    characters: ((data ?? []) as CharacterRow[]).map(rowToCharacter),
     hasMore:
       typeof count === "number"
         ? offset + limit < count
-        : rows.length === limit
+        : (data?.length ?? 0) === limit
   };
 }
 
