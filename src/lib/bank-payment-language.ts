@@ -22,6 +22,10 @@ export const BANK_PAYMENT_COPY: Record<
     back: string;
     important: string;
     instructions: string;
+    bankPickerHint: string;
+    copyAndOpen: string;
+    bankCopied: string;
+    copyAllFirst: string;
   }
 > = {
   EN: {
@@ -43,7 +47,11 @@ export const BANK_PAYMENT_COPY: Record<
     pending: "Not received yet. Keep this page open and check again in a moment.",
     back: "Back to EverCoin",
     important: "Use the exact payment reference shown below.",
-    instructions: "Your bank decides whether the transfer is sent instantly by RTP/FedNow or by another bank-transfer rail."
+    instructions: "Your bank decides whether the transfer is sent instantly by RTP/FedNow or by another bank-transfer rail.",
+    bankPickerHint: "Tap your bank. EverBond copies the recipient, routing number, account number, exact amount, and payment reference first, then opens your bank so you can paste the details into the transfer.",
+    copyAndOpen: "Copy details & open",
+    bankCopied: "Payment details copied. {bank} opened in a new tab — paste the details into your transfer.",
+    copyAllFirst: "Your browser could not copy automatically. Use “Copy all payment details,” then open your bank."
   },
   ES: {
     title: "Paga al instante desde tu banco",
@@ -64,7 +72,11 @@ export const BANK_PAYMENT_COPY: Record<
     pending: "Aún no se ha recibido. Mantén esta página abierta y vuelve a comprobar en un momento.",
     back: "Volver a EverCoin",
     important: "Usa exactamente la referencia de pago que aparece abajo.",
-    instructions: "Tu banco decide si la transferencia se envía al instante mediante RTP/FedNow u otra red bancaria."
+    instructions: "Tu banco decide si la transferencia se envía al instante mediante RTP/FedNow u otra red bancaria.",
+    bankPickerHint: "Toca tu banco. EverBond copia primero el destinatario, el número de ruta, la cuenta, el importe exacto y la referencia; después abre tu banco para que pegues los datos en la transferencia.",
+    copyAndOpen: "Copiar datos y abrir",
+    bankCopied: "Datos de pago copiados. {bank} se abrió en otra pestaña; pega los datos en tu transferencia.",
+    copyAllFirst: "El navegador no pudo copiar automáticamente. Usa “Copiar todos los datos de pago” y después abre tu banco."
   },
   FR: {
     title: "Payez instantanément depuis votre banque",
@@ -85,7 +97,11 @@ export const BANK_PAYMENT_COPY: Record<
     pending: "Pas encore reçu. Gardez cette page ouverte et réessayez dans un instant.",
     back: "Retour à EverCoin",
     important: "Utilisez exactement la référence de paiement affichée ci-dessous.",
-    instructions: "Votre banque décide si le virement est envoyé instantanément via RTP/FedNow ou par un autre réseau bancaire."
+    instructions: "Votre banque décide si le virement est envoyé instantanément via RTP/FedNow ou par un autre réseau bancaire.",
+    bankPickerHint: "Touchez votre banque. EverBond copie d’abord le bénéficiaire, le routage, le compte, le montant exact et la référence, puis ouvre votre banque pour que vous puissiez coller les informations dans le virement.",
+    copyAndOpen: "Copier et ouvrir",
+    bankCopied: "Informations copiées. {bank} s’est ouverte dans un nouvel onglet — collez les informations dans votre virement.",
+    copyAllFirst: "Le navigateur n’a pas pu copier automatiquement. Utilisez « Copier toutes les informations », puis ouvrez votre banque."
   },
   DE: {
     title: "Sofort von deinem Bankkonto bezahlen",
@@ -106,7 +122,11 @@ export const BANK_PAYMENT_COPY: Record<
     pending: "Noch nicht eingegangen. Lass diese Seite geöffnet und prüfe gleich noch einmal.",
     back: "Zurück zu EverCoin",
     important: "Verwende genau die unten angezeigte Zahlungsreferenz.",
-    instructions: "Deine Bank entscheidet, ob die Überweisung sofort über RTP/FedNow oder über einen anderen Bankweg gesendet wird."
+    instructions: "Deine Bank entscheidet, ob die Überweisung sofort über RTP/FedNow oder über einen anderen Bankweg gesendet wird.",
+    bankPickerHint: "Tippe auf deine Bank. EverBond kopiert zuerst Empfänger, Routing-Nummer, Kontonummer, exakten Betrag und Zahlungsreferenz und öffnet dann deine Bank, damit du die Daten in die Überweisung einfügen kannst.",
+    copyAndOpen: "Daten kopieren & öffnen",
+    bankCopied: "Zahlungsdaten kopiert. {bank} wurde in einem neuen Tab geöffnet — füge die Daten in deine Überweisung ein.",
+    copyAllFirst: "Automatisches Kopieren war nicht möglich. Nutze „Alle Zahlungsdaten kopieren“ und öffne danach deine Bank."
   },
   JA: {
     title: "銀行からすぐに支払う",
@@ -127,7 +147,11 @@ export const BANK_PAYMENT_COPY: Record<
     pending: "まだ入金を確認できません。ページを開いたまま、少し待って再確認してください。",
     back: "EverCoinへ戻る",
     important: "下に表示される支払い参照番号を正確に使用してください。",
-    instructions: "送金がRTP/FedNowで即時処理されるか、別の銀行送金経路になるかは送金元の銀行が決定します。"
+    instructions: "送金がRTP/FedNowで即時処理されるか、別の銀行送金経路になるかは送金元の銀行が決定します。",
+    bankPickerHint: "銀行をタップすると、EverBondが受取人・ルーティング番号・口座番号・正確な金額・参照番号を先にコピーし、その後銀行を開きます。送金画面に貼り付けてください。",
+    copyAndOpen: "情報をコピーして開く",
+    bankCopied: "支払い情報をコピーしました。{bank}を新しいタブで開きました。送金画面に貼り付けてください。",
+    copyAllFirst: "自動コピーできませんでした。「支払い情報をすべてコピー」を押してから銀行を開いてください。"
   },
   KO: {
     title: "은행에서 즉시 결제",
@@ -148,6 +172,10 @@ export const BANK_PAYMENT_COPY: Record<
     pending: "아직 입금되지 않았습니다. 이 페이지를 열어 두고 잠시 후 다시 확인하세요.",
     back: "EverCoin으로 돌아가기",
     important: "아래 표시된 결제 참조 코드를 정확히 사용하세요.",
-    instructions: "송금이 RTP/FedNow를 통해 즉시 처리되는지 다른 은행 송금 방식으로 처리되는지는 송금 은행이 결정합니다."
+    instructions: "송금이 RTP/FedNow를 통해 즉시 처리되는지 다른 은행 송금 방식으로 처리되는지는 송금 은행이 결정합니다.",
+    bankPickerHint: "은행을 누르면 EverBond가 수취인, 라우팅 번호, 계좌 번호, 정확한 금액과 참조 코드를 먼저 복사한 뒤 은행을 엽니다. 송금 화면에 붙여 넣으세요.",
+    copyAndOpen: "정보 복사 후 열기",
+    bankCopied: "결제 정보를 복사했습니다. {bank}을(를) 새 탭에서 열었습니다. 송금 화면에 붙여 넣으세요.",
+    copyAllFirst: "자동 복사를 할 수 없습니다. ‘모든 결제 정보 복사’를 누른 뒤 은행을 여세요."
   }
 };
