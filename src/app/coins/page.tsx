@@ -5,7 +5,6 @@ import {
   Clapperboard,
   Gift,
   ImageIcon,
-  Landmark,
   LoaderCircle,
   MessageCircleMore
 } from "lucide-react";
@@ -101,7 +100,6 @@ function CoinsPageContent() {
     async function checkPending() {
       if (cancelled) return;
       attempts += 1;
-      setNotice(paymentCopy.checking);
 
       try {
         const response = await fetch(
@@ -142,7 +140,6 @@ function CoinsPageContent() {
     };
   }, [
     session?.access_token,
-    paymentCopy.checking,
     paymentCopy.expired,
     paymentCopy.paid,
     paymentCopy.pending
@@ -238,14 +235,6 @@ function CoinsPageContent() {
         title={pageCopy.title}
         description={pageCopy.description}
       />
-
-      <div className="mx-auto mb-8 flex max-w-3xl items-center gap-3 rounded-2xl border border-bond-rose/25 bg-bond-rose/10 px-5 py-4 text-sm text-white">
-        <Landmark className="shrink-0 text-bond-rose" size={22} />
-        <div>
-          <p className="font-bold">{bankCopy.title}</p>
-          <p className="mt-1 text-bond-muted">{bankCopy.instructions}</p>
-        </div>
-      </div>
 
       {notice && (
         <p className="mx-auto mb-8 max-w-3xl rounded-2xl border border-bond-rose/25 bg-bond-rose/10 px-5 py-3 text-center text-sm text-white">
