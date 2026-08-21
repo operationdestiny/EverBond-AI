@@ -11,14 +11,14 @@ export const maxDuration = 30;
 
 const Body = z
   .object({
-    rail: z.enum(["card", "crypto"]),
+    rail: z.enum(["bank", "card", "crypto"]),
     pack: z.enum(["500", "1200", "2000", "5000"])
   })
   .strict();
 
 export async function GET() {
   return NextResponse.json(
-    { rails: configuredPaymentRails() },
+    { rails: await configuredPaymentRails() },
     { headers: { "Cache-Control": "private, no-store" } }
   );
 }
@@ -54,7 +54,10 @@ export async function POST(request: Request) {
     const detail = error instanceof Error ? error.message : "CHECKOUT_FAILED";
     console.error("EverCoin payment-router checkout failed:", error);
 
-    const notConfigured = detail === "PAYRAM_NOT_CONFIGURED";
+    const notConfigured =
+      detail === "PAYRAM_NOT_CONFIGURED" ||
+      detail === "BANK_RAIL_NOT_CONFIGURED" ||
+      detail === "PLAID_BANK_NOT_CONNECTED";
 
     return NextResponse.json(
       {

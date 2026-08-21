@@ -5,6 +5,7 @@ import {
   Clapperboard,
   Gift,
   ImageIcon,
+  Landmark,
   LoaderCircle,
   MessageCircleMore
 } from "lucide-react";
@@ -14,12 +15,13 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useSiteLanguage } from "@/lib/site-language";
 import { EVERCOIN_PAGE_COPY } from "@/lib/evercoin-page-language";
 import { EVERCOIN_PAYMENT_COPY } from "@/lib/evercoin-payment-language";
+import { BANK_PAYMENT_COPY } from "@/lib/bank-payment-language";
 import {
   LOCALE_BY_LANGUAGE,
   localizedErrorMessage
 } from "@/lib/final-localization-language";
 
-type Rail = "card";
+type Rail = "bank";
 type Pack = {
   code: "1200" | "2000" | "5000";
   amount: number;
@@ -47,6 +49,7 @@ function CoinsPageContent() {
   const { language } = useSiteLanguage();
   const pageCopy = EVERCOIN_PAGE_COPY[language] ?? EVERCOIN_PAGE_COPY.EN;
   const paymentCopy = EVERCOIN_PAYMENT_COPY[language] ?? EVERCOIN_PAYMENT_COPY.EN;
+  const bankCopy = BANK_PAYMENT_COPY[language] ?? BANK_PAYMENT_COPY.EN;
   const locale = LOCALE_BY_LANGUAGE[language] ?? LOCALE_BY_LANGUAGE.EN;
   const { session, authReady, openAuthModal } = useAuth();
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -78,7 +81,7 @@ function CoinsPageContent() {
         setVideoCost(Math.trunc(nextVideoCost));
       }
 
-      setPaymentReady(checkout?.rails?.card === true);
+      setPaymentReady(checkout?.rails?.bank === true);
     });
 
     return () => {
@@ -124,7 +127,7 @@ function CoinsPageContent() {
         }
 
         if (response.ok && attempts < 6) {
-          window.setTimeout(checkPending, 2500);
+          window.setTimeout(checkPending, 3000);
         } else {
           setNotice(paymentCopy.pending);
         }
@@ -137,7 +140,13 @@ function CoinsPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [session?.access_token, paymentCopy.checking, paymentCopy.expired, paymentCopy.paid, paymentCopy.pending]);
+  }, [
+    session?.access_token,
+    paymentCopy.checking,
+    paymentCopy.expired,
+    paymentCopy.paid,
+    paymentCopy.pending
+  ]);
 
   const items = useMemo(
     () => [
@@ -216,26 +225,44 @@ function CoinsPageContent() {
       window.location.assign(payload.url);
     } catch (checkoutError) {
       setError(
-        checkoutError instanceof Error
-          ? checkoutError.message
-          : pageCopy.checkoutFailed
+        checkoutError instanceof Error ? checkoutError.message : pageCopy.checkoutFailed
       );
       setBusyKey(null);
     }
   }
 
-  function PaymentSection({
-    packages,
-    enabled
-  }: {
-    packages: Pack[];
-    enabled: boolean;
-  }) {
-    return (
+  return (
+    <main className="px-4 py-10 md:px-6">
+      <SectionHeader
+        eyebrow="EverCoin"
+        title={pageCopy.title}
+        description={pageCopy.description}
+      />
+
+      <div className="mx-auto mb-8 flex max-w-3xl items-center gap-3 rounded-2xl border border-bond-rose/25 bg-bond-rose/10 px-5 py-4 text-sm text-white">
+        <Landmark className="shrink-0 text-bond-rose" size={22} />
+        <div>
+          <p className="font-bold">{bankCopy.title}</p>
+          <p className="mt-1 text-bond-muted">{bankCopy.instructions}</p>
+        </div>
+      </div>
+
+      {notice && (
+        <p className="mx-auto mb-8 max-w-3xl rounded-2xl border border-bond-rose/25 bg-bond-rose/10 px-5 py-3 text-center text-sm text-white">
+          {notice}
+        </p>
+      )}
+
+      {error && (
+        <p className="mx-auto mb-8 max-w-3xl rounded-2xl border border-red-400/25 bg-red-500/10 px-5 py-3 text-center text-sm text-red-100">
+          {error}
+        </p>
+      )}
+
       <section className="mx-auto mb-12 max-w-6xl">
         <div className="grid gap-4 md:grid-cols-3">
-          {packages.map((pack) => {
-            const key = `card:${pack.code}`;
+          {paymentPackages.map((pack) => {
+            const key = `bank:${pack.code}`;
             const busy = busyKey === key;
             return (
               <div
@@ -258,45 +285,18 @@ function CoinsPageContent() {
 
                 <button
                   type="button"
-                  onClick={() => void buyPack("card", pack)}
-                  disabled={!authReady || Boolean(busyKey) || !enabled}
+                  onClick={() => void buyPack("bank", pack)}
+                  disabled={!authReady || Boolean(busyKey) || !paymentReady}
                   className="bond-pink-button mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-bond-rose/15 px-5 py-3 text-base font-bold text-bond-rose disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   {busy && <LoaderCircle size={18} className="animate-spin" />}
-                  {enabled ? paymentCopy.buyCard : paymentCopy.unavailable}
+                  {paymentReady ? bankCopy.title : paymentCopy.unavailable}
                 </button>
               </div>
             );
           })}
         </div>
       </section>
-    );
-  }
-
-  return (
-    <main className="px-4 py-10 md:px-6">
-      <SectionHeader
-        eyebrow="EverCoin"
-        title={pageCopy.title}
-        description={pageCopy.description}
-      />
-
-      {notice && (
-        <p className="mx-auto mb-8 max-w-3xl rounded-2xl border border-bond-rose/25 bg-bond-rose/10 px-5 py-3 text-center text-sm text-white">
-          {notice}
-        </p>
-      )}
-
-      {error && (
-        <p className="mx-auto mb-8 max-w-3xl rounded-2xl border border-red-400/25 bg-red-500/10 px-5 py-3 text-center text-sm text-red-100">
-          {error}
-        </p>
-      )}
-
-      <PaymentSection
-        packages={paymentPackages}
-        enabled={paymentReady}
-      />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {items.map((item) => {

@@ -1,15 +1,19 @@
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import {
+  bankRailConfigured,
+  refreshAndReconcileBankPayments
+} from "@/lib/plaid-bank";
+import {
   getEverCoinPack,
   isEverCoinCardPack,
   isEverCoinCryptoPack,
   type EverCoinPack
 } from "@/lib/billing/evercoin-packs";
 
-export type EverCoinPaymentRail = "card" | "crypto";
-export type EverCoinPaymentProvider = "payram";
+export type EverCoinPaymentRail = "bank" | "card" | "crypto";
+export type EverCoinPaymentProvider = "direct_bank" | "payram";
 
-type PaymentOrder = {
+export type PaymentOrder = {
   id: string;
   user_id: string;
   rail: EverCoinPaymentRail;
@@ -43,7 +47,6 @@ function parseUsdMinor(value: unknown) {
   const text = String(value ?? "").trim();
   const match = /^(\d+)(?:\.(\d{1,6}))?$/.exec(text);
   if (!match) return null;
-
   const dollars = Number.parseInt(match[1], 10);
   const cents = (match[2] ?? "").padEnd(2, "0").slice(0, 2);
   const minor = dollars * 100 + Number.parseInt(cents || "0", 10);
@@ -52,13 +55,13 @@ function parseUsdMinor(value: unknown) {
 
 function paymentPack(rail: EverCoinPaymentRail, code: string) {
   const allowed =
-    rail === "card" ? isEverCoinCardPack(code) : isEverCoinCryptoPack(code);
+    rail === "crypto" ? isEverCoinCryptoPack(code) : isEverCoinCardPack(code);
   const pack = allowed ? getEverCoinPack(code) : null;
   if (!pack) throw new Error("INVALID_EVERCOIN_PAYMENT_PACK");
   return pack;
 }
 
-function payRamConfig(rail: EverCoinPaymentRail) {
+function payRamConfig(rail: "card" | "crypto") {
   const baseUrl = process.env.PAYRAM_BASE_URL?.trim();
   const apiKey =
     rail === "card"
@@ -66,34 +69,21 @@ function payRamConfig(rail: EverCoinPaymentRail) {
       : process.env.PAYRAM_CRYPTO_API_KEY?.trim();
 
   if (!baseUrl || !apiKey) return null;
-
   const normalized = cleanBaseUrl(baseUrl);
-  if (
-    process.env.NODE_ENV === "production" &&
-    !normalized.startsWith("https://")
-  ) {
+  if (process.env.NODE_ENV === "production" && !normalized.startsWith("https://")) {
     throw new Error("PAYRAM_HTTPS_REQUIRED");
   }
-
   return { baseUrl: normalized, apiKey };
 }
 
 function validPayRamCheckoutUrl(baseUrl: string, value: unknown) {
   if (typeof value !== "string" || !value.trim()) return "";
-
   try {
     const checkout = new URL(value.trim());
     const base = new URL(baseUrl);
-
-    if (checkout.protocol !== "https:" && process.env.NODE_ENV === "production") {
-      return "";
-    }
+    if (checkout.protocol !== "https:" && process.env.NODE_ENV === "production") return "";
     if (checkout.protocol !== "https:" && checkout.protocol !== "http:") return "";
-
-    // PayRam may expose its API on :8443 while serving the hosted payment page
-    // on standard HTTPS. Require the same hostname but allow the port to differ.
     if (checkout.hostname.toLowerCase() !== base.hostname.toLowerCase()) return "";
-
     return checkout.toString();
   } catch {
     return "";
@@ -105,6 +95,8 @@ async function insertOrder(values: {
   rail: EverCoinPaymentRail;
   provider: EverCoinPaymentProvider;
   pack: EverCoinPack;
+  providerReference?: string | null;
+  checkoutUrl?: string | null;
 }) {
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
@@ -117,7 +109,10 @@ async function insertOrder(values: {
       coins: values.pack.coins,
       amount_minor: values.pack.amountMinor,
       currency_code: "USD",
-      status: "pending"
+      status: "pending",
+      provider_reference: values.providerReference || null,
+      checkout_url: values.checkoutUrl || null,
+      provider_state: values.provider === "direct_bank" ? "AWAITING_TRANSFER" : null
     })
     .select(
       "id,user_id,rail,provider,pack_code,coins,amount_minor,currency_code,status,provider_reference,checkout_url,provider_state"
@@ -128,10 +123,7 @@ async function insertOrder(values: {
   return data as PaymentOrder;
 }
 
-async function updateOrder(
-  orderId: string,
-  values: Record<string, unknown>
-) {
+async function updateOrder(orderId: string, values: Record<string, unknown>) {
   const { error } = await getSupabaseServiceClient()
     .from("evercoin_payment_orders")
     .update({ ...values, updated_at: new Date().toISOString() })
@@ -139,8 +131,49 @@ async function updateOrder(
   if (error) throw error;
 }
 
+function makeBankReference() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "EVB-";
+  for (let i = 0; i < 6; i += 1) {
+    code += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return code;
+}
+
+async function createDirectBankCheckout(values: {
+  pack: EverCoinPack;
+  userId: string;
+}): Promise<CheckoutResult> {
+  if (!(await bankRailConfigured())) throw new Error("BANK_RAIL_NOT_CONFIGURED");
+
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const reference = makeBankReference();
+    try {
+      const order = await insertOrder({
+        userId: values.userId,
+        rail: "bank",
+        provider: "direct_bank",
+        pack: values.pack,
+        providerReference: reference
+      });
+      const url = `/bank-pay?orderId=${encodeURIComponent(order.id)}`;
+      await updateOrder(order.id, { checkout_url: url });
+      return {
+        orderId: order.id,
+        mode: "redirect",
+        provider: "direct_bank",
+        url
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("BANK_REFERENCE_CREATE_FAILED");
+}
+
 async function createPayRamCheckout(values: {
-  rail: EverCoinPaymentRail;
+  rail: "card" | "crypto";
   pack: EverCoinPack;
   userId: string;
   email: string;
@@ -191,12 +224,7 @@ async function createPayRamCheckout(values: {
       provider_state: "OPEN"
     });
 
-    return {
-      orderId: order.id,
-      mode: "redirect",
-      provider: "payram",
-      url
-    };
+    return { orderId: order.id, mode: "redirect", provider: "payram", url };
   } catch (error) {
     await updateOrder(order.id, {
       status: "failed",
@@ -214,12 +242,9 @@ export async function createEverCoinPaymentCheckout(values: {
   email: string;
 }) {
   const pack = paymentPack(values.rail, values.packCode);
-
-  // Both public rails use PayRam, but each rail has its own project API key.
-  // The PayRam dashboard is the enforcement point for which checkout options
-  // are exposed by each project:
-  //   card   -> card/fiat onramp options only
-  //   crypto -> USDC on Base only
+  if (values.rail === "bank") {
+    return createDirectBankCheckout({ pack, userId: values.userId });
+  }
   return createPayRamCheckout({
     rail: values.rail,
     pack,
@@ -255,34 +280,26 @@ async function creditOrder(order: PaymentOrder, transactionId: string) {
     .maybeSingle();
   if (walletError) throw walletError;
 
-  return {
-    status: "paid" as const,
-    coins: order.coins,
-    balance: Number(wallet?.balance ?? 0)
-  };
+  return { status: "paid" as const, coins: order.coins, balance: Number(wallet?.balance ?? 0) };
 }
 
 async function refreshPayRamOrder(order: PaymentOrder) {
-  const config = payRamConfig(order.rail);
-  if (!config || !order.provider_reference) {
-    throw new Error("PAYRAM_ORDER_NOT_CONFIGURED");
+  if (order.rail !== "card" && order.rail !== "crypto") {
+    throw new Error("PAYRAM_INVALID_RAIL");
   }
+  const config = payRamConfig(order.rail);
+  if (!config || !order.provider_reference) throw new Error("PAYRAM_ORDER_NOT_CONFIGURED");
 
   const response = await fetch(
     `${config.baseUrl}/api/v1/payment/reference/${encodeURIComponent(order.provider_reference)}`,
     {
-      headers: {
-        "API-Key": config.apiKey,
-        Accept: "application/json"
-      },
+      headers: { "API-Key": config.apiKey, Accept: "application/json" },
       cache: "no-store",
       signal: AbortSignal.timeout(20_000)
     }
   );
   const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload) {
-    throw new Error(`PAYRAM_STATUS_FAILED:${response.status}`);
-  }
+  if (!response.ok || !payload) throw new Error(`PAYRAM_STATUS_FAILED:${response.status}`);
 
   const state = String(
     payload.paymentState ?? payload.payment_state ?? payload.status ?? "OPEN"
@@ -293,9 +310,7 @@ async function refreshPayRamOrder(order: PaymentOrder) {
   if (invoiceMinor !== null && invoiceMinor !== order.amount_minor) {
     throw new Error("PAYRAM_AMOUNT_MISMATCH");
   }
-  if (customerId && customerId !== order.user_id) {
-    throw new Error("PAYRAM_USER_MISMATCH");
-  }
+  if (customerId && customerId !== order.user_id) throw new Error("PAYRAM_USER_MISMATCH");
 
   await updateOrder(order.id, {
     provider_state: state,
@@ -303,9 +318,7 @@ async function refreshPayRamOrder(order: PaymentOrder) {
   });
 
   if (state === "FILLED" || state === "OVER_FILLED") {
-    const filledMinor = parseUsdMinor(
-      payload.filled_amount_in_usd ?? payload.filledAmountInUSD
-    );
+    const filledMinor = parseUsdMinor(payload.filled_amount_in_usd ?? payload.filledAmountInUSD);
     if (filledMinor !== null && filledMinor < order.amount_minor) {
       throw new Error("PAYRAM_UNDERPAYMENT");
     }
@@ -316,7 +329,6 @@ async function refreshPayRamOrder(order: PaymentOrder) {
     await updateOrder(order.id, { status: "expired" });
     return { status: "expired" as const, coins: 0, balance: null };
   }
-
   return { status: "pending" as const, coins: 0, balance: null };
 }
 
@@ -357,11 +369,21 @@ export async function refreshEverCoinPaymentOrder(order: PaymentOrder) {
     return { status: order.status as "expired" | "failed", coins: 0, balance: null };
   }
 
+  if (order.provider === "direct_bank") {
+    await refreshAndReconcileBankPayments();
+    const latest = await getPaymentOrderForUser(order.id, order.user_id);
+    if (latest?.status === "paid") {
+      return { status: "paid" as const, coins: latest.coins, balance: null };
+    }
+    return { status: "pending" as const, coins: 0, balance: null };
+  }
+
   return refreshPayRamOrder(order);
 }
 
-export function configuredPaymentRails() {
+export async function configuredPaymentRails() {
   return {
+    bank: await bankRailConfigured(),
     card: Boolean(payRamConfig("card")),
     crypto: Boolean(payRamConfig("crypto"))
   };
