@@ -12,7 +12,10 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 
   try {
-    const url = await createPaddleCheckoutUrl(parsed.data);
+    const url = await createPaddleCheckoutUrl({
+      plan: parsed.data.plan,
+      email: parsed.data.email
+    });
     return NextResponse.json({ url });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Paddle checkout failed" }, { status: 500 });

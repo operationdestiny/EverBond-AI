@@ -7,6 +7,10 @@ const UnlockRequest = z.object({ characterId: z.string(), slot: z.number().int()
 export async function POST(request: Request) {
   const parsed = UnlockRequest.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "Invalid unlock request" }, { status: 400 });
-  const result = await getOrCreateCharacterImageUnlock(parsed.data);
+
+  const result = await getOrCreateCharacterImageUnlock({
+    characterId: parsed.data.characterId,
+    slot: parsed.data.slot
+  });
   return NextResponse.json(result);
 }

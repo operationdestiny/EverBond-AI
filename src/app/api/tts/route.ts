@@ -7,6 +7,10 @@ const TtsRequest = z.object({ text: z.string().min(1).max(3000), voiceId: z.stri
 export async function POST(request: Request) {
   const parsed = TtsRequest.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "Invalid TTS request" }, { status: 400 });
-  const result = await synthesizeSpeech(parsed.data);
+
+  const result = await synthesizeSpeech({
+    text: parsed.data.text,
+    voiceId: parsed.data.voiceId
+  });
   return NextResponse.json(result);
 }
