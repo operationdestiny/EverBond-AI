@@ -138,7 +138,6 @@ function BankPayContent() {
       .writeText(text)
       .then(() => {
         setCopied(`bank:${bank.name}`);
-        setStatus(copy.bankCopied.replace("{bank}", bank.name));
         window.setTimeout(() => setCopied(""), 2200);
       })
       .catch(() => {
@@ -202,13 +201,16 @@ function BankPayContent() {
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
       <div className="rounded-[2rem] border border-bond-rose/30 bg-white/[0.035] p-6 md:p-8">
-        <p className="text-sm font-bold uppercase tracking-[0.2em] text-bond-rose">
-          EverCoin
-        </p>
-        <h1 className="mt-3 font-display text-3xl font-bold text-white md:text-4xl">
+        <h1 className="font-display text-3xl font-bold text-white md:text-4xl">
           {copy.title}
         </h1>
-        <p className="mt-4 leading-7 text-bond-muted">{copy.subtitle}</p>
+
+        <div className="mt-5 space-y-2 text-base leading-7 text-white">
+          <p className="font-bold">{copy.step1}</p>
+          <p>{copy.step2}</p>
+          <p className="font-bold">{copy.step3}</p>
+          <p className="font-bold">{copy.step4}</p>
+        </div>
 
         {!details ? (
           <div className="mt-8 rounded-2xl border border-white/10 bg-black/20 p-5 text-center text-white">
@@ -226,10 +228,6 @@ function BankPayContent() {
               </p>
             </div>
 
-            <p className="mt-6 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
-              {copy.important}
-            </p>
-
             <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 px-4">
               <DetailRow label={copy.bank} value={details.bank.bankName} copyKey="bank" />
               <DetailRow label={copy.routing} value={details.bank.routingNumber} copyKey="routing" />
@@ -246,11 +244,9 @@ function BankPayContent() {
             </button>
 
             <div className="mt-8">
-              <h2 className="font-display text-xl font-bold text-white">{copy.chooseBank}</h2>
-              <p className="mt-2 text-sm leading-6 text-bond-muted">{copy.instructions}</p>
-              <div className="mt-4 rounded-2xl border border-bond-rose/25 bg-bond-rose/[0.07] px-4 py-3 text-sm leading-6 text-white">
-                {copy.bankPickerHint}
-              </div>
+              <h2 className="text-center font-display text-xl font-bold text-white">
+                {copy.chooseBank}
+              </h2>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {BANKS.map((bank) => {

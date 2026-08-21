@@ -4,6 +4,10 @@ export const BANK_PAYMENT_COPY: Record<
   LanguageCode,
   {
     title: string;
+    step1: string;
+    step2: string;
+    step3: string;
+    step4: string;
     subtitle: string;
     amount: string;
     bank: string;
@@ -30,6 +34,10 @@ export const BANK_PAYMENT_COPY: Record<
 > = {
   EN: {
     title: "Pay instantly from your bank",
+    step1: "1. Send the EXACT amount shown to EverBond.",
+    step2: "2. Copy the bank name, routing number, account number, and EVB‑xxxxxx reference into your bank transfer.",
+    step3: "3. After sending the payment, return here and tap “I’ve sent payment.”",
+    step4: "4. EverCoin is added automatically once your deposit is confirmed.",
     subtitle: "Send the exact amount to EverBond, include the payment reference, then return here. EverCoin is added only after the deposit is confirmed.",
     amount: "Amount",
     bank: "Receiving bank",
@@ -41,7 +49,7 @@ export const BANK_PAYMENT_COPY: Record<
     copyAll: "Copy all payment details",
     chooseBank: "Choose your bank",
     openBank: "Open bank",
-    sent: "I've sent the payment",
+    sent: "I’ve sent payment",
     checking: "Checking for your payment...",
     paid: "Payment received. Your EverCoin has been added.",
     pending: "Not received yet. Keep this page open and check again in a moment.",
@@ -55,6 +63,10 @@ export const BANK_PAYMENT_COPY: Record<
   },
   ES: {
     title: "Paga al instante desde tu banco",
+    step1: "1. Envía a EverBond el importe EXACTO que se muestra.",
+    step2: "2. Copia el nombre del banco, el número de ruta, el número de cuenta y la referencia EVB‑xxxxxx en tu transferencia bancaria.",
+    step3: "3. Después de enviar el pago, vuelve aquí y pulsa «He enviado el pago».",
+    step4: "4. EverCoin se añade automáticamente una vez confirmado tu depósito.",
     subtitle: "Envía el importe exacto a EverBond, incluye la referencia de pago y vuelve aquí. Los EverCoin se añaden solo cuando se confirma el depósito.",
     amount: "Importe",
     bank: "Banco receptor",
@@ -80,6 +92,10 @@ export const BANK_PAYMENT_COPY: Record<
   },
   FR: {
     title: "Payez instantanément depuis votre banque",
+    step1: "1. Envoyez à EverBond le montant EXACT affiché.",
+    step2: "2. Copiez le nom de la banque, le numéro de routage, le numéro de compte et la référence EVB‑xxxxxx dans votre virement bancaire.",
+    step3: "3. Après avoir envoyé le paiement, revenez ici et appuyez sur « J’ai envoyé le paiement ».",
+    step4: "4. Les EverCoin sont ajoutés automatiquement dès que votre dépôt est confirmé.",
     subtitle: "Envoyez le montant exact à EverBond, ajoutez la référence de paiement puis revenez ici. Les EverCoin sont ajoutés uniquement après confirmation du dépôt.",
     amount: "Montant",
     bank: "Banque destinataire",
@@ -105,6 +121,10 @@ export const BANK_PAYMENT_COPY: Record<
   },
   DE: {
     title: "Sofort von deinem Bankkonto bezahlen",
+    step1: "1. Sende den angezeigten EXAKTEN Betrag an EverBond.",
+    step2: "2. Kopiere Bankname, Routing-Nummer, Kontonummer und die EVB‑xxxxxx-Referenz in deine Banküberweisung.",
+    step3: "3. Kehre nach dem Senden der Zahlung hierher zurück und tippe auf „Ich habe die Zahlung gesendet“.",
+    step4: "4. EverCoin werden automatisch hinzugefügt, sobald deine Einzahlung bestätigt ist.",
     subtitle: "Sende den exakten Betrag an EverBond, gib die Zahlungsreferenz an und kehre hierher zurück. EverCoin werden erst nach bestätigtem Zahlungseingang gutgeschrieben.",
     amount: "Betrag",
     bank: "Empfängerbank",
@@ -130,6 +150,10 @@ export const BANK_PAYMENT_COPY: Record<
   },
   JA: {
     title: "銀行からすぐに支払う",
+    step1: "1. 表示された正確な金額をEverBondへ送金してください。",
+    step2: "2. 銀行名、ルーティング番号、口座番号、EVB‑xxxxxx参照番号を銀行振込に入力してください。",
+    step3: "3. 送金後、このページに戻り「支払いを送信しました」をタップしてください。",
+    step4: "4. 入金が確認されるとEverCoinが自動的に追加されます。",
     subtitle: "正確な金額をEverBondへ送金し、支払い参照番号を入力してこのページへ戻ってください。入金確認後にEverCoinが追加されます。",
     amount: "金額",
     bank: "受取銀行",
@@ -155,6 +179,10 @@ export const BANK_PAYMENT_COPY: Record<
   },
   KO: {
     title: "은행에서 즉시 결제",
+    step1: "1. 표시된 정확한 금액을 EverBond로 보내세요.",
+    step2: "2. 은행 이름, 라우팅 번호, 계좌 번호, EVB‑xxxxxx 참조 코드를 은행 송금에 입력하세요.",
+    step3: "3. 결제를 보낸 후 여기로 돌아와 “결제를 보냈습니다”를 누르세요.",
+    step4: "4. 입금이 확인되면 EverCoin이 자동으로 추가됩니다.",
     subtitle: "정확한 금액을 EverBond로 보내고 결제 참조 코드를 입력한 뒤 이 페이지로 돌아오세요. 입금이 확인된 후 EverCoin이 추가됩니다.",
     amount: "금액",
     bank: "수취 은행",
