@@ -2,22 +2,26 @@ import { NextResponse } from "next/server";
 import { EVERCOIN_PACKS } from "@/lib/billing/evercoin-packs";
 import {
   everCoinCallCostPerMinute,
-  everCoinImageCost,
-  everCoinPerDollar,
-  everCoinVideoCost
+  everCoinPerDollar
 } from "@/lib/evercoin";
+import {
+  UNIFICALLY_VIDEO_AUDIO_ENABLED,
+  UNIFICALLY_VIDEO_DURATION_SECONDS,
+  unificallyImageEverCoinCost,
+  unificallyVideoEverCoinCost
+} from "@/lib/unifically-pricing";
 
 export async function GET() {
-  const videoCost = everCoinVideoCost();
+  const videoCost = unificallyVideoEverCoinCost();
 
   return NextResponse.json(
     {
       everCoinPerDollar: everCoinPerDollar(),
       callCostPerMinute: everCoinCallCostPerMinute(),
-      imageCost: everCoinImageCost(),
+      imageCost: unificallyImageEverCoinCost(),
       videoCost,
-      videoDurationSeconds: 8,
-      videoAudioEnabled: false,
+      videoDurationSeconds: UNIFICALLY_VIDEO_DURATION_SECONDS,
+      videoAudioEnabled: UNIFICALLY_VIDEO_AUDIO_ENABLED,
       videoPricingConfigured: videoCost > 0,
       packs: Object.values(EVERCOIN_PACKS).map((pack) => ({
         code: pack.code,

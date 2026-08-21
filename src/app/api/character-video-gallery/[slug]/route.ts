@@ -4,19 +4,28 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { activeCharacterReferenceDataUrl } from "@/lib/character-media-reference";
 import {
   completeCharacterVideoRequest,
-  everCoinVideoCost,
   failCharacterVideoRequest,
   setCharacterVideoQueue,
   startCharacterVideoRequest
 } from "@/lib/evercoin";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
-import { getCharacterBySlugForUser } from "@/lib/user-characters";
 import {
-  downloadWaveSpeedOutput,
-  getWaveSpeedPrediction,
-  submitWaveSpeedPrediction,
-  wavespeedApiKey
-} from "@/lib/wavespeed-media";
+  createUnificallyTask,
+  downloadUnificallyOutput,
+  getUnificallyTask,
+  unificallyApiKey,
+  unificallyOutputUrls,
+  uploadUnificallyBase64
+} from "@/lib/unifically-media";
+import {
+  UNIFICALLY_VIDEO_ASPECT_RATIO,
+  UNIFICALLY_VIDEO_AUDIO_ENABLED,
+  UNIFICALLY_VIDEO_DURATION_SECONDS,
+  UNIFICALLY_VIDEO_PRESET,
+  UNIFICALLY_VIDEO_RESOLUTION,
+  unificallyVideoEverCoinCost
+} from "@/lib/unifically-pricing";
+import { getCharacterBySlugForUser } from "@/lib/user-characters";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -24,8 +33,8 @@ export const maxDuration = 300;
 const VIDEO_LIMIT = 5;
 const VIDEO_PROMPT_MAX_CHARACTERS = 1_000;
 const MAX_GENERATED_VIDEO_BYTES = 100 * 1024 * 1024;
-const VIDEO_DURATIONS = [8] as const;
-const DEFAULT_VIDEO_MODEL = "bytedance/seedance-v1.5-pro/image-to-video-spicy";
+const VIDEO_DURATIONS = [UNIFICALLY_VIDEO_DURATION_SECONDS] as const;
+const DEFAULT_VIDEO_MODEL = "xai/grok-imagine-video";
 const VIDEO_CONTENT_TYPES = new Set(["video/mp4", "application/octet-stream"]);
 
 const GenerateBody = z
@@ -63,34 +72,37 @@ type VideoRequestRow = {
 };
 
 function videoModel() {
-  return process.env.WAVESPEED_VIDEO_MODEL?.trim() || DEFAULT_VIDEO_MODEL;
+  return process.env.UNIFICALLY_VIDEO_MODEL?.trim() || DEFAULT_VIDEO_MODEL;
 }
 
 function videoResolution() {
-  const value = process.env.WAVESPEED_VIDEO_RESOLUTION?.trim().toLowerCase();
+  const value = process.env.UNIFICALLY_VIDEO_RESOLUTION?.trim().toLowerCase();
   return new Set(["480p", "720p", "1080p"]).has(value || "")
     ? value!
-    : "720p";
+    : UNIFICALLY_VIDEO_RESOLUTION;
 }
 
 function videoAspectRatio() {
-  const value = process.env.WAVESPEED_VIDEO_ASPECT_RATIO?.trim();
-  return new Set(["1:1", "3:4", "4:3", "9:16", "16:9", "21:9"]).has(
-    value || ""
-  )
+  const value = process.env.UNIFICALLY_VIDEO_ASPECT_RATIO?.trim();
+  return new Set(["1:1", "2:3", "3:2", "9:16", "16:9"]).has(value || "")
     ? value!
-    : "9:16";
+    : UNIFICALLY_VIDEO_ASPECT_RATIO;
+}
+
+function videoPreset() {
+  const value = process.env.UNIFICALLY_VIDEO_PRESET?.trim().toLowerCase();
+  return new Set(["custom", "spicy", "fun", "normal"]).has(value || "")
+    ? value!
+    : UNIFICALLY_VIDEO_PRESET;
 }
 
 function naturalMotionPrompt(characterName: string, userPrompt: string) {
   return (
-    `The input image is the exact fictional adult character ${characterName}. ` +
-    "Preserve the same recognizable face, adult age appearance, hair, body proportions, anatomy, skin tone, scene, lighting, and overall identity throughout the entire clip. " +
-    "Animate one continuous realistic shot with natural body movement, hand movement, gravity, and fabric physics. " +
-    "If clothing is visibly already being opened, lifted, lowered, pulled aside, or removed in the input image, or the user request clearly asks for that clothing action, continue it gradually and naturally. " +
-    "Hands should interact with the garment, fabric should slide and fold progressively, and any change in coverage should happen in small continuous steps. " +
-    "Do not rip, tear, snap, teleport, dissolve, instantly remove, or abruptly replace clothing. Do not begin unrelated clothing changes that are neither requested nor already underway. " +
+    `The supplied start image is the exact fictional adult character ${characterName}. ` +
+    "Preserve the same recognizable face, adult age appearance, hair, body proportions, anatomy, skin tone, defining features, and overall identity throughout the clip. " +
+    "Animate one continuous realistic shot with natural body movement, hand movement, gravity, facial expression, and fabric physics. " +
     "Keep motion physically coherent: no face drift, body morphing, extra limbs or fingers, abrupt pose jumps, jump cuts, sudden scene changes, or wardrobe teleportation. " +
+    "If the user asks for dialogue or speech, create matching natural generated audio and lip synchronization. " +
     `User direction: ${userPrompt}`
   );
 }
@@ -130,14 +142,17 @@ async function retrieveProviderVideo(values: {
   queueId: string;
 }) {
   try {
-    const prediction = await getWaveSpeedPrediction({
+    const task = await getUnificallyTask({
       apiKey: values.apiKey,
-      predictionId: values.queueId,
+      taskId: values.queueId,
       timeoutMs: 30_000
     });
 
-    if (prediction.status === "completed") {
-      const outputUrl = prediction.outputs[0];
+    if (task.status === "completed") {
+      const outputUrl = unificallyOutputUrls(task).find((url) =>
+        /\.mp4(?:$|\?)/i.test(url)
+      ) ?? unificallyOutputUrls(task)[0];
+
       if (!outputUrl) {
         return {
           state: "failed" as const,
@@ -146,7 +161,7 @@ async function retrieveProviderVideo(values: {
       }
 
       try {
-        const downloaded = await downloadWaveSpeedOutput({
+        const downloaded = await downloadUnificallyOutput({
           url: outputUrl,
           maximumBytes: MAX_GENERATED_VIDEO_BYTES,
           allowedContentTypes: VIDEO_CONTENT_TYPES,
@@ -163,37 +178,27 @@ async function retrieveProviderVideo(values: {
       }
     }
 
-    if (
-      prediction.status === "failed" ||
-      prediction.status === "cancelled" ||
-      prediction.status === "timeout"
-    ) {
+    if (task.status === "failed") {
       return {
         state: "failed" as const,
-        errorCode:
-          prediction.error || `VIDEO_PROVIDER_${prediction.status.toUpperCase()}`
+        errorCode: task.error || "VIDEO_PROVIDER_FAILED"
       };
     }
-
-    const rawInference = Number(prediction.timings?.inference ?? 0);
-    const executionDuration = Number.isFinite(rawInference)
-      ? rawInference > 100
-        ? rawInference / 1000
-        : rawInference
-      : 0;
 
     return {
       state: "processing" as const,
       averageExecutionTime: 0,
-      executionDuration
+      executionDuration: 0
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (/WAVESPEED_RESULT_FAILED:(400|401|402|403|404|410|422):/.test(message)) {
+    if (
+      /UNIFICALLY_TASK_FAILED:(400|401|402|403|404|410|422):/.test(message)
+    ) {
       return { state: "failed" as const, errorCode: message.slice(0, 200) };
     }
 
-    // Temporary result-query failures should not refund a still-running job.
+    // Temporary task-status failures should not refund a still-running job.
     return {
       state: "processing" as const,
       averageExecutionTime: 0,
@@ -235,7 +240,7 @@ async function finalizeVideo(values: {
         storage_path: storagePath,
         prompt: values.prompt,
         duration_seconds: values.durationSeconds,
-        provider: "wavespeed",
+        provider: "unifically",
         model: values.model,
         evercoin_charge: values.cost
       },
@@ -342,8 +347,8 @@ export async function GET(
         return NextResponse.json({ status: "processing" });
       }
 
-      const apiKey = wavespeedApiKey();
-      if (!apiKey) throw new Error("WAVESPEED_NOT_CONFIGURED");
+      const apiKey = unificallyApiKey();
+      if (!apiKey) throw new Error("UNIFICALLY_NOT_CONFIGURED");
 
       const retrieved = await retrieveProviderVideo({
         apiKey,
@@ -432,7 +437,7 @@ export async function GET(
       }))
     );
 
-    const cost = everCoinVideoCost();
+    const cost = unificallyVideoEverCoinCost();
     return NextResponse.json(
       {
         character: {
@@ -482,7 +487,7 @@ export async function POST(
     }
     requestId = parsed.data.requestId;
 
-    const cost = everCoinVideoCost();
+    const cost = unificallyVideoEverCoinCost();
     if (cost <= 0) {
       return NextResponse.json(
         { error: "VIDEO_PRICING_NOT_CONFIGURED" },
@@ -559,8 +564,8 @@ export async function POST(
       );
     }
 
-    const apiKey = wavespeedApiKey();
-    if (!apiKey) throw new Error("WAVESPEED_NOT_CONFIGURED");
+    const apiKey = unificallyApiKey();
+    if (!apiKey) throw new Error("UNIFICALLY_NOT_CONFIGURED");
 
     const referenceImage = await activeCharacterReferenceDataUrl({
       request,
@@ -568,19 +573,23 @@ export async function POST(
       characterId: character.id,
       fallbackImage: character.image
     });
+    const referenceUrl = await uploadUnificallyBase64({
+      apiKey,
+      base64: referenceImage,
+      timeoutMs: 45_000
+    });
 
-    const submitted = await submitWaveSpeedPrediction({
+    const submitted = await createUnificallyTask({
       apiKey,
       model,
       input: {
-        image: referenceImage,
         prompt: naturalMotionPrompt(character.name, parsed.data.prompt),
+        start_image_url: referenceUrl,
         duration: parsed.data.durationSeconds,
         resolution: videoResolution(),
         aspect_ratio: videoAspectRatio(),
-        generate_audio: false,
-        camera_fixed: false,
-        seed: -1
+        audio: UNIFICALLY_VIDEO_AUDIO_ENABLED,
+        video_preset: videoPreset()
       },
       timeoutMs: 60_000
     });
@@ -588,14 +597,14 @@ export async function POST(
     const recorded = await setCharacterVideoQueue({
       userId: user.id,
       requestId,
-      providerModel: submitted.model,
-      providerQueueId: submitted.id,
+      providerModel: submitted.model || model,
+      providerQueueId: submitted.taskId,
       providerDownloadUrl: null
     });
     if (!recorded) throw new Error("VIDEO_QUEUE_RECORD_FAILED");
 
     return NextResponse.json(
-      { status: "processing", requestId },
+      { status: "processing", requestId, everCoinCost: cost },
       {
         status: 202,
         headers: { "Cache-Control": "private, no-store" }

@@ -3,7 +3,6 @@ import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import {
   completeCharacterImageRequest,
-  everCoinImageCost,
   failCharacterImageRequest,
   startCharacterImageRequest
 } from "@/lib/evercoin";
@@ -11,18 +10,21 @@ import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getCharacterBySlugForUser } from "@/lib/user-characters";
 import { activeCharacterReferenceDataUrl } from "@/lib/character-media-reference";
 import {
-  downloadWaveSpeedOutput,
-  submitWaveSpeedPrediction,
-  waitForWaveSpeedPrediction,
-  wavespeedApiKey
-} from "@/lib/wavespeed-media";
+  createUnificallyTask,
+  downloadUnificallyOutput,
+  unificallyApiKey,
+  unificallyOutputUrls,
+  uploadUnificallyBase64,
+  waitForUnificallyTask
+} from "@/lib/unifically-media";
+import { unificallyImageEverCoinCost } from "@/lib/unifically-pricing";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const GALLERY_LIMIT = 7;
 const MAX_GENERATED_IMAGE_BYTES = 10 * 1024 * 1024;
-const DEFAULT_IMAGE_MODEL = "bytedance/seedream-v5.0-pro/edit";
+const DEFAULT_IMAGE_MODEL = "bytedance/seedream-5.0-pro";
 const ALLOWED_SOURCE_MIME_TYPES = new Set([
   "image/png",
   "image/jpeg",
@@ -50,9 +52,10 @@ type GalleryRow = {
 };
 
 function imageResolution() {
-  return process.env.WAVESPEED_IMAGE_RESOLUTION?.trim().toLowerCase() === "2k"
-    ? "2k"
-    : "1k";
+  const value = process.env.UNIFICALLY_IMAGE_RESOLUTION?.trim().toUpperCase();
+  return new Set(["1K", "1.5K", "2K"]).has(value || "")
+    ? value!
+    : "1K";
 }
 
 async function signedUrl(path: string) {
@@ -145,7 +148,7 @@ export async function GET(
         images: result,
         selectedImageId: preference?.selected_gallery_image_id ?? null,
         limit: GALLERY_LIMIT,
-        imageCost: everCoinImageCost()
+        imageCost: unificallyImageEverCoinCost()
       },
       { headers: { "Cache-Control": "private, no-store" } }
     );
@@ -191,7 +194,7 @@ export async function POST(
       );
     }
 
-    const cost = everCoinImageCost();
+    const cost = unificallyImageEverCoinCost();
     const claim = await startCharacterImageRequest({
       userId: user.id,
       requestId,
@@ -249,47 +252,54 @@ export async function POST(
       );
     }
 
-    const apiKey = wavespeedApiKey();
-    if (!apiKey) throw new Error("WAVESPEED_NOT_CONFIGURED");
+    const apiKey = unificallyApiKey();
+    if (!apiKey) throw new Error("UNIFICALLY_NOT_CONFIGURED");
 
     const model =
-      process.env.WAVESPEED_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
+      process.env.UNIFICALLY_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
     const referenceImage = await activeCharacterReferenceDataUrl({
       request,
       userId: user.id,
       characterId: character.id,
       fallbackImage: character.image
     });
+    const referenceUrl = await uploadUnificallyBase64({
+      apiKey,
+      base64: referenceImage
+    });
 
     const identityPrompt =
       `The supplied reference image defines the exact visual identity of the fictional adult character ${character.name}. ` +
       "Preserve the same recognizable person: face and facial proportions, adult age appearance, eye color, hair color and hairstyle, skin tone, body proportions, tattoos, scars, and permanent identifying features. " +
-      "Do not substitute a different person or redesign the character. Keep identity consistent even when changing pose, expression, clothing state, location, lighting, camera angle, or scene. " +
+      "Keep that identity consistent while following the requested pose, expression, clothing state, location, lighting, camera angle, and scene. " +
       `Follow the user's requested image closely: ${parsed.data.prompt}`;
 
-    const submitted = await submitWaveSpeedPrediction({
+    const submitted = await createUnificallyTask({
       apiKey,
       model,
       input: {
         prompt: identityPrompt,
-        images: [referenceImage],
-        aspect_ratio: "4:5",
+        image_urls: [referenceUrl],
+        aspect_ratio: "3:4",
         resolution: imageResolution(),
         output_format: "jpeg"
       },
       timeoutMs: 60_000
     });
 
-    const prediction = await waitForWaveSpeedPrediction({
-      apiKey,
-      predictionId: submitted.id,
-      maximumWaitMs: 145_000,
-      pollIntervalMs: 2_000
-    });
-    const outputUrl = prediction.outputs[0];
+    const completedTask =
+      submitted.status === "completed"
+        ? submitted
+        : await waitForUnificallyTask({
+            apiKey,
+            taskId: submitted.taskId,
+            maximumWaitMs: 165_000,
+            pollIntervalMs: 2_000
+          });
+    const outputUrl = unificallyOutputUrls(completedTask)[0];
     if (!outputUrl) throw new Error("IMAGE_PROVIDER_OUTPUT_MISSING");
 
-    const downloaded = await downloadWaveSpeedOutput({
+    const downloaded = await downloadUnificallyOutput({
       url: outputUrl,
       maximumBytes: MAX_GENERATED_IMAGE_BYTES,
       allowedContentTypes: ALLOWED_SOURCE_MIME_TYPES,
@@ -325,8 +335,8 @@ export async function POST(
         character_id: character.id,
         storage_path: uploadedPath,
         prompt: parsed.data.prompt,
-        provider: "wavespeed",
-        model: submitted.model,
+        provider: "unifically",
+        model: submitted.model || model,
         evercoin_charge: cost
       })
       .select("id,storage_path,prompt,created_at")

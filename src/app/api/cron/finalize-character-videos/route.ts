@@ -5,10 +5,11 @@ import {
 } from "@/lib/evercoin";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import {
-  downloadWaveSpeedOutput,
-  getWaveSpeedPrediction,
-  wavespeedApiKey
-} from "@/lib/wavespeed-media";
+  downloadUnificallyOutput,
+  getUnificallyTask,
+  unificallyApiKey,
+  unificallyOutputUrls
+} from "@/lib/unifically-media";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,14 +47,16 @@ async function retrieveProviderVideo(values: {
   queueId: string;
 }): Promise<ProviderResult> {
   try {
-    const prediction = await getWaveSpeedPrediction({
+    const task = await getUnificallyTask({
       apiKey: values.apiKey,
-      predictionId: values.queueId,
+      taskId: values.queueId,
       timeoutMs: 25_000
     });
 
-    if (prediction.status === "completed") {
-      const outputUrl = prediction.outputs[0];
+    if (task.status === "completed") {
+      const urls = unificallyOutputUrls(task);
+      const outputUrl =
+        urls.find((url) => /\.mp4(?:$|\?)/i.test(url)) ?? urls[0];
       if (!outputUrl) {
         return {
           state: "failed",
@@ -62,7 +65,7 @@ async function retrieveProviderVideo(values: {
       }
 
       try {
-        const downloaded = await downloadWaveSpeedOutput({
+        const downloaded = await downloadUnificallyOutput({
           url: outputUrl,
           maximumBytes: MAX_GENERATED_VIDEO_BYTES,
           allowedContentTypes: VIDEO_CONTENT_TYPES,
@@ -79,22 +82,19 @@ async function retrieveProviderVideo(values: {
       }
     }
 
-    if (
-      prediction.status === "failed" ||
-      prediction.status === "cancelled" ||
-      prediction.status === "timeout"
-    ) {
+    if (task.status === "failed") {
       return {
         state: "failed",
-        errorCode:
-          prediction.error || `VIDEO_PROVIDER_${prediction.status.toUpperCase()}`
+        errorCode: task.error || "VIDEO_PROVIDER_FAILED"
       };
     }
 
     return { state: "processing" };
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (/WAVESPEED_RESULT_FAILED:(400|401|402|403|404|410|422):/.test(message)) {
+    if (
+      /UNIFICALLY_TASK_FAILED:(400|401|402|403|404|410|422):/.test(message)
+    ) {
       return { state: "failed", errorCode: message.slice(0, 200) };
     }
 
@@ -126,7 +126,7 @@ async function finalizeVideo(request: PendingVideoRequest, bytes: Buffer) {
         storage_path: storagePath,
         prompt: request.prompt,
         duration_seconds: Number(request.duration_seconds),
-        provider: "wavespeed",
+        provider: "unifically",
         model: request.provider_model,
         evercoin_charge: Number(request.evercoin_charge)
       },
@@ -180,9 +180,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
-  const apiKey = wavespeedApiKey();
+  const apiKey = unificallyApiKey();
   if (!apiKey) {
-    return NextResponse.json({ error: "WAVESPEED_NOT_CONFIGURED" }, { status: 503 });
+    return NextResponse.json(
+      { error: "UNIFICALLY_NOT_CONFIGURED" },
+      { status: 503 }
+    );
   }
 
   const { data, error } = await getSupabaseServiceClient()
@@ -197,7 +200,10 @@ export async function GET(request: Request) {
 
   if (error) {
     console.error("Video recovery query failed:", error);
-    return NextResponse.json({ error: "VIDEO_RECOVERY_QUERY_FAILED" }, { status: 500 });
+    return NextResponse.json(
+      { error: "VIDEO_RECOVERY_QUERY_FAILED" },
+      { status: 500 }
+    );
   }
 
   const pending: PendingVideoRequest[] = (data ?? []).flatMap(

@@ -22,8 +22,8 @@ const TARGET_LANGUAGE_NAMES: Record<
   KO: "natural Korean"
 };
 
-const DEFAULT_WAVESPEED_LLM_BASE_URL = "https://llm.wavespeed.ai/v1";
-const DEFAULT_WAVESPEED_CHAT_MODEL = "thedrummer/cydonia-24b-v4.1";
+const DEFAULT_VENICE_BASE_URL = "https://api.venice.ai/api/v1";
+const DEFAULT_VENICE_CHAT_MODEL = "venice-uncensored-role-play";
 
 const TranslationCardSchema = z
   .object({
@@ -98,8 +98,7 @@ function cleanBaseUrl(value: string) {
 
 function chatCompletionsEndpoint() {
   const base = cleanBaseUrl(
-    process.env.WAVESPEED_LLM_BASE_URL?.trim() ||
-      DEFAULT_WAVESPEED_LLM_BASE_URL
+    process.env.VENICE_BASE_URL?.trim() || DEFAULT_VENICE_BASE_URL
   );
 
   return base.endsWith("/chat/completions")
@@ -230,13 +229,13 @@ async function translateBatch(
   sources: TranslationSource[],
   language: Exclude<CharacterContentLanguage, "EN">
 ) {
-  const apiKey = process.env.WAVESPEED_API_KEY?.trim();
+  const apiKey = process.env.VENICE_API_KEY?.trim();
   const model =
-    process.env.WAVESPEED_TRANSLATION_MODEL?.trim() ||
-    process.env.WAVESPEED_CHAT_MODEL?.trim() ||
-    DEFAULT_WAVESPEED_CHAT_MODEL;
+    process.env.VENICE_TRANSLATION_MODEL?.trim() ||
+    process.env.VENICE_CHAT_MODEL?.trim() ||
+    DEFAULT_VENICE_CHAT_MODEL;
 
-  if (!apiKey) throw new Error("WAVESPEED_NOT_CONFIGURED");
+  if (!apiKey) throw new Error("VENICE_NOT_CONFIGURED");
 
   const targetLanguage = TARGET_LANGUAGE_NAMES[language];
   const response = await fetch(chatCompletionsEndpoint(), {
@@ -259,7 +258,13 @@ async function translateBatch(
       ],
       temperature: 0.1,
       top_p: 0.9,
-      max_tokens: 12000
+      max_tokens: 12000,
+      venice_parameters: {
+        include_venice_system_prompt: false,
+        enable_web_search: "off",
+        enable_web_scraping: false,
+        enable_web_citations: false
+      }
     }),
     signal: AbortSignal.timeout(120_000)
   });
@@ -353,7 +358,7 @@ export async function localizeCharacters(
     return true;
   });
 
-  const providerConfigured = Boolean(process.env.WAVESPEED_API_KEY?.trim());
+  const providerConfigured = Boolean(process.env.VENICE_API_KEY?.trim());
 
   if (allowProvider && missing.length && providerConfigured) {
     const claimItems = missing.map((entry) => ({
