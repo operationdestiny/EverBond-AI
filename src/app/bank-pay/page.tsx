@@ -34,6 +34,14 @@ const BANKS = [
 ];
 
 export default function BankPayPage() {
+  return (
+    <AppShell>
+      <BankPayContent />
+    </AppShell>
+  );
+}
+
+function BankPayContent() {
   const { language } = useSiteLanguage();
   const copy = BANK_PAYMENT_COPY[language] ?? BANK_PAYMENT_COPY.EN;
   const { session, authReady, openAuthModal } = useAuth();
@@ -153,8 +161,7 @@ export default function BankPayPage() {
   }
 
   return (
-    <AppShell>
-      <main className="mx-auto max-w-3xl px-4 py-10">
+    <main className="mx-auto max-w-3xl px-4 py-10">
         <div className="rounded-[2rem] border border-bond-rose/30 bg-white/[0.035] p-6 md:p-8">
           <p className="text-sm font-bold uppercase tracking-[0.2em] text-bond-rose">
             EverCoin
@@ -241,7 +248,6 @@ export default function BankPayPage() {
             {copy.back}
           </Link>
         </div>
-      </main>
-    </AppShell>
+    </main>
   );
 }

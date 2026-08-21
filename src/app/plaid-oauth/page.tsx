@@ -46,6 +46,14 @@ function loadPlaidScript() {
 }
 
 export default function PlaidOauthPage() {
+  return (
+    <AppShell>
+      <PlaidOauthContent />
+    </AppShell>
+  );
+}
+
+function PlaidOauthContent() {
   const { session, authReady, openAuthModal } = useAuth();
   const [status, setStatus] = useState("Ready to connect the EverBond receiving account.");
   const [busy, setBusy] = useState(false);
@@ -150,8 +158,7 @@ export default function PlaidOauthPage() {
   }, [authReady, session?.access_token]);
 
   return (
-    <AppShell>
-      <main className="mx-auto max-w-2xl px-4 py-12">
+    <main className="mx-auto max-w-2xl px-4 py-12">
         <div className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-7">
           <p className="text-sm font-bold uppercase tracking-[0.2em] text-bond-rose">
             EverBond Owner Setup
@@ -178,7 +185,6 @@ export default function PlaidOauthPage() {
             {session ? "Connect Navy Federal Business Checking" : "Sign in to continue"}
           </button>
         </div>
-      </main>
-    </AppShell>
+    </main>
   );
 }
