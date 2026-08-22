@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import {
-  getPaymentOrderForUser,
-  refreshEverCoinPaymentOrder
-} from "@/lib/billing/evercoin-payment-router";
-import { refreshCustomBankPayments } from "@/lib/custom-bank-payments";
+  getTributeOrderForUser,
+  refreshTributeOrder
+} from "@/lib/tribute-payments";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -24,54 +23,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "INVALID_ORDER_ID" }, { status: 400 });
     }
 
-    const order = await getPaymentOrderForUser(parsed.data, user.id);
+    const order = await getTributeOrderForUser(parsed.data, user.id);
     if (!order) {
       return NextResponse.json({ error: "PAYMENT_ORDER_NOT_FOUND" }, { status: 404 });
     }
 
-    if (
-      order.provider === "direct_bank" &&
-      order.rail === "bank" &&
-      order.pack_code === "custom"
-    ) {
-      await refreshCustomBankPayments();
-      const latest = await getPaymentOrderForUser(order.id, user.id);
-
-      if (latest?.status === "paid") {
-        return NextResponse.json(
-          {
-            status: "paid",
-            coins: latest.coins,
-            balance: null,
-            provisional: latest.provider_state === "PENDING_CREDITED"
-          },
-          { headers: { "Cache-Control": "private, no-store" } }
-        );
-      }
-
-      if (
-        latest?.status === "failed" ||
-        latest?.status === "expired" ||
-        latest?.status === "cancelled"
-      ) {
-        return NextResponse.json(
-          { status: latest.status, coins: 0, balance: null, provisional: false },
-          { headers: { "Cache-Control": "private, no-store" } }
-        );
-      }
-
-      return NextResponse.json(
-        { status: "pending", coins: 0, balance: null, provisional: false },
-        { headers: { "Cache-Control": "private, no-store" } }
-      );
-    }
-
-    const result = await refreshEverCoinPaymentOrder(order);
+    const result = await refreshTributeOrder(order);
     return NextResponse.json(result, {
       headers: { "Cache-Control": "private, no-store" }
     });
   } catch (error) {
-    console.error("EverCoin payment status failed:", error);
+    console.error("Tribute EverCoin payment status failed:", error);
     return NextResponse.json({ error: "PAYMENT_STATUS_FAILED" }, { status: 500 });
   }
 }

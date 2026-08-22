@@ -14,13 +14,15 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useSiteLanguage } from "@/lib/site-language";
 import { EVERCOIN_PAGE_COPY } from "@/lib/evercoin-page-language";
 import { EVERCOIN_PAYMENT_COPY } from "@/lib/evercoin-payment-language";
-import { BANK_PAYMENT_COPY } from "@/lib/bank-payment-language";
+import { TRIBUTE_PAYMENT_COPY } from "@/lib/tribute-payment-language";
 import {
   LOCALE_BY_LANGUAGE,
   localizedErrorMessage
 } from "@/lib/final-localization-language";
 
 const PENDING_PAYMENT_KEY = "everbond-pending-evercoin-payment";
+const MIN_AMOUNT_MINOR = 100;
+const MAX_AMOUNT_MINOR = 300_000;
 
 function parseUsdMinor(value: string) {
   const normalized = value.trim().replace(/[$,\s]/g, "");
@@ -30,12 +32,7 @@ function parseUsdMinor(value: string) {
   const dollars = Number.parseInt(match[1], 10);
   const cents = (match[2] || "").padEnd(2, "0");
   const amount = dollars * 100 + Number.parseInt(cents || "0", 10);
-
   return Number.isSafeInteger(amount) ? amount : null;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 export default function CoinsPage() {
@@ -50,7 +47,7 @@ function CoinsPageContent() {
   const { language } = useSiteLanguage();
   const pageCopy = EVERCOIN_PAGE_COPY[language] ?? EVERCOIN_PAGE_COPY.EN;
   const paymentCopy = EVERCOIN_PAYMENT_COPY[language] ?? EVERCOIN_PAYMENT_COPY.EN;
-  const bankCopy = BANK_PAYMENT_COPY[language] ?? BANK_PAYMENT_COPY.EN;
+  const tributeCopy = TRIBUTE_PAYMENT_COPY[language] ?? TRIBUTE_PAYMENT_COPY.EN;
   const locale = LOCALE_BY_LANGUAGE[language] ?? LOCALE_BY_LANGUAGE.EN;
   const { session, authReady, openAuthModal } = useAuth();
 
@@ -86,7 +83,7 @@ function CoinsPageContent() {
         setVideoCost(Math.trunc(nextVideoCost));
       }
 
-      setPaymentReady(checkout?.rails?.bank === true);
+      setPaymentReady(checkout?.tribute === true);
     });
 
     return () => {
@@ -97,8 +94,15 @@ function CoinsPageContent() {
   useEffect(() => {
     if (!session?.access_token || typeof window === "undefined") return;
 
-    const orderId = window.localStorage.getItem(PENDING_PAYMENT_KEY);
+    const params = new URLSearchParams(window.location.search);
+    const returnedOrderId = params.get("orderId") || "";
+    const storedOrderId = window.localStorage.getItem(PENDING_PAYMENT_KEY) || "";
+    const orderId = returnedOrderId || storedOrderId;
     if (!orderId) return;
+
+    if (returnedOrderId) {
+      window.localStorage.setItem(PENDING_PAYMENT_KEY, returnedOrderId);
+    }
 
     let cancelled = false;
     let attempts = 0;
@@ -109,7 +113,7 @@ function CoinsPageContent() {
 
       try {
         const response = await fetch(
-          `/api/evercoin/checkout/status?orderId=${encodeURIComponent(orderId!)}`,
+          `/api/evercoin/checkout/status?orderId=${encodeURIComponent(orderId)}`,
           {
             headers: { Authorization: `Bearer ${session!.access_token}` },
             cache: "no-store"
@@ -124,17 +128,26 @@ function CoinsPageContent() {
           return;
         }
 
-        if (payload?.status === "expired" || payload?.status === "failed") {
+        if (
+          payload?.status === "expired" ||
+          payload?.status === "failed" ||
+          payload?.status === "cancelled" ||
+          payload?.status === "refunded"
+        ) {
           window.localStorage.removeItem(PENDING_PAYMENT_KEY);
           setNotice(paymentCopy.expired);
           return;
         }
 
-        if (response.ok && attempts < 6) {
-          window.setTimeout(checkPending, 3000);
+        if (response.ok && attempts < 8) {
+          window.setTimeout(checkPending, 2000);
+        } else if (response.ok) {
+          setNotice(paymentCopy.pending);
         }
       } catch {
-        // The dedicated bank-payment page remains the source of truth.
+        if (!cancelled && attempts < 8) {
+          window.setTimeout(checkPending, 2500);
+        }
       }
     }
 
@@ -142,7 +155,7 @@ function CoinsPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [session?.access_token, paymentCopy.expired, paymentCopy.paid]);
+  }, [session?.access_token, paymentCopy.expired, paymentCopy.paid, paymentCopy.pending]);
 
   const items = useMemo(
     () => [
@@ -174,7 +187,7 @@ function CoinsPageContent() {
     [imageCost, pageCopy, videoCost]
   );
 
-  async function startCustomBankPayment() {
+  async function startTributePayment() {
     if (!authReady || busy) return;
 
     if (!session?.access_token) {
@@ -182,58 +195,53 @@ function CoinsPageContent() {
       return;
     }
 
-    if (!requestedMinor || requestedMinor < 6 || requestedMinor > 1_000_000) {
-      setError(bankCopy.invalidAmount);
+    if (
+      !requestedMinor ||
+      requestedMinor < MIN_AMOUNT_MINOR ||
+      requestedMinor > MAX_AMOUNT_MINOR
+    ) {
+      setError(tributeCopy.invalidAmount);
       return;
     }
 
     setBusy(true);
     setError("");
-    setNotice(bankCopy.reserving);
+    setNotice(tributeCopy.opening);
 
     try {
-      for (;;) {
-        const response = await fetch("/api/evercoin/bank/custom-checkout", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`
-          },
-          body: JSON.stringify({ amountMinor: requestedMinor })
-        });
+      const response = await fetch("/api/evercoin/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ amountMinor: requestedMinor })
+      });
 
-        const payload = await response.json().catch(() => ({}));
-
-        if (response.status === 409 && payload?.error === "BANK_AMOUNT_SLOTS_BUSY") {
-          setNotice(bankCopy.waiting);
-          await sleep(2000);
-          continue;
+      const payload = await response.json().catch(() => ({}));
+      if (
+        !response.ok ||
+        payload?.mode !== "redirect" ||
+        payload?.provider !== "tribute" ||
+        typeof payload?.url !== "string" ||
+        typeof payload?.orderId !== "string"
+      ) {
+        if (payload?.error === "PAYMENT_RAIL_NOT_CONFIGURED") {
+          throw new Error(paymentCopy.unavailable);
         }
 
-        if (
-          !response.ok ||
-          payload?.mode !== "redirect" ||
-          typeof payload?.url !== "string" ||
-          typeof payload?.orderId !== "string"
-        ) {
-          if (payload?.error === "PAYMENT_RAIL_NOT_CONFIGURED") {
-            throw new Error(paymentCopy.unavailable);
-          }
-
-          throw new Error(
-            localizedErrorMessage(
-              payload?.message ?? payload?.error,
-              language,
-              pageCopy.checkoutFailed,
-              "checkout"
-            )
-          );
-        }
-
-        window.localStorage.setItem(PENDING_PAYMENT_KEY, payload.orderId);
-        window.location.assign(payload.url);
-        return;
+        throw new Error(
+          localizedErrorMessage(
+            payload?.message ?? payload?.error,
+            language,
+            pageCopy.checkoutFailed,
+            "checkout"
+          )
+        );
       }
+
+      window.localStorage.setItem(PENDING_PAYMENT_KEY, payload.orderId);
+      window.location.assign(payload.url);
     } catch (checkoutError) {
       setError(
         checkoutError instanceof Error ? checkoutError.message : pageCopy.checkoutFailed
@@ -261,12 +269,12 @@ function CoinsPageContent() {
       <section className="mx-auto mb-12 max-w-3xl">
         <div className="eb-neon-card rounded-[2rem] bg-white/[0.035] p-6 text-center md:p-8">
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-bond-rose">
-            {bankCopy.customRate}
+            {tributeCopy.customRate}
           </p>
           <h2 className="mt-3 font-display text-3xl font-bold text-white">
-            {bankCopy.customTitle}
+            {tributeCopy.customTitle}
           </h2>
-          <p className="mt-3 text-bond-muted">{bankCopy.customPrompt}</p>
+          <p className="mt-3 text-bond-muted">{tributeCopy.customPrompt}</p>
 
           <div className="mx-auto mt-7 max-w-md">
             <label className="relative block">
@@ -281,10 +289,10 @@ function CoinsPageContent() {
                   setError("");
                   setNotice("");
                 }}
-                placeholder={bankCopy.customPlaceholder}
+                placeholder={tributeCopy.customPlaceholder}
                 disabled={busy}
                 className="w-full rounded-2xl border border-bond-rose/35 bg-black/35 py-4 pl-11 pr-5 text-center font-display text-3xl font-bold text-white outline-none transition focus:border-bond-rose disabled:opacity-60"
-                aria-label={bankCopy.customPrompt}
+                aria-label={tributeCopy.customPrompt}
               />
             </label>
 
@@ -303,9 +311,9 @@ function CoinsPageContent() {
             </div>
 
             <div className="mt-6 rounded-2xl border border-bond-rose/25 bg-bond-rose/10 px-5 py-4">
-              <p className="text-sm text-bond-muted">{bankCopy.youReceive}</p>
+              <p className="text-sm text-bond-muted">{tributeCopy.youReceive}</p>
               <p className="mt-1 font-display text-4xl font-bold text-bond-rose">
-                {(requestedMinor && requestedMinor >= 6
+                {(requestedMinor && requestedMinor >= MIN_AMOUNT_MINOR
                   ? requestedMinor
                   : 0
                 ).toLocaleString(locale)}{" "}
@@ -315,13 +323,15 @@ function CoinsPageContent() {
 
             <button
               type="button"
-              onClick={() => void startCustomBankPayment()}
+              onClick={() => void startTributePayment()}
               disabled={!authReady || busy || !paymentReady}
               className="bond-pink-button mt-6 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-4 text-base font-bold disabled:cursor-not-allowed disabled:opacity-55"
             >
               {busy && <LoaderCircle size={18} className="animate-spin" />}
-              {paymentReady ? bankCopy.continue : paymentCopy.unavailable}
+              {paymentReady ? tributeCopy.continue : paymentCopy.unavailable}
             </button>
+
+            <p className="mt-3 text-xs text-bond-muted">{tributeCopy.secureNote}</p>
 
             {notice && (
               <p className="mt-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white">

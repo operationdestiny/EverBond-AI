@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { EVERCOIN_PACKS } from "@/lib/billing/evercoin-packs";
 import {
   everCoinCallCostPerMinute,
   everCoinImageCost,
@@ -18,12 +17,7 @@ export async function GET() {
       videoCost,
       videoDurationSeconds: 8,
       videoAudioEnabled: false,
-      videoPricingConfigured: videoCost > 0,
-      packs: Object.values(EVERCOIN_PACKS).map((pack) => ({
-        code: pack.code,
-        coins: pack.coins,
-        displayPrice: pack.displayPrice
-      }))
+      videoPricingConfigured: videoCost > 0
     },
     {
       headers: {

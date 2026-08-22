@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { EVERCOIN_PACKS } from "@/lib/billing/evercoin-packs";
 import {
   everCoinCallCostPerMinute,
   everCoinImageCost,
@@ -21,23 +20,11 @@ export async function GET() {
       everCoinPerDollar: everCoinPerDollar(),
       callCostPerMinute: everCoinCallCostPerMinute(),
       imageCost: everCoinImageCost(),
-
-      // This is deliberately an advertised estimate. Generation itself uses
-      // a fresh Grok quote, and a fresh Wan quote if automatic fallback occurs.
       videoCost,
       videoDisplayCost: videoCost,
-
       videoDurationSeconds: VIDEO_DURATION_SECONDS,
       videoAudioEnabled: false,
-      videoPricingConfigured,
-
-      packs: Object.values(EVERCOIN_PACKS).map(
-        (pack) => ({
-          code: pack.code,
-          coins: pack.coins,
-          displayPrice: pack.displayPrice
-        })
-      )
+      videoPricingConfigured
     },
     {
       headers: {
