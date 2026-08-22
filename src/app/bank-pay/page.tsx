@@ -10,6 +10,7 @@ import { BANK_PAYMENT_COPY } from "@/lib/bank-payment-language";
 type BankDetails = {
   orderId: string;
   status: string;
+  providerState: string | null;
   coins: number;
   amountMinor: number;
   requestedAmountMinor: number;
@@ -70,7 +71,11 @@ function BankPayContent() {
         if (!response.ok) throw new Error(payload?.error || "BANK_DETAILS_FAILED");
         if (!cancelled) {
           setDetails(payload);
-          if (payload.status === "paid") setStatus(copy.paid);
+          if (payload.status === "paid") {
+            setStatus(
+              payload.providerState === "PENDING_CREDITED" ? copy.paidPending : copy.paid
+            );
+          }
         }
       })
       .catch(() => {
@@ -80,7 +85,15 @@ function BankPayContent() {
     return () => {
       cancelled = true;
     };
-  }, [authReady, copy.paid, copy.pending, openAuthModal, orderId, session?.access_token]);
+  }, [
+    authReady,
+    copy.paid,
+    copy.paidPending,
+    copy.pending,
+    openAuthModal,
+    orderId,
+    session?.access_token
+  ]);
 
   async function copyValue(label: string, value: string) {
     await navigator.clipboard.writeText(value);
@@ -112,6 +125,16 @@ function BankPayContent() {
     setStatus(copy.checkingPayment);
 
     try {
+      await fetch("/api/evercoin/bank/sent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ orderId }),
+        cache: "no-store"
+      }).catch(() => undefined);
+
       for (let attempt = 0; attempt < 24; attempt += 1) {
         const response = await fetch(
           `/api/evercoin/checkout/status?orderId=${encodeURIComponent(orderId)}`,
@@ -123,8 +146,22 @@ function BankPayContent() {
         const payload = await response.json().catch(() => ({}));
 
         if (payload?.status === "paid") {
-          setStatus(copy.paid);
-          setDetails((current) => (current ? { ...current, status: "paid" } : current));
+          const provisional = payload?.provisional === true;
+          setStatus(provisional ? copy.paidPending : copy.paid);
+          setDetails((current) =>
+            current
+              ? {
+                  ...current,
+                  status: "paid",
+                  providerState: provisional ? "PENDING_CREDITED" : "RECEIVED"
+                }
+              : current
+          );
+          return;
+        }
+
+        if (payload?.status === "failed") {
+          setStatus(copy.failed);
           return;
         }
 
@@ -234,6 +271,30 @@ function BankPayContent() {
             >
               {copied === "all" ? copy.copied : copy.copyAll}
             </button>
+
+            <div className="mt-7 rounded-2xl border border-white/10 bg-black/20 p-5">
+              <h2 className="font-display text-xl font-bold text-white">
+                {copy.timingTitle}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-bond-muted">{copy.timingIntro}</p>
+
+              <div className="mt-4 space-y-3">
+                {[
+                  [copy.rtpTitle, copy.rtpBody],
+                  [copy.internalTitle, copy.internalBody],
+                  [copy.achTitle, copy.achBody],
+                  [copy.wireTitle, copy.wireBody],
+                  [copy.slowTitle, copy.slowBody]
+                ].map(([title, body]) => (
+                  <div key={title} className="rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3">
+                    <p className="font-bold text-white">{title}</p>
+                    <p className="mt-1 text-sm leading-6 text-bond-muted">{body}</p>
+                  </div>
+                ))}
+              </div>
+
+              <p className="mt-4 text-xs leading-5 text-bond-muted">{copy.provisionalNote}</p>
+            </div>
 
             <button
               type="button"

@@ -40,6 +40,7 @@ export async function GET(request: Request) {
       {
         orderId: order.id,
         status: order.status,
+        providerState: order.provider_state,
         coins: order.coins,
         amountMinor: order.amount_minor,
         requestedAmountMinor:

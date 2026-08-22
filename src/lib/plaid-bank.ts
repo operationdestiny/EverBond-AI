@@ -298,6 +298,12 @@ async function cacheTransactions(connection: PlaidConnection, transactions: any[
         transaction_date: transaction.date || null,
         transaction_datetime: transaction.datetime || null,
         pending: Boolean(transaction.pending),
+        pending_transaction_id:
+          typeof transaction.pending_transaction_id === "string" &&
+          transaction.pending_transaction_id.trim()
+            ? transaction.pending_transaction_id.trim()
+            : null,
+        removed_at: null,
         reference_text: extractText(transaction) || null,
         payer: typeof meta.payer === "string" ? meta.payer.slice(0, 300) : null,
         payment_method:
@@ -318,6 +324,20 @@ async function cacheTransactions(connection: PlaidConnection, transactions: any[
   if (error) throw error;
 }
 
+async function markRemovedTransactions(transactionIds: string[]) {
+  if (!transactionIds.length) return;
+  const now = new Date().toISOString();
+  for (let start = 0; start < transactionIds.length; start += 200) {
+    const batch = transactionIds.slice(start, start + 200);
+    const { error } = await getSupabaseServiceClient()
+      .from("plaid_incoming_transactions")
+      .update({ removed_at: now, last_seen_at: now })
+      .in("transaction_id", batch)
+      .is("removed_at", null);
+    if (error) throw error;
+  }
+}
+
 export async function syncPlaidTransactions() {
   const connection = await getActivePlaidConnection();
   if (!connection?.account_id) return { synced: false, reason: "NOT_CONNECTED" as const };
@@ -326,6 +346,7 @@ export async function syncPlaidTransactions() {
   let cursor = connection.sync_cursor || undefined;
   let hasMore = true;
   let loops = 0;
+  const removedTransactionIds: string[] = [];
 
   while (hasMore && loops < 20) {
     loops += 1;
@@ -342,9 +363,16 @@ export async function syncPlaidTransactions() {
     });
 
     await cacheTransactions(connection, [...(payload.added || []), ...(payload.modified || [])]);
+    for (const removed of payload.removed || []) {
+      if (typeof removed?.transaction_id === "string" && removed.transaction_id) {
+        removedTransactionIds.push(removed.transaction_id);
+      }
+    }
     cursor = payload.next_cursor;
     hasMore = Boolean(payload.has_more);
   }
+
+  await markRemovedTransactions(removedTransactionIds);
 
   const { error } = await getSupabaseServiceClient()
     .from("plaid_bank_connections")

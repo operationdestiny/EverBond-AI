@@ -39,13 +39,29 @@ export async function GET(request: Request) {
 
       if (latest?.status === "paid") {
         return NextResponse.json(
-          { status: "paid", coins: latest.coins, balance: null },
+          {
+            status: "paid",
+            coins: latest.coins,
+            balance: null,
+            provisional: latest.provider_state === "PENDING_CREDITED"
+          },
+          { headers: { "Cache-Control": "private, no-store" } }
+        );
+      }
+
+      if (
+        latest?.status === "failed" ||
+        latest?.status === "expired" ||
+        latest?.status === "cancelled"
+      ) {
+        return NextResponse.json(
+          { status: latest.status, coins: 0, balance: null, provisional: false },
           { headers: { "Cache-Control": "private, no-store" } }
         );
       }
 
       return NextResponse.json(
-        { status: "pending", coins: 0, balance: null },
+        { status: "pending", coins: 0, balance: null, provisional: false },
         { headers: { "Cache-Control": "private, no-store" } }
       );
     }
