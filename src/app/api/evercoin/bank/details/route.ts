@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getPaymentOrderForUser } from "@/lib/billing/evercoin-payment-router";
 import { getReceivingBankDetails } from "@/lib/plaid-bank";
+import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -27,16 +28,31 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "BANK_ORDER_NOT_FOUND" }, { status: 404 });
     }
 
-    const bank = await getReceivingBankDetails();
+    const receiving = await getReceivingBankDetails();
+    const { data: metadata } = await getSupabaseServiceClient()
+      .from("evercoin_payment_orders")
+      .select("requested_amount_minor")
+      .eq("id", order.id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
     return NextResponse.json(
       {
         orderId: order.id,
         status: order.status,
         coins: order.coins,
         amountMinor: order.amount_minor,
+        requestedAmountMinor:
+          Number(metadata?.requested_amount_minor) || Number(order.amount_minor),
         currency: order.currency_code,
-        reference: order.provider_reference,
-        bank
+        bank: {
+          accountHolderName:
+            process.env.EVERBOND_BANK_ACCOUNT_NAME?.trim() || "EverBond LLC",
+          bankName: receiving.bankName,
+          accountType: "Checking",
+          routingNumber: receiving.routingNumber,
+          accountNumber: receiving.accountNumber
+        }
       },
       { headers: { "Cache-Control": "private, no-store" } }
     );

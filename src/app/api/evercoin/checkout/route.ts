@@ -9,9 +9,11 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
+// Bundle checkout is retained only for non-bank legacy/provider rails.
+// New bank purchases use /api/evercoin/bank/custom-checkout.
 const Body = z
   .object({
-    rail: z.enum(["bank", "card", "crypto"]),
+    rail: z.enum(["card", "crypto"]),
     pack: z.enum(["500", "1000", "5000"])
   })
   .strict();
@@ -54,10 +56,7 @@ export async function POST(request: Request) {
     const detail = error instanceof Error ? error.message : "CHECKOUT_FAILED";
     console.error("EverCoin payment-router checkout failed:", error);
 
-    const notConfigured =
-      detail === "PAYRAM_NOT_CONFIGURED" ||
-      detail === "BANK_RAIL_NOT_CONFIGURED" ||
-      detail === "PLAID_BANK_NOT_CONNECTED";
+    const notConfigured = detail === "PAYRAM_NOT_CONFIGURED";
 
     return NextResponse.json(
       {

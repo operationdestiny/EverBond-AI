@@ -20,21 +20,23 @@ import {
   localizedErrorMessage
 } from "@/lib/final-localization-language";
 
-type Rail = "bank";
-type Pack = {
-  code: "500" | "1000" | "5000";
-  amount: number;
-  price: string;
-  image: string;
-};
-
-const paymentPackages: Pack[] = [
-  { code: "500", amount: 500, price: "$4.99", image: "/assets/evercoin-1000.png" },
-  { code: "1000", amount: 1_000, price: "$9.99", image: "/assets/evercoin-5000.png" },
-  { code: "5000", amount: 5_000, price: "$44.99", image: "/assets/evercoin-10000.png" }
-];
-
 const PENDING_PAYMENT_KEY = "everbond-pending-evercoin-payment";
+
+function parseUsdMinor(value: string) {
+  const normalized = value.trim().replace(/[$,\s]/g, "");
+  const match = /^(\d+)(?:\.(\d{0,2}))?$/.exec(normalized);
+  if (!match) return null;
+
+  const dollars = Number.parseInt(match[1], 10);
+  const cents = (match[2] || "").padEnd(2, "0");
+  const amount = dollars * 100 + Number.parseInt(cents || "0", 10);
+
+  return Number.isSafeInteger(amount) ? amount : null;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 export default function CoinsPage() {
   return (
@@ -51,12 +53,16 @@ function CoinsPageContent() {
   const bankCopy = BANK_PAYMENT_COPY[language] ?? BANK_PAYMENT_COPY.EN;
   const locale = LOCALE_BY_LANGUAGE[language] ?? LOCALE_BY_LANGUAGE.EN;
   const { session, authReady, openAuthModal } = useAuth();
-  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  const [amountInput, setAmountInput] = useState("20.00");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [imageCost, setImageCost] = useState(20);
   const [videoCost, setVideoCost] = useState(90);
   const [paymentReady, setPaymentReady] = useState(false);
+
+  const requestedMinor = useMemo(() => parseUsdMinor(amountInput), [amountInput]);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,11 +132,9 @@ function CoinsPageContent() {
 
         if (response.ok && attempts < 6) {
           window.setTimeout(checkPending, 3000);
-        } else {
-          setNotice(paymentCopy.pending);
         }
       } catch {
-        if (!cancelled) setNotice(paymentCopy.pending);
+        // The dedicated bank-payment page remains the source of truth.
       }
     }
 
@@ -138,12 +142,7 @@ function CoinsPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [
-    session?.access_token,
-    paymentCopy.expired,
-    paymentCopy.paid,
-    paymentCopy.pending
-  ]);
+  }, [session?.access_token, paymentCopy.expired, paymentCopy.paid]);
 
   const items = useMemo(
     () => [
@@ -175,57 +174,80 @@ function CoinsPageContent() {
     [imageCost, pageCopy, videoCost]
   );
 
-  async function buyPack(rail: Rail, pack: Pack) {
-    if (!authReady || busyKey) return;
+  async function startCustomBankPayment() {
+    if (!authReady || busy) return;
 
     if (!session?.access_token) {
       openAuthModal();
       return;
     }
 
-    const key = `${rail}:${pack.code}`;
-    setBusyKey(key);
+    if (!requestedMinor || requestedMinor < 6 || requestedMinor > 1_000_000) {
+      setError(bankCopy.invalidAmount);
+      return;
+    }
+
+    setBusy(true);
     setError("");
-    setNotice("");
+    setNotice(bankCopy.reserving);
 
     try {
-      const response = await fetch("/api/evercoin/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ rail, pack: pack.code })
-      });
-      const payload = await response.json().catch(() => ({}));
+      for (;;) {
+        const response = await fetch("/api/evercoin/bank/custom-checkout", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ amountMinor: requestedMinor })
+        });
 
-      if (
-        !response.ok ||
-        payload?.mode !== "redirect" ||
-        typeof payload?.url !== "string" ||
-        typeof payload?.orderId !== "string"
-      ) {
-        if (payload?.error === "PAYMENT_RAIL_NOT_CONFIGURED") {
-          throw new Error(paymentCopy.unavailable);
+        const payload = await response.json().catch(() => ({}));
+
+        if (response.status === 409 && payload?.error === "BANK_AMOUNT_SLOTS_BUSY") {
+          setNotice(bankCopy.waiting);
+          await sleep(2000);
+          continue;
         }
-        throw new Error(
-          localizedErrorMessage(
-            payload?.message ?? payload?.error,
-            language,
-            pageCopy.checkoutFailed,
-            "checkout"
-          )
-        );
-      }
 
-      window.localStorage.setItem(PENDING_PAYMENT_KEY, payload.orderId);
-      window.location.assign(payload.url);
+        if (
+          !response.ok ||
+          payload?.mode !== "redirect" ||
+          typeof payload?.url !== "string" ||
+          typeof payload?.orderId !== "string"
+        ) {
+          if (payload?.error === "PAYMENT_RAIL_NOT_CONFIGURED") {
+            throw new Error(paymentCopy.unavailable);
+          }
+
+          throw new Error(
+            localizedErrorMessage(
+              payload?.message ?? payload?.error,
+              language,
+              pageCopy.checkoutFailed,
+              "checkout"
+            )
+          );
+        }
+
+        window.localStorage.setItem(PENDING_PAYMENT_KEY, payload.orderId);
+        window.location.assign(payload.url);
+        return;
+      }
     } catch (checkoutError) {
       setError(
         checkoutError instanceof Error ? checkoutError.message : pageCopy.checkoutFailed
       );
-      setBusyKey(null);
+      setNotice("");
+      setBusy(false);
     }
+  }
+
+  function setQuickAmount(value: string) {
+    if (busy) return;
+    setAmountInput(value);
+    setError("");
+    setNotice("");
   }
 
   return (
@@ -236,54 +258,83 @@ function CoinsPageContent() {
         description={pageCopy.description}
       />
 
-      {notice && (
-        <p className="mx-auto mb-8 max-w-3xl rounded-2xl border border-bond-rose/25 bg-bond-rose/10 px-5 py-3 text-center text-sm text-white">
-          {notice}
-        </p>
-      )}
+      <section className="mx-auto mb-12 max-w-3xl">
+        <div className="eb-neon-card rounded-[2rem] bg-white/[0.035] p-6 text-center md:p-8">
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-bond-rose">
+            {bankCopy.customRate}
+          </p>
+          <h2 className="mt-3 font-display text-3xl font-bold text-white">
+            {bankCopy.customTitle}
+          </h2>
+          <p className="mt-3 text-bond-muted">{bankCopy.customPrompt}</p>
 
-      {error && (
-        <p className="mx-auto mb-8 max-w-3xl rounded-2xl border border-red-400/25 bg-red-500/10 px-5 py-3 text-center text-sm text-red-100">
-          {error}
-        </p>
-      )}
+          <div className="mx-auto mt-7 max-w-md">
+            <label className="relative block">
+              <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-bold text-white">
+                $
+              </span>
+              <input
+                inputMode="decimal"
+                value={amountInput}
+                onChange={(event: { target: { value: string } }) => {
+                  setAmountInput(event.target.value);
+                  setError("");
+                  setNotice("");
+                }}
+                placeholder={bankCopy.customPlaceholder}
+                disabled={busy}
+                className="w-full rounded-2xl border border-bond-rose/35 bg-black/35 py-4 pl-11 pr-5 text-center font-display text-3xl font-bold text-white outline-none transition focus:border-bond-rose disabled:opacity-60"
+                aria-label={bankCopy.customPrompt}
+              />
+            </label>
 
-      <section className="mx-auto mb-12 max-w-6xl">
-        <div className="grid gap-4 md:grid-cols-3">
-          {paymentPackages.map((pack) => {
-            const key = `bank:${pack.code}`;
-            const busy = busyKey === key;
-            return (
-              <div
-                key={key}
-                className="eb-neon-card overflow-hidden rounded-[2rem] bg-white/[0.035] p-4 text-center"
-              >
-                <div className="overflow-hidden rounded-[1.55rem] border border-bond-rose/45 bg-black">
-                  <img
-                    src={pack.image}
-                    alt={`${pack.amount.toLocaleString(locale)} EverCoin`}
-                    className="h-80 w-full object-cover"
-                  />
-                </div>
-
-                <p className="mt-5 font-display text-5xl font-bold text-bond-rose drop-shadow-[0_0_18px_rgba(255,92,168,0.55)]">
-                  {pack.amount.toLocaleString(locale)}
-                </p>
-                <p className="mt-2 text-lg text-white">EverCoin</p>
-                <p className="mt-2 text-2xl font-bold text-white">{pack.price}</p>
-
+            <div className="mt-4 grid grid-cols-4 gap-2">
+              {["5.00", "10.00", "20.00", "50.00"].map((value) => (
                 <button
+                  key={value}
                   type="button"
-                  onClick={() => void buyPack("bank", pack)}
-                  disabled={!authReady || Boolean(busyKey) || !paymentReady}
-                  className="bond-pink-button mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-bond-rose/15 px-5 py-3 text-base font-bold text-bond-rose disabled:cursor-not-allowed disabled:opacity-55"
+                  onClick={() => setQuickAmount(value)}
+                  disabled={busy}
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-sm font-bold text-white hover:border-bond-rose/45 disabled:opacity-50"
                 >
-                  {busy && <LoaderCircle size={18} className="animate-spin" />}
-                  {paymentReady ? bankCopy.title : paymentCopy.unavailable}
+                  ${Number(value).toFixed(0)}
                 </button>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-bond-rose/25 bg-bond-rose/10 px-5 py-4">
+              <p className="text-sm text-bond-muted">{bankCopy.youReceive}</p>
+              <p className="mt-1 font-display text-4xl font-bold text-bond-rose">
+                {(requestedMinor && requestedMinor >= 6
+                  ? requestedMinor
+                  : 0
+                ).toLocaleString(locale)}{" "}
+                EverCoin
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void startCustomBankPayment()}
+              disabled={!authReady || busy || !paymentReady}
+              className="bond-pink-button mt-6 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-4 text-base font-bold disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              {busy && <LoaderCircle size={18} className="animate-spin" />}
+              {paymentReady ? bankCopy.continue : paymentCopy.unavailable}
+            </button>
+
+            {notice && (
+              <p className="mt-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white">
+                {notice}
+              </p>
+            )}
+
+            {error && (
+              <p className="mt-4 rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                {error}
+              </p>
+            )}
+          </div>
         </div>
       </section>
 

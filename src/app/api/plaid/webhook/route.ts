@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { syncPlaidTransactions, verifyPlaidWebhook } from "@/lib/plaid-bank";
+import { reconcileCustomBankOrders } from "@/lib/custom-bank-payments";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -22,6 +23,9 @@ export async function POST(request: Request) {
     if (payload.webhook_type === "TRANSACTIONS" || payload.webhook_type === "ITEM") {
       await syncPlaidTransactions().catch((error) => {
         console.error("Plaid webhook sync failed:", error);
+      });
+      await reconcileCustomBankOrders().catch((error) => {
+        console.error("Custom bank reconciliation failed:", error);
       });
     }
 

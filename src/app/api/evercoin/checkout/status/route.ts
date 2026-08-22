@@ -5,6 +5,7 @@ import {
   getPaymentOrderForUser,
   refreshEverCoinPaymentOrder
 } from "@/lib/billing/evercoin-payment-router";
+import { refreshCustomBankPayments } from "@/lib/custom-bank-payments";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -26,6 +27,27 @@ export async function GET(request: Request) {
     const order = await getPaymentOrderForUser(parsed.data, user.id);
     if (!order) {
       return NextResponse.json({ error: "PAYMENT_ORDER_NOT_FOUND" }, { status: 404 });
+    }
+
+    if (
+      order.provider === "direct_bank" &&
+      order.rail === "bank" &&
+      order.pack_code === "custom"
+    ) {
+      await refreshCustomBankPayments();
+      const latest = await getPaymentOrderForUser(order.id, user.id);
+
+      if (latest?.status === "paid") {
+        return NextResponse.json(
+          { status: "paid", coins: latest.coins, balance: null },
+          { headers: { "Cache-Control": "private, no-store" } }
+        );
+      }
+
+      return NextResponse.json(
+        { status: "pending", coins: 0, balance: null },
+        { headers: { "Cache-Control": "private, no-store" } }
+      );
     }
 
     const result = await refreshEverCoinPaymentOrder(order);
