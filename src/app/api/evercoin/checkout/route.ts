@@ -12,7 +12,7 @@ export const maxDuration = 30;
 const Body = z
   .object({
     rail: z.enum(["bank", "card", "crypto"]),
-    pack: z.enum(["500", "1200", "2000", "5000"])
+    pack: z.enum(["500", "1000", "5000"])
   })
   .strict();
 

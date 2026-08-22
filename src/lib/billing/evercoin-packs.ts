@@ -22,8 +22,6 @@ export const EVERCOIN_PACKS: Record<EverCoinPackCode, EverCoinPack> = {
     amountMinor: 499,
     priceEnv: "STRIPE_PRICE_EVERCOIN_500"
   },
-  // Kept only so historical Stripe/Paddle transactions can still be reconciled.
-  // This pack is no longer shown in the customer checkout.
   "1000": {
     code: "1000",
     coins: 1_000,
@@ -31,12 +29,16 @@ export const EVERCOIN_PACKS: Record<EverCoinPackCode, EverCoinPack> = {
     amountMinor: 999,
     priceEnv: "STRIPE_PRICE_EVERCOIN_1000"
   },
+  // Historical pack retained so existing/older orders can still reconcile.
+  // It is not available for new checkout creation.
   "1200": {
     code: "1200",
     coins: 1_200,
     displayPrice: "$12.09",
     amountMinor: 1_209
   },
+  // Historical pack retained so existing/older orders can still reconcile.
+  // It is not available for new checkout creation.
   "2000": {
     code: "2000",
     coins: 2_000,
@@ -52,8 +54,9 @@ export const EVERCOIN_PACKS: Record<EverCoinPackCode, EverCoinPack> = {
   }
 };
 
-export const EVERCOIN_CARD_PACK_CODES = ["1200", "2000", "5000"] as const;
-export const EVERCOIN_CRYPTO_PACK_CODES = ["500", "1200", "5000"] as const;
+// These are the only packs allowed for NEW purchases on every active checkout rail.
+export const EVERCOIN_CARD_PACK_CODES = ["500", "1000", "5000"] as const;
+export const EVERCOIN_CRYPTO_PACK_CODES = ["500", "1000", "5000"] as const;
 
 export function getEverCoinPack(code: string | null | undefined) {
   if (!code) return null;

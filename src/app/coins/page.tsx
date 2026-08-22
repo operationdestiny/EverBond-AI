@@ -22,15 +22,15 @@ import {
 
 type Rail = "bank";
 type Pack = {
-  code: "1200" | "2000" | "5000";
+  code: "500" | "1000" | "5000";
   amount: number;
   price: string;
   image: string;
 };
 
 const paymentPackages: Pack[] = [
-  { code: "1200", amount: 1_200, price: "$12.09", image: "/assets/evercoin-1000.png" },
-  { code: "2000", amount: 2_000, price: "$19.99", image: "/assets/evercoin-5000.png" },
+  { code: "500", amount: 500, price: "$4.99", image: "/assets/evercoin-1000.png" },
+  { code: "1000", amount: 1_000, price: "$9.99", image: "/assets/evercoin-5000.png" },
   { code: "5000", amount: 5_000, price: "$44.99", image: "/assets/evercoin-10000.png" }
 ];
 
